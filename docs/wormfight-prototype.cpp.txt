@@ -1,0 +1,167 @@
+#include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
+
+#define LED_PIN 4
+#define BUTTON_PIN 5
+#define NUM_LEDS 10
+
+Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+struct Monster
+{
+  float headPos; // Starts near NUM_LEDS - 1, moves towards 0
+  float speed;   // Negative speed
+  int length;    // Remaining hits required / visual length
+  bool active;
+};
+
+struct Projectile
+{
+  float pos;   // Starts near stackCount, moves towards NUM_LEDS - 1
+  float speed; // Positive speed
+  bool active;
+};
+
+Monster monster = {(float)(NUM_LEDS - 1), -0.08f, 4, true};
+Projectile shot = {0.0f, 0.4f, false};
+int stackCount = 0; // Misses stack up starting at Index 0
+
+unsigned long lastTick = 0;
+const int TICK_INTERVAL = 30; // ~33 FPS
+
+void setup()
+{
+  Serial.begin(115200);
+
+  // Non-blocking 3-second wait for USB Serial terminal connection
+  unsigned long start = millis();
+  while (!Serial && (millis() - start < 3000))
+  {
+    delay(10);
+  }
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  strip.begin();
+  strip.setBrightness(40);
+  strip.show();
+
+  Serial.println("\n==================================");
+  Serial.println("[SYSTEM] Game Boot Completed");
+  Serial.print("[INIT] Monster spawned at index: ");
+  Serial.print(monster.headPos);
+  Serial.print(" | Length: ");
+  Serial.println(monster.length);
+  Serial.println("==================================");
+}
+
+void loop()
+{
+  if (millis() - lastTick < TICK_INTERVAL)
+    return;
+  lastTick = millis();
+
+  // --- 1. INPUT & BUTTON TRACING ---
+  static bool lastBtnState = HIGH;
+  bool btnState = digitalRead(BUTTON_PIN);
+
+  if (btnState == LOW && lastBtnState == HIGH)
+  {
+    Serial.print("[INPUT] Button Press Detected! ");
+    if (!shot.active)
+    {
+      shot.pos = (float)stackCount;
+      shot.active = true;
+      Serial.print("Firing shot from index ");
+      Serial.println(shot.pos);
+    }
+    else
+    {
+      Serial.println("Rejected (shot already in flight)");
+    }
+  }
+  lastBtnState = btnState;
+
+  // --- 2. UPDATE & COLLISION TRACING ---
+  if (monster.active)
+  {
+    monster.headPos += monster.speed;
+    Serial.print("[UPDATE] Monster head position: ");
+    Serial.println(monster.headPos);
+
+    // Check if monster reaches player stack
+    if (monster.headPos <= stackCount)
+    {
+      monster.active = false;
+      Serial.println("\n[GAME OVER] Monster reached player base!");
+      Serial.print("[GAME OVER] Final Stack Count (Misses): ");
+      Serial.println(stackCount);
+    }
+  }
+
+  if (shot.active)
+  {
+    shot.pos += shot.speed;
+
+    float monsterTail = monster.headPos + (monster.length - 1);
+
+    // Hit Detection
+    if (monster.active && shot.pos >= monster.headPos && shot.pos <= monsterTail)
+    {
+      shot.active = false;
+      monster.length--;
+      Serial.print("[COLLISION] HIT! Shot index ");
+      Serial.print(shot.pos);
+      Serial.print(" | Monster length remaining: ");
+      Serial.println(monster.length);
+
+      if (monster.length <= 0)
+      {
+        monster.active = false;
+        Serial.println("[SUCCESS] Monster completely destroyed!");
+      }
+    }
+    // Miss Detection (Shot goes off the far end of the strip)
+    else if (shot.pos >= NUM_LEDS - 1)
+    {
+      shot.active = false;
+      stackCount++;
+      Serial.print("[MISS] Shot went out of bounds! Stack count increased to ");
+      Serial.println(stackCount);
+    }
+  }
+
+  // --- 3. RENDER ---
+  strip.clear();
+
+  // Draw Stacked Misses (White)
+  for (int i = 0; i < stackCount; i++)
+  {
+    strip.setPixelColor(i, strip.Color(100, 100, 100));
+  }
+
+  // Draw Monster (Red)
+  if (monster.active)
+  {
+    int head = (int)monster.headPos;
+    for (int i = 0; i < monster.length; i++)
+    {
+      int pixelIdx = head + i;
+      if (pixelIdx >= 0 && pixelIdx < NUM_LEDS)
+      {
+        strip.setPixelColor(pixelIdx, strip.Color(255, 0, 0));
+      }
+    }
+  }
+
+  // Draw Projectile (Blue)
+  if (shot.active)
+  {
+    int shotIdx = (int)shot.pos;
+    if (shotIdx >= 0 && shotIdx < NUM_LEDS)
+    {
+      strip.setPixelColor(shotIdx, strip.Color(0, 150, 255));
+    }
+  }
+
+  strip.show();
+}

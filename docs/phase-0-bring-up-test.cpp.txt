@@ -1,0 +1,187 @@
+// Beam Boy — Phase 0 hardware bring-up.
+//
+// Verifies the LED tube end to end before any engine code exists:
+//
+//   1. Pixel count and wiring       — is the whole tube addressable?
+//   2. Pixel order and direction    — which end is index 0?
+//   3. Colour channel order         — is the strip really GRB?
+//   4. Current draw                 — measured at the brightness cap.
+//   5. Low-voltage behaviour        — does it survive a drooping LiPo?
+//
+// Cycles through test patterns automatically; press button A to skip ahead.
+// Progress is also reported over serial.
+
+#include <Arduino.h>
+
+#if defined(ARDUINO_ARCH_ESP8266)
+#include <ESP8266WiFi.h>
+#endif
+
+#include "core/board_config.h"
+
+namespace {
+
+using beamboy::board::kBrightnessCap;
+using beamboy::board::kPinLedData;
+using beamboy::board::kPixelCount;
+
+beamboy::board::LedBus strip(kPixelCount, kPinLedData);
+
+// Scale a colour by the global brightness cap. Phase 1 moves this into the
+// Display class; here it is inline so the test stays self-contained.
+RgbColor dim(uint8_t r, uint8_t g, uint8_t b) {
+  return RgbColor((r * kBrightnessCap) / 255, (g * kBrightnessCap) / 255,
+                  (b * kBrightnessCap) / 255);
+}
+
+// --- Test 1: walk a single pixel from index 0 to the end ------------------
+// Confirms every pixel is reachable and reveals which physical end is index 0.
+// The step rate scales with strip length so one full pass takes ~3 s on any
+// strip, rather than blurring past on a short one.
+constexpr uint32_t kWalkStepMs = 3000 / kPixelCount;
+
+void patternWalk(uint32_t elapsed) {
+  const uint16_t index = (elapsed / kWalkStepMs) % kPixelCount;
+  strip.ClearTo(RgbColor(0));
+  strip.SetPixelColor(index, dim(255, 255, 255));
+
+  // Mark the ends: index 0 green, last pixel blue, so orientation is obvious.
+  if (index != 0) strip.SetPixelColor(0, dim(0, 60, 0));
+  if (index != kPixelCount - 1) strip.SetPixelColor(kPixelCount - 1, dim(0, 0, 60));
+}
+
+// --- Test 2: solid primaries ----------------------------------------------
+// Confirms the colour order. Serial announces the intended colour; if the tube
+// shows something else, the feature type in board_config.h is wrong (try
+// NeoRgbFeature or NeoBrgFeature).
+void patternPrimaries(uint32_t elapsed) {
+  const uint8_t step = (elapsed / 1500) % 3;
+  const RgbColor colors[3] = {dim(255, 0, 0), dim(0, 255, 0), dim(0, 0, 255)};
+  strip.ClearTo(colors[step]);
+}
+
+// --- Test 3: rainbow sweep -------------------------------------------------
+// The "it works" moment, and a moderate, realistic current load.
+void patternRainbow(uint32_t elapsed) {
+  const uint16_t offset = (elapsed / 20) % 360;
+  for (uint16_t i = 0; i < kPixelCount; i++) {
+    const float hue = fmodf(offset + (360.0f * i) / kPixelCount, 360.0f) / 360.0f;
+    strip.SetPixelColor(i, RgbColor(HsbColor(hue, 1.0f, kBrightnessCap / 255.0f)));
+  }
+}
+
+// --- Test 4: worst-case power ---------------------------------------------
+// Full white on every pixel at the brightness cap. Measure current here with a
+// USB meter or multimeter -- this is the number that sizes the battery and
+// validates the cap chosen in board_config.h.
+void patternFullWhite(uint32_t) { strip.ClearTo(dim(255, 255, 255)); }
+
+// --- Test 5: baseline ------------------------------------------------------
+// All pixels off. Whatever current still flows is the MCU's own consumption,
+// so subtracting this from test 4 gives the true LED draw. Without this
+// baseline it is easy to misattribute the radio's consumption to the strip and
+// oversize the battery.
+void patternDark(uint32_t) { strip.ClearTo(RgbColor(0)); }
+
+// --- Test 6: realistic game frame -----------------------------------------
+// A few lit pixels, which is what 1D games actually look like most of the time.
+// This -- not full white -- is the figure that determines real battery life.
+void patternGameFrame(uint32_t elapsed) {
+  strip.ClearTo(RgbColor(0));
+  const uint16_t player = (elapsed / 100) % kPixelCount;
+  strip.SetPixelColor(player, dim(0, 150, 255));
+  strip.SetPixelColor(kPixelCount / 2, dim(255, 0, 0));
+  if (kPixelCount > 2) strip.SetPixelColor(kPixelCount - 2, dim(255, 0, 0));
+}
+
+struct Pattern {
+  const char* name;
+  void (*render)(uint32_t elapsed);
+  uint32_t duration_ms;
+};
+
+const Pattern kPatterns[] = {
+    {"1/6 Pixel walk (ends: green=first, blue=last)", patternWalk, 6000},
+    {"2/6 Primaries (expect red, then green, then blue)", patternPrimaries, 4500},
+    {"3/6 Rainbow sweep", patternRainbow, 6000},
+    {"4/6 Full white -- MEASURE CURRENT (worst case)", patternFullWhite, 8000},
+    {"5/6 All dark -- MEASURE CURRENT (MCU baseline)", patternDark, 8000},
+    {"6/6 Game frame -- MEASURE CURRENT (realistic)", patternGameFrame, 8000},
+};
+constexpr uint8_t kPatternCount = sizeof(kPatterns) / sizeof(kPatterns[0]);
+
+uint8_t current_pattern = 0;
+uint32_t pattern_started = 0;
+uint32_t last_frame = 0;
+constexpr uint32_t kFrameInterval = 16;  // ~60 fps
+
+void announcePattern() {
+  Serial.print("[TEST] ");
+  Serial.println(kPatterns[current_pattern].name);
+}
+
+}  // namespace
+
+void setup() {
+  Serial.begin(115200);
+
+  const uint32_t start = millis();
+  while (!Serial && (millis() - start < 3000)) {
+    delay(10);
+  }
+
+  // The radio powers up automatically at boot and draws ~70-120 mA even when
+  // idle, which dwarfs the LEDs at the brightness cap. Beam Boy is offline by
+  // default, so switch it off until the user explicitly opts in (Phase 4).
+#if defined(ARDUINO_ARCH_ESP8266)
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  delay(1);
+#endif
+
+  pinMode(beamboy::board::kPinButtonA, INPUT_PULLUP);
+
+  strip.Begin();
+  strip.ClearTo(RgbColor(0));
+  strip.Show();
+
+  Serial.println();
+  Serial.println("==================================");
+  Serial.println("Beam Boy -- Phase 0 bring-up");
+  Serial.print("Pixels:         ");
+  Serial.println(kPixelCount);
+  Serial.print("Brightness cap: ");
+  Serial.print(kBrightnessCap);
+  Serial.println("/255");
+  Serial.println("Press button A to skip a test.");
+  Serial.println("==================================");
+
+  pattern_started = millis();
+  announcePattern();
+}
+
+void loop() {
+  const uint32_t now = millis();
+
+  // Skip ahead on a button press so the tests can be driven by hand.
+  static bool last_button = HIGH;
+  const bool button = digitalRead(beamboy::board::kPinButtonA);
+  const bool advance_requested = (button == LOW && last_button == HIGH);
+  last_button = button;
+
+  if (advance_requested ||
+      now - pattern_started >= kPatterns[current_pattern].duration_ms) {
+    current_pattern = (current_pattern + 1) % kPatternCount;
+    pattern_started = now;
+    announcePattern();
+  }
+
+  if (now - last_frame < kFrameInterval) {
+    return;
+  }
+  last_frame = now;
+
+  kPatterns[current_pattern].render(now - pattern_started);
+  strip.Show();
+}
