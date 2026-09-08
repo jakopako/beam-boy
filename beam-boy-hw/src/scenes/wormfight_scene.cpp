@@ -125,8 +125,9 @@ bool WormfightScene::fire(uint8_t power, float speed) {
   return false;
 }
 
-// Charging is driven from the button level rather than press/release edges: if a
-// release edge were ever missed, an edge-driven charge would stick on forever.
+// Charging is driven from the button level rather than press/release edges: if
+// a release edge were ever missed, an edge-driven charge would stick on
+// forever.
 void WormfightScene::updateCharge(Engine& engine, float dt) {
   const bool held = engine.input().held(Button::kB);
 
@@ -142,9 +143,9 @@ void WormfightScene::updateCharge(Engine& engine, float dt) {
   // Released: a stab of B is just a normal shot, so B is never a dead button.
   bool fired;
   if (charge_ >= kChargeTimeMin) {
-    const float ratio = clampf(
-        (charge_ - kChargeTimeMin) / (kChargeTimeFull - kChargeTimeMin), 0.0f,
-        1.0f);
+    const float ratio =
+        clampf((charge_ - kChargeTimeMin) / (kChargeTimeFull - kChargeTimeMin),
+               0.0f, 1.0f);
     const uint8_t power =
         1 + static_cast<uint8_t>(ratio * (kChargedShotPower - 1) + 0.5f);
     fired = fire(power, power > 1 ? kChargedShotSpeed : kShotSpeed);
@@ -328,8 +329,7 @@ void WormfightScene::update(Engine& engine, float dt) {
       const float seg = display.pixelWidth();
       const float tail = worm.head + seg * (worm.segments - 1);
 
-      if (shot.pos >= worm.head - seg * 0.5f &&
-          shot.pos <= tail + seg * 0.5f) {
+      if (shot.pos >= worm.head - seg * 0.5f && shot.pos <= tail + seg * 0.5f) {
         worm.segments--;
         worm.hit_flash = kHitFlashTime;
         score_++;
@@ -448,8 +448,7 @@ void WormfightScene::renderPlayfield(Engine& engine) {
   if (charging_ && charge_ > 0.0f) {
     const float ratio = clampf(charge_ / kChargeTimeFull, 0.0f, 1.0f);
     const float rate = 6.0f + 18.0f * ratio;
-    const float level =
-        0.55f + 0.45f * pulse(millis() / 1000.0f, rate);
+    const float level = 0.55f + 0.45f * pulse(millis() / 1000.0f, rate);
 
     display.point(player_, kChargeColor, ratio * level);
     if (charge_ >= kChargeTimeFull) {

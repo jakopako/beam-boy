@@ -101,9 +101,8 @@ void DemoScene::render(Engine& engine) {
   // about to be recycled. Without this the ring buffer looks like random
   // pixels appearing and vanishing rather than a visible history.
   for (uint8_t i = 0; i < marker_count_; i++) {
-    const float age = marker_count_ > 1
-                          ? static_cast<float>(i) / (marker_count_ - 1)
-                          : 1.0f;
+    const float age =
+        marker_count_ > 1 ? static_cast<float>(i) / (marker_count_ - 1) : 1.0f;
     display.point(markers_[i], colors::kAmber, 0.12f + 0.33f * age);
   }
 

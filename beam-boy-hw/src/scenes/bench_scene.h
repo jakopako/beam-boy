@@ -5,17 +5,17 @@
 // The question this exists to answer: can a scripted cartridge do a frame's
 // worth of real game work inside the 16.6 ms budget?
 //
-// A number on its own is meaningless, so this measures a *native* implementation
-// of a representative workload first. That baseline is the control: when the
-// same workload is later driven by a script VM, the ratio between the two is the
-// answer, and it is a far more honest measure than an absolute figure that
-// depends on clock speed and compiler flags.
+// A number on its own is meaningless, so this measures a *native*
+// implementation of a representative workload first. That baseline is the
+// control: when the same workload is later driven by a script VM, the ratio
+// between the two is the answer, and it is a far more honest measure than an
+// absolute figure that depends on clock speed and compiler flags.
 //
-// The workload deliberately mirrors what a real game does each frame -- integrate
-// a set of entities, bounce them off the ends, then draw each one -- rather than
-// a synthetic arithmetic loop, because VM overhead is dominated by the cost of
-// *calls across the native boundary*, not by raw arithmetic. Fifty entities and
-// fifty draw calls is roughly Wormfight at its busiest.
+// The workload deliberately mirrors what a real game does each frame --
+// integrate a set of entities, bounce them off the ends, then draw each one --
+// rather than a synthetic arithmetic loop, because VM overhead is dominated by
+// the cost of *calls across the native boundary*, not by raw arithmetic. Fifty
+// entities and fifty draw calls is roughly Wormfight at its busiest.
 //
 //   A     step to the next entity count
 //   B     hold to freeze the display so results can be read

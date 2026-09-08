@@ -19,16 +19,15 @@
 //    drop the network config.
 //
 // The captive portal is deliberately hand-rolled rather than using WiFiManager.
-// WiFiManager owns the main loop (it blocks in autoConnect / startConfigPortal),
-// which is incompatible with rule 2 -- the tube must keep animating while the
-// portal is open, since that animation is the only feedback the user has.
+// WiFiManager owns the main loop (it blocks in autoConnect /
+// startConfigPortal), which is incompatible with rule 2 -- the tube must keep
+// animating while the portal is open, since that animation is the only feedback
+// the user has.
 
 #include <Arduino.h>
-
+#include <DNSServer.h>
 #include <WebServer.h>
 #include <WiFi.h>
-
-#include <DNSServer.h>
 
 #include <atomic>
 
@@ -200,9 +199,9 @@ class Network {
 
   FailReason fail_reason_ = FailReason::kNone;
 
-  // begin() is called on every scene entry, not once at boot. This distinguishes
-  // the first call so that per-session state is not reset each time the user
-  // walks into the Network scene.
+  // begin() is called on every scene entry, not once at boot. This
+  // distinguishes the first call so that per-session state is not reset each
+  // time the user walks into the Network scene.
   bool began_ = false;
 
   NetState state_ = NetState::kOff;
@@ -211,11 +210,13 @@ class Network {
   DNSServer dns_;
   WebServer server_{kHttpPort};
   bool server_running_ = false;
-  // Routes are registered once for the lifetime of the object; see startServer().
+  // Routes are registered once for the lifetime of the object; see
+  // startServer().
   bool handlers_registered_ = false;
 
-  // Number of networks in the driver's completed scan buffer, or 0. Results stay
-  // owned by the WiFi driver until scanDelete(), so only the count is kept here.
+  // Number of networks in the driver's completed scan buffer, or 0. Results
+  // stay owned by the WiFi driver until scanDelete(), so only the count is kept
+  // here.
   //
   // Starting a new scan frees the previous buffer, so while scan_pending_ is
   // true this count can be stale and describe a buffer that no longer exists.

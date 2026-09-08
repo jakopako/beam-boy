@@ -85,8 +85,9 @@ void test_millis_based_pulse_survives_the_rollover_window(void) {
 
 void test_millis_rollover_does_not_break_elapsed_time(void) {
   // Every scene computes elapsed time as millis() - started_at. That is correct
-  // across the rollover *only* because both are unsigned 32-bit; writing it with
-  // a signed intermediate would break once every 49 days. Pin the behaviour.
+  // across the rollover *only* because both are unsigned 32-bit; writing it
+  // with a signed intermediate would break once every 49 days. Pin the
+  // behaviour.
   const uint32_t started = 4294967000u;  // ~300 ms before rollover
   const uint32_t now = 200u;             // ~200 ms after
   const uint32_t elapsed = now - started;

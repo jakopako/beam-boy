@@ -30,8 +30,8 @@ background:#0f8;color:#111;border:0;border-radius:6px}
 <label for=s>Network name</label>)HTML";
 
 // Shown when the scan found nothing: the text field is the only way in. A scan
-// can legitimately come back empty (hidden SSIDs, 5 GHz-only networks -- neither
-// chip can see those), so this is a normal path, not an error.
+// can legitimately come back empty (hidden SSIDs, 5 GHz-only networks --
+// neither chip can see those), so this is a normal path, not an error.
 const char kSetupPageManual[] PROGMEM =
     R"HTML(<input id=s name=s maxlength=32 autofocus>)HTML";
 
@@ -167,9 +167,9 @@ void Network::forget() {
   fail_reason_ = FailReason::kNone;
 
   // If the radio is currently using the credentials being erased, take it down
-  // too. Otherwise "forget" leaves the device still associated to the network it
-  // claims to have forgotten -- and still drawing power for it -- until the next
-  // reboot, which is not what the user asked for.
+  // too. Otherwise "forget" leaves the device still associated to the network
+  // it claims to have forgotten -- and still drawing power for it -- until the
+  // next reboot, which is not what the user asked for.
   if (state_ != NetState::kOff) disconnect();
 }
 
@@ -185,8 +185,8 @@ Network::FailReason Network::classifyFailure(bool deadline_reached) const {
   //
   // wl_status_t deliberately is not used to detect a bad password. It cannot:
   //   - WL_CONNECT_FAILED is not an authentication verdict -- it also covers
-  //     WIFI_REASON_ASSOC_FAIL (an AP at capacity, for instance), and reading it
-  //     as "wrong password" would erase perfectly good credentials.
+  //     WIFI_REASON_ASSOC_FAIL (an AP at capacity, for instance), and reading
+  //     it as "wrong password" would erase perfectly good credentials.
   //   - It is a cached value updated by events, so straight after WiFi.begin()
   //     it can still describe the *previous* attempt.
   if (authRejectedThisAttempt()) return FailReason::kBadPassword;
@@ -196,8 +196,7 @@ Network::FailReason Network::classifyFailure(bool deadline_reached) const {
   if (WiFi.status() == WL_NO_SSID_AVAIL) return FailReason::kNotFound;
 
   const uint32_t gen = attempt_gen_.load();
-  if (deadline_reached && gen != kNoAttempt &&
-      no_ap_found_gen_.load() == gen) {
+  if (deadline_reached && gen != kNoAttempt && no_ap_found_gen_.load() == gen) {
     return FailReason::kNotFound;
   }
 
@@ -322,7 +321,6 @@ void Network::onDisconnected(int reason) {
   }
 }
 
-
 void Network::startPortal() {
   // AP+STA rather than plain AP. The station half never connects to anything --
   // begin() disables auto-connect and no WiFi.begin() is issued here -- but its
@@ -343,7 +341,8 @@ void Network::startPortal() {
   // expected 204/success body.
   dns_.setErrorReplyCode(DNSReplyCode::NoError);
   // DNSServer::start() takes its port by reference, which odr-uses the constant
-  // and would demand an out-of-line definition. Copying to a local sidesteps it.
+  // and would demand an out-of-line definition. Copying to a local sidesteps
+  // it.
   uint16_t dns_port = kDnsPort;
   dns_.start(dns_port, "*", WiFi.softAPIP());
 
@@ -418,9 +417,7 @@ void Network::stopServer() {
   server_running_ = false;
 }
 
-void Network::requestScan() {
-  scan_requested_ = true;
-}
+void Network::requestScan() { scan_requested_ = true; }
 
 void Network::startRequestedScan() {
   if (!scan_requested_ || scan_pending_) return;
@@ -449,14 +446,14 @@ void Network::startRequestedScan() {
   //
   // Deferring to the end of tick() makes both harmless: the gap then falls at a
   // point where the portal is fully constructed and no HTTP handler is part-way
-  // through, so there is no half-finished work for the SDK to trip over. It also
-  // keeps the scan out of handleRescan(), where suspending with
+  // through, so there is no half-finished work for the SDK to trip over. It
+  // also keeps the scan out of handleRescan(), where suspending with
   // server_.handleClient() further down the stack is its own trap.
   //
   // Requires the station half to be up (AP_STA is enough).
   //
-  // show_hidden = true: a hidden AP reports an empty SSID, which is filtered out
-  // when rendering, but asking costs nothing.
+  // show_hidden = true: a hidden AP reports an empty SSID, which is filtered
+  // out when rendering, but asking costs nothing.
   //
   // The per-channel dwell is exposed as a 4th argument. The default is 300 ms;
   // 500 gives slow-beaconing APs another chance to be heard. Async, so the cost
@@ -468,8 +465,8 @@ void Network::startRequestedScan() {
 void Network::pollScan() {
   if (!scan_pending_) return;
 
-  // Negative means still running (-1) or failed (-2). Only a non-negative result
-  // is a completed scan whose buffer is safe to index.
+  // Negative means still running (-1) or failed (-2). Only a non-negative
+  // result is a completed scan whose buffer is safe to index.
   const int16_t result = WiFi.scanComplete();
   if (result < 0) {
     if (result == WIFI_SCAN_FAILED) {
@@ -491,8 +488,8 @@ void Network::pollScan() {
 // The portal is the tightest the heap ever gets: the soft-AP allocates a pbuf
 // per received frame, an HTTP request is in flight, and a scan result buffer is
 // live. When an allocation fails in that state the SDK does not report it -- it
-// faults, and the reported PC lands in whichever allocating function happened to
-// be running, which is why successive crashes pointed at unrelated core
+// faults, and the reported PC lands in whichever allocating function happened
+// to be running, which is why successive crashes pointed at unrelated core
 // functions. Free heap alone is not enough to see this coming: what matters is
 // the largest contiguous block, since fragmentation can starve a single large
 // allocation while the total still looks healthy.
@@ -570,15 +567,17 @@ void Network::handleRoot() {
       option += F("\">");
       appendEscaped(option, ssid);
       // Signal strength, so it is obvious which of two similar names is yours.
-      option += WiFi.RSSI(i) >= -67 ? F(" &middot;&middot;&middot;") : F(" &middot;");
+      option +=
+          WiFi.RSSI(i) >= -67 ? F(" &middot;&middot;&middot;") : F(" &middot;");
       option += F("</option>");
       server_.sendContent(option);
     }
-    // A network can be hidden, or 5 GHz-only and thus invisible to this chip, so
-    // there must always be a way to type a name the scan never found.
-    server_.sendContent(F("<option value=\"\">Other (type below)</option></select>"
-                          "<label for=m>Or type the name</label>"
-                          "<input id=m name=m maxlength=32>"));
+    // A network can be hidden, or 5 GHz-only and thus invisible to this chip,
+    // so there must always be a way to type a name the scan never found.
+    server_.sendContent(
+        F("<option value=\"\">Other (type below)</option></select>"
+          "<label for=m>Or type the name</label>"
+          "<input id=m name=m maxlength=32>"));
   } else {
     server_.sendContent_P(kSetupPageManual);
   }
@@ -593,7 +592,8 @@ void Network::handleRoot() {
     // Distinguishes "still looking" from "looked and found nothing". Without
     // this, a form loaded while the first scan is still running looks like a
     // scan that failed.
-    server_.sendContent(F("Still scanning &mdash; <a href=\"/\">reload</a> in a moment."));
+    server_.sendContent(
+        F("Still scanning &mdash; <a href=\"/\">reload</a> in a moment."));
   } else {
     // Plain navigation gives no feedback until the response starts arriving,
     // which is instant on the firmware side but still a blank pause on the
@@ -623,12 +623,24 @@ void Network::appendEscaped(String& out, const String& raw) {
   for (size_t i = 0; i < raw.length(); ++i) {
     const char c = raw[i];
     switch (c) {
-      case '&': out += F("&amp;"); break;
-      case '<': out += F("&lt;"); break;
-      case '>': out += F("&gt;"); break;
-      case '"': out += F("&quot;"); break;
-      case '\'': out += F("&#39;"); break;
-      default: out += c; break;
+      case '&':
+        out += F("&amp;");
+        break;
+      case '<':
+        out += F("&lt;");
+        break;
+      case '>':
+        out += F("&gt;");
+        break;
+      case '"':
+        out += F("&quot;");
+        break;
+      case '\'':
+        out += F("&#39;");
+        break;
+      default:
+        out += c;
+        break;
     }
   }
 }
@@ -697,10 +709,11 @@ void Network::tick() {
       } else {
         // Wait for the deadline rather than acting the instant a rejection
         // arrives. The core retries the first disconnect internally for every
-        // reason (WiFiGeneric.cpp), so aborting on the first event would cut short a retry that might well have succeeded -- and, with the
-        // discard rule below, erase valid credentials over one flaky handshake.
-        // The verdict is still used; it is just read at the end, by which point
-        // the core has had its retry and any late-queued event has landed.
+        // reason (WiFiGeneric.cpp), so aborting on the first event would cut
+        // short a retry that might well have succeeded -- and, with the discard
+        // rule below, erase valid credentials over one flaky handshake. The
+        // verdict is still used; it is just read at the end, by which point the
+        // core has had its retry and any late-queued event has landed.
         if (elapsed > kConnectTimeoutMs) {
           failWith(classifyFailure(true));
         }

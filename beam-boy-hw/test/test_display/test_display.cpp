@@ -3,13 +3,14 @@
 // Two of the things checked here are regression tests for bugs that actually
 // happened, not hypotheticals:
 //
-//   * wrappedSin() must stay accurate at phases large enough to have crashed the
-//     device. The crash itself cannot be reproduced off-target -- it was a stack
-//     overflow in newlib's huge-argument path, and the host's libm has no such
-//     limit -- so what is tested is the property the fix relies on: that
+//   * wrappedSin() must stay accurate at phases large enough to have crashed
+//   the
+//     device. The crash itself cannot be reproduced off-target -- it was a
+//     stack overflow in newlib's huge-argument path, and the host's libm has no
+//     such limit -- so what is tested is the property the fix relies on: that
 //     wrapping does not change the answer. Note this test would still pass if
-//     someone replaced wrappedSin() with a bare sinf(), which is exactly why the
-//     soak test also asserts on the *argument* the scenes pass in.
+//     someone replaced wrappedSin() with a bare sinf(), which is exactly why
+//     the soak test also asserts on the *argument* the scenes pass in.
 //
 //   * Color::scaled() must truncate while present() rounds. The asymmetry looks
 //     like an inconsistency and is a standing temptation to "tidy"; truncation
@@ -67,13 +68,14 @@ void test_pulse_is_periodic(void) {
   // visibly jump when a scene wraps its phase.
   const float rate = 2.0f;
   const float period = 6.28318531f / rate;
-  TEST_ASSERT_FLOAT_WITHIN(1e-3f, pulse(3.0f, rate), pulse(3.0f + period, rate));
+  TEST_ASSERT_FLOAT_WITHIN(1e-3f, pulse(3.0f, rate),
+                           pulse(3.0f + period, rate));
 }
 
 void test_scaled_truncates_so_fade_reaches_black(void) {
   // The real scenario: fade() applied repeatedly to its own output. With
-  // rounding, a channel at 1 scaled by 0.9 stays at 1 forever and the tube keeps
-  // a faint permanent glow.
+  // rounding, a channel at 1 scaled by 0.9 stays at 1 forever and the tube
+  // keeps a faint permanent glow.
   Color c(255, 128, 3);
   for (int i = 0; i < 500; i++) c = c.scaled(0.9f);
   TEST_ASSERT_EQUAL_UINT8(0, c.r);

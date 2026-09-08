@@ -30,12 +30,36 @@ Color Color::hsv(float hue, float saturation, float value) {
 
   float r = 0.0f, g = 0.0f, b = 0.0f;
   switch (sector % 6) {
-    case 0: r = value; g = t;     b = p;     break;
-    case 1: r = q;     g = value; b = p;     break;
-    case 2: r = p;     g = value; b = t;     break;
-    case 3: r = p;     g = q;     b = value; break;
-    case 4: r = t;     g = p;     b = value; break;
-    default: r = value; g = p;    b = q;     break;
+    case 0:
+      r = value;
+      g = t;
+      b = p;
+      break;
+    case 1:
+      r = q;
+      g = value;
+      b = p;
+      break;
+    case 2:
+      r = p;
+      g = value;
+      b = t;
+      break;
+    case 3:
+      r = p;
+      g = q;
+      b = value;
+      break;
+    case 4:
+      r = t;
+      g = p;
+      b = value;
+      break;
+    default:
+      r = value;
+      g = p;
+      b = q;
+      break;
   }
 
   return Color(static_cast<uint8_t>(r * 255.0f),
@@ -76,9 +100,12 @@ void Display::addToPixel(uint16_t index, const Color& color, float weight) {
   // The +128 rounds instead of truncating -- anti-aliased points spend most of
   // their time at partial weights, so a systematic downward bias here both dims
   // and discolours them.
-  target.r = addChannel(target.r, (static_cast<uint16_t>(color.r) * f + 128) >> 8);
-  target.g = addChannel(target.g, (static_cast<uint16_t>(color.g) * f + 128) >> 8);
-  target.b = addChannel(target.b, (static_cast<uint16_t>(color.b) * f + 128) >> 8);
+  target.r =
+      addChannel(target.r, (static_cast<uint16_t>(color.r) * f + 128) >> 8);
+  target.g =
+      addChannel(target.g, (static_cast<uint16_t>(color.g) * f + 128) >> 8);
+  target.b =
+      addChannel(target.b, (static_cast<uint16_t>(color.b) * f + 128) >> 8);
 }
 
 void Display::point(float pos, const Color& color, float intensity) {
@@ -169,9 +196,10 @@ void Display::present() {
   // the overall look.
   for (uint16_t i = 0; i < board::kPixelCount; i++) {
     const Color& c = buffer_[i];
-    // Round rather than truncate. At the low end -- a dim zone at 0.35 intensity
-    // lands around 15/255 after the cap -- there are few steps left to express a
-    // hue with, so a consistent downward bias visibly shifts colours.
+    // Round rather than truncate. At the low end -- a dim zone at 0.35
+    // intensity lands around 15/255 after the cap -- there are few steps left
+    // to express a hue with, so a consistent downward bias visibly shifts
+    // colours.
     strip_.SetPixelColor(i, RgbColor((c.r * brightness_ + 127) / 255,
                                      (c.g * brightness_ + 127) / 255,
                                      (c.b * brightness_ + 127) / 255));

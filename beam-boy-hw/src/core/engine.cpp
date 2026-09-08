@@ -2,6 +2,7 @@
 
 #include <math.h>
 
+#include "cartridge_store.h"
 #include "game_registry.h"
 
 namespace beamboy {
@@ -43,8 +44,8 @@ void Engine::exitToLauncher() {
   // File the score before leaving. Doing it here rather than in each game means
   // no cartridge can forget to, or cheat by reporting a score it never scored.
   if (scene_ != nullptr && current_game_ >= 0 &&
-      current_game_ < static_cast<int8_t>(games::kGameCount)) {
-    storage_.submitScore(games::kGames[current_game_].id, scene_->score());
+      current_game_ < static_cast<int8_t>(gameList().count())) {
+    storage_.submitScore(gameList().at(current_game_).id, scene_->score());
     storage_.setLastGame(static_cast<uint8_t>(current_game_));
   }
 
@@ -66,8 +67,8 @@ void Engine::setScene(Scene* scene) {
 }
 
 // While paused the game is frozen and dimmed, with a slow amber breathing pulse
-// so the console never looks crashed. Holding B fills the line from the player's
-// end as a progress bar toward returning to the launcher.
+// so the console never looks crashed. Holding B fills the line from the
+// player's end as a progress bar toward returning to the launcher.
 void Engine::renderPauseOverlay() {
   display_.fade(0.55f);
 
@@ -131,9 +132,10 @@ void Engine::tick() {
   // press became a pause, and the paused branch returns before the scene ever
   // updates. They get a direct hold-B exit instead, with no pause step, since
   // they have no game state worth freezing.
-  const bool is_game = current_game_ >= 0 &&
-                       current_game_ < static_cast<int8_t>(games::kGameCount) &&
-                       games::kGames[current_game_].is_game;
+  const bool is_game =
+      current_game_ >= 0 &&
+      current_game_ < static_cast<int8_t>(gameList().count()) &&
+      gameList().at(current_game_).is_game;
 
   if (current_game_ >= 0 && launcher_ != nullptr && !is_game) {
     // Armed the same way as the paused gesture, so a B press carried in from
@@ -144,9 +146,10 @@ void Engine::tick() {
     } else {
       const uint32_t held = input_.holdDuration(Button::kB);
       exit_gesture_progress_ =
-          held == 0 ? 0.0f
-                    : (held >= kExitHoldMs ? 1.0f
-                                           : static_cast<float>(held) / kExitHoldMs);
+          held == 0
+              ? 0.0f
+              : (held >= kExitHoldMs ? 1.0f
+                                     : static_cast<float>(held) / kExitHoldMs);
       if (held >= kExitHoldMs) {
         exitToLauncher();
         return;
@@ -155,10 +158,10 @@ void Engine::tick() {
   }
 
   if (current_game_ >= 0 && launcher_ != nullptr && is_game) {
-    // Exit is deliberately only available *while paused*. Games legitimately use
-    // long holds during play -- Wormfight charges on B for up to 1.1 s -- so a
-    // bare hold-to-exit would fight the game's own controls. Requiring the pause
-    // first makes the two unambiguous.
+    // Exit is deliberately only available *while paused*. Games legitimately
+    // use long holds during play -- Wormfight charges on B for up to 1.1 s --
+    // so a bare hold-to-exit would fight the game's own controls. Requiring the
+    // pause first makes the two unambiguous.
     if (input_.pressed(Input::kNavButton)) {
       paused_ = !paused_;
       exit_gesture_progress_ = 0.0f;
@@ -228,11 +231,12 @@ namespace {
 // Deliberately noinline: the Xtensa GCC shipped with the ESP32 platform hits an
 // internal compiler error ("insn does not satisfy its constraints" during
 // postreload, trying to load a float literal straight into an FP register) when
-// this is inlined into the loop in renderScore(). Keeping the float maths in one
-// non-inlined function sidesteps it and costs nothing at this call rate.
+// this is inlined into the loop in renderScore(). Keeping the float maths in
+// one non-inlined function sidesteps it and costs nothing at this call rate.
 //
-// The bit currently arriving fades up over its slot, so the reveal reads as bits
-// landing one by one rather than simply appearing; settled bits are full bright.
+// The bit currently arriving fades up over its slot, so the reveal reads as
+// bits landing one by one rather than simply appearing; settled bits are full
+// bright.
 float __attribute__((noinline)) bitIntensity(uint16_t bit, uint32_t revealed,
                                              uint32_t elapsed_ms,
                                              uint32_t per_bit_ms) {

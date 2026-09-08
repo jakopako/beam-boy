@@ -93,9 +93,9 @@ class Engine {
   // Files the running game's score and returns to the launcher.
   void exitToLauncher();
 
-  // True while the exit gesture is being held, and how far through it is (0..1),
-  // so games can render the progress. Showing the gesture filling up is what
-  // stops it feeling like the console froze.
+  // True while the exit gesture is being held, and how far through it is
+  // (0..1), so games can render the progress. Showing the gesture filling up is
+  // what stops it feeling like the console froze.
   bool exitGestureActive() const { return exit_gesture_progress_ > 0.0f; }
   float exitGestureProgress() const { return exit_gesture_progress_; }
 

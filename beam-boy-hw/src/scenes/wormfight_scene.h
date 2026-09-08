@@ -46,11 +46,11 @@ class WormfightScene : public Scene {
   };
 
   struct Worm {
-    float head = 0.0f;      // normalised position of the leading segment
-    float speed = 0.0f;     // units per second, always negative (toward player)
-    uint8_t segments = 0;   // remaining hits; also the visual length
+    float head = 0.0f;     // normalised position of the leading segment
+    float speed = 0.0f;    // units per second, always negative (toward player)
+    uint8_t segments = 0;  // remaining hits; also the visual length
     bool active = false;
-    float hit_flash = 0.0f; // seconds remaining of the white hit flash
+    float hit_flash = 0.0f;  // seconds remaining of the white hit flash
   };
 
   struct Shot {
@@ -65,7 +65,7 @@ class WormfightScene : public Scene {
   struct Particle {
     float pos = 0.0f;
     float velocity = 0.0f;
-    float life = 0.0f;      // seconds remaining
+    float life = 0.0f;  // seconds remaining
     Color color;
     bool active = false;
   };

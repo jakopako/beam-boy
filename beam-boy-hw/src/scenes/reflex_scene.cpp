@@ -155,8 +155,8 @@ void ReflexScene::render(Engine& engine) {
 
   // The target zone is always drawn, so the player can aim before the dot
   // arrives rather than reacting to something they cannot see coming.
-  display.span(zone_center_ - zone_half_width_,
-               zone_center_ + zone_half_width_, kZoneColor, 0.35f);
+  display.span(zone_center_ - zone_half_width_, zone_center_ + zone_half_width_,
+               kZoneColor, 0.35f);
   display.point(zone_center_, kZoneColor, 0.7f);
 
   if (state_ == State::kSweeping) {

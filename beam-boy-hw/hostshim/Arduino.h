@@ -6,20 +6,20 @@
 // with no board attached. It is deliberately *small*: it provides only what the
 // code under test actually calls, and it makes no attempt to emulate a
 // microcontroller. Anything that needs real hardware behaviour -- WiFi, LED
-// timing, the cont task's stack -- is out of scope by construction and has to be
-// tested on the device.
+// timing, the cont task's stack -- is out of scope by construction and has to
+// be tested on the device.
 //
 // The important property is that time and input are *driven by the test* rather
 // than by a clock. millis() returns whatever the test last set, so a soak test
 // can advance a simulated hour in a few milliseconds of real time, and a button
 // test can place an edge exactly where it wants it.
 
+#include <cmath>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cmath>
 #include <string>
 
 // --- Arduino constants -----------------------------------------------------

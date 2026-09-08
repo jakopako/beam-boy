@@ -45,10 +45,10 @@ class NetworkScene : public Scene {
   Menu menu_ = Menu::kConnect;
   float phase_ = 0.0f;
 
-  // Forget is a destructive action reached by a single button press on a console
-  // with no text, so it asks first: the second press within the window confirms.
-  // Nothing else in the menu can be triggered by accident in a way the user
-  // cannot immediately undo, so nothing else needs this.
+  // Forget is a destructive action reached by a single button press on a
+  // console with no text, so it asks first: the second press within the window
+  // confirms. Nothing else in the menu can be triggered by accident in a way
+  // the user cannot immediately undo, so nothing else needs this.
   bool forget_armed_ = false;
   uint32_t forget_armed_at_ms_ = 0;
   static constexpr uint32_t kForgetArmMs = 3000;

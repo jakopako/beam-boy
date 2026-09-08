@@ -1,0 +1,10 @@
+---
+# Beam Boy — clang-format config.
+#
+# Pins the style already used throughout the codebase (2-space indent, 80
+# columns, Google-style brace placement) so "format on save" in any editor
+# reformats *to* this, instead of silently drifting toward whatever that
+# editor's C/C++ extension defaults to when no .clang-format is present. That
+# drift is exactly what was happening before this file existed.
+BasedOnStyle: Google
+ColumnLimit: 80

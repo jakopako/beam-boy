@@ -54,8 +54,7 @@ bool Storage::load() {
   uint32_t stored_checksum = 0;
 
   const size_t want = sizeof(SaveData);
-  const bool sized_right =
-      file.size() == want + sizeof(stored_checksum);
+  const bool sized_right = file.size() == want + sizeof(stored_checksum);
 
   if (!sized_right) {
     file.close();

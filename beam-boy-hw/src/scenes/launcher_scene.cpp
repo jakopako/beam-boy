@@ -2,6 +2,7 @@
 
 #include <math.h>
 
+#include "core/cartridge_store.h"
 #include "core/game_registry.h"
 
 namespace beamboy {
@@ -22,7 +23,7 @@ constexpr uint8_t kGapPixels = 1;
 void LauncherScene::enter(Engine& engine) {
   // Resume on whatever was played last: the console picks up where it was.
   selected_ = engine.storage().lastGame();
-  if (selected_ >= games::kGameCount) selected_ = 0;
+  if (selected_ >= gameList().count()) selected_ = 0;
 
   highlight_ = static_cast<float>(selected_);
   scroll_ = 0;
@@ -34,11 +35,11 @@ void LauncherScene::enter(Engine& engine) {
 }
 
 uint8_t LauncherScene::blockPixels(const Display& display) const {
-  if (games::kGameCount == 0) return kMinBlockPixels;
+  if (gameList().count() == 0) return kMinBlockPixels;
 
   // Fit every game if we can; only shrink blocks down to the readable minimum.
   const uint16_t available = display.pixelCount();
-  const uint16_t per_game = available / games::kGameCount;
+  const uint16_t per_game = available / gameList().count();
 
   if (per_game <= kMinBlockPixels + kGapPixels) return kMinBlockPixels;
 
@@ -61,7 +62,7 @@ void LauncherScene::update(Engine& engine, float dt) {
   if (launching_) {
     launch_timer_ -= dt;
     if (launch_timer_ <= 0.0f) {
-      Scene* scene = games::kGames[selected_].scene;
+      Scene* scene = gameList().at(selected_).scene;
       if (scene != nullptr) {
         engine.setCurrentGame(static_cast<int8_t>(selected_));
         engine.setScene(scene);
@@ -72,7 +73,7 @@ void LauncherScene::update(Engine& engine, float dt) {
     return;
   }
 
-  if (games::kGameCount == 0) return;
+  if (gameList().count() == 0) return;
 
   // Navigation comes through navDelta(), not the raw stick, so this code is
   // identical once the rotary encoder is fitted.
@@ -81,7 +82,7 @@ void LauncherScene::update(Engine& engine, float dt) {
     const int16_t next = static_cast<int16_t>(selected_) + step;
     // Clamp rather than wrap: on a physical line, running off the end and
     // reappearing at the other is disorienting.
-    if (next >= 0 && next < static_cast<int16_t>(games::kGameCount)) {
+    if (next >= 0 && next < static_cast<int16_t>(gameList().count())) {
       selected_ = static_cast<uint8_t>(next);
     }
   }
@@ -94,7 +95,8 @@ void LauncherScene::update(Engine& engine, float dt) {
     scroll_ = selected_ - slots + 1;
   }
 
-  highlight_ += (static_cast<float>(selected_) - highlight_) * kHighlightEase * dt;
+  highlight_ +=
+      (static_cast<float>(selected_) - highlight_) * kHighlightEase * dt;
 
   if (input.pressed(Button::kA) || input.pressed(Input::kNavButton)) {
     launching_ = true;
@@ -111,9 +113,9 @@ void LauncherScene::renderList(Engine& engine) {
 
   for (uint8_t slot = 0; slot < slots; slot++) {
     const uint16_t index = scroll_ + slot;
-    if (index >= games::kGameCount) break;
+    if (index >= gameList().count()) break;
 
-    const GameEntry& game = games::kGames[index];
+    const GameEntry& game = gameList().at(index);
 
     // Distance from the (eased) highlight drives brightness, so the selection
     // reads as a glow moving along the line rather than a discrete jump.
@@ -139,7 +141,7 @@ void LauncherScene::renderList(Engine& engine) {
   if (scroll_ > 0) {
     display.rawPixel(0, Color(60, 60, 60));
   }
-  if (scroll_ + slots < games::kGameCount) {
+  if (scroll_ + slots < gameList().count()) {
     display.rawPixel(display.pixelCount() - 1, Color(60, 60, 60));
   }
 }
@@ -148,8 +150,9 @@ void LauncherScene::render(Engine& engine) {
   Display& display = engine.display();
   display.clear();
 
-  if (games::kGameCount == 0) {
-    // Nothing installed: a slow red pulse rather than a dark, dead-looking tube.
+  if (gameList().count() == 0) {
+    // Nothing installed: a slow red pulse rather than a dark, dead-looking
+    // tube.
     const float level = 0.3f + 0.3f * pulse(millis() / 1000.0f, 2.0f);
     display.point(0.5f, colors::kRed, level);
     return;
@@ -158,7 +161,7 @@ void LauncherScene::render(Engine& engine) {
   // Holding B shows the selected game's highscore, so records are visible from
   // the menu without launching anything.
   if (engine.input().held(Button::kB)) {
-    engine.renderScore(engine.storage().highscore(games::kGames[selected_].id),
+    engine.renderScore(engine.storage().highscore(gameList().at(selected_).id),
                        engine.input().holdDuration(Button::kB));
     return;
   }
@@ -167,7 +170,7 @@ void LauncherScene::render(Engine& engine) {
     // The chosen game's colour floods the whole tube, then hands over. It makes
     // the launch feel like a commitment rather than an instant cut.
     const float progress = 1.0f - (launch_timer_ / kLaunchFlashTime);
-    display.span(0.0f, progress, games::kGames[selected_].accent, 1.0f);
+    display.span(0.0f, progress, gameList().at(selected_).accent, 1.0f);
     return;
   }
 

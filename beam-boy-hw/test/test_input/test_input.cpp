@@ -186,7 +186,8 @@ void test_nav_hysteresis_prevents_a_stream_of_steps(void) {
 
   int steps = 0;
   for (uint32_t t = 116; t < 2000; t += 16) {
-    // Oscillate in the band between kNavRelease (0.30) and kNavThreshold (0.55).
+    // Oscillate in the band between kNavRelease (0.30) and kNavThreshold
+    // (0.55).
     setStick(t % 32 == 0 ? 0.70f : 0.68f);
     tick(input, t);
     steps += input.navDelta() != 0 ? 1 : 0;

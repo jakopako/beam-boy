@@ -33,11 +33,15 @@ void BenchScene::enter(Engine& engine) {
   Serial.println(" bytes  <- the budget any VM must fit inside");
   Serial.println();
   Serial.println("naive_slowdown assumes a VM slows the draw calls too, which");
-  Serial.println("it does not -- draw stays native. update_headroom is the real");
-  Serial.println("pass mark: how many times slower than native the INTERPRETED");
+  Serial.println(
+      "it does not -- draw stays native. update_headroom is the real");
+  Serial.println(
+      "pass mark: how many times slower than native the INTERPRETED");
   Serial.println("half may be and still hold 60 fps.");
   Serial.println();
-  Serial.println("entities,mean_us,update_us,draw_us,worst_us,pct_of_budget,naive_slowdown,update_headroom");
+  Serial.println(
+      "entities,mean_us,update_us,draw_us,worst_us,pct_of_budget,naive_"
+      "slowdown,update_headroom");
 }
 
 void BenchScene::beginStep(uint8_t step) {
@@ -54,9 +58,8 @@ void BenchScene::beginStep(uint8_t step) {
   // Deterministic setup, so every run of the benchmark measures identical work
   // and results can be compared across builds and across VMs.
   for (uint16_t i = 0; i < entity_count_; i++) {
-    const float t = entity_count_ > 1
-                        ? static_cast<float>(i) / (entity_count_ - 1)
-                        : 0.0f;
+    const float t =
+        entity_count_ > 1 ? static_cast<float>(i) / (entity_count_ - 1) : 0.0f;
     entities_[i].pos = t;
     entities_[i].velocity =
         (kMinSpeed + t * (kMaxSpeed - kMinSpeed)) * ((i % 2) ? 1.0f : -1.0f);
@@ -64,8 +67,9 @@ void BenchScene::beginStep(uint8_t step) {
   }
 }
 
-// This is the function a scripted implementation must replace, and nothing else.
-// Keeping the boundary this tight is what makes the comparison meaningful.
+// This is the function a scripted implementation must replace, and nothing
+// else. Keeping the boundary this tight is what makes the comparison
+// meaningful.
 void BenchScene::runWorkload(Engine& engine) {
   Display& display = engine.display();
   const float dt = 1.0f / 60.0f;
@@ -184,9 +188,9 @@ void BenchScene::reportStep(Engine& engine) {
 void BenchScene::render(Engine& engine) {
   Display& display = engine.display();
 
-  // The workload already drew the entities into the framebuffer during update(),
-  // so rendering is just the progress indicator on top. Clearing here would
-  // throw away the very work being measured.
+  // The workload already drew the entities into the framebuffer during
+  // update(), so rendering is just the progress indicator on top. Clearing here
+  // would throw away the very work being measured.
 
   if (complete_) {
     // A slow green sweep: the benchmark finished and the numbers are on serial.
@@ -198,8 +202,7 @@ void BenchScene::render(Engine& engine) {
 
   // Progress through the current step, drawn at the very first pixel. It is
   // deliberately tiny: the point is to see the workload, not the HUD.
-  const float progress =
-      static_cast<float>(frames_this_step_) / kFramesPerStep;
+  const float progress = static_cast<float>(frames_this_step_) / kFramesPerStep;
   display.rawPixel(0, colors::kAmber.scaled(0.15f + 0.6f * progress));
 }
 

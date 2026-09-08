@@ -426,13 +426,12 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
 ### Phase 5 — VM bake-off ⚠️ *(1–2 days — do this before Phase 6)*
 > *Goal: prove the scripting model before betting the architecture on it.*
 
-> **⚠️ Berry is ESP32-only.** Tasmota, the only production embedder, documents it
-> as "NOT supported on ESP82xx" and hard-scopes its build to `espressif32`; no
-> prior art on ESP8266 exists, and the LX106's lack of unaligned-access support
-> conflicts with Berry's flash-resident const-object design. **The scripted half
-> of this phase is blocked on the ESP32-S3 Feather.** See
-> [`docs/phase-5-vm-bakeoff.md`](docs/phase-5-vm-bakeoff.md) for the evidence,
-> the vendoring recipe and the config flags.
+> **Update:** Berry only needs an ESP32 core, not the Feather's charging
+> circuit, so this ran on the `esp32-s3-devkitc-1-n16r8` dev board rather than
+> waiting for the Feather. See
+> [`docs/phase-5-vm-bakeoff.md`](docs/phase-5-vm-bakeoff.md) for the vendoring
+> notes, the real hardware measurements (per-entity and batched), and the
+> resulting cartridge-API design constraint.
 
 1. ✅ Build the **native baseline** (`BenchScene`) — runs on the ESP8266 today, no
    Feather needed. Sweeps 10/25/50/100 entities and prints, as CSV, the frame
@@ -443,12 +442,27 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
    **✅ Result: 52× headroom at 100 entities. Scripting is viable.** The run also
    exposed a soft-float bottleneck in the renderer, since fixed to 8.8 integer
    maths for a 35 % cut in draw cost.
-2. Embed **Berry** into the firmware on the S3. Bind three test functions from
-   the Beam API.
-3. Reimplement `runWorkload()` — and *only* that function — as a script. The tight
+2. ✅ Embed **Berry** into the firmware on the S3 (`VmBenchScene`, both a
+   per-entity-call and a batched-call variant, toggled with B).
+   **✅ Result on real hardware: `update_headroom` = 3.5 at 100 entities
+   per-entity, 69.5 batched.** The per-entity number is a real pass but tight —
+   almost entirely per-call VM↔native crossing overhead. Batching (one call per
+   frame over a persistent list) confirms that: headroom jumps ~20× and stops
+   shrinking with entity count.
+3. ✅ Reimplement `runWorkload()` — and *only* that function — as a script. The tight
    boundary is what makes the comparison meaningful.
-4. **Compare against the baseline.** Pass = beats `max_vm_slowdown` with headroom.
-5. If Berry fails, try **mruby/c** (claims <40 KB); if that fails too, fall back to
+4. ✅ **Compare against the baseline.** Pass = beats `max_vm_slowdown` with headroom.
+   **Passed comfortably with the batched calling convention (69.5× at 100
+   entities).**
+5. ✅ **Batch the call.** One script call over the whole entity list, looping
+   internally, instead of one call per entity.
+   **✅ Result: confirms the gap was call overhead, not interpretation cost —
+   see item 2.** Concrete consequence for Phase 6: the cartridge API should
+   expose one "update all entities" entry point that owns its own list, not a
+   per-entity callback.
+6. mruby/c comparison (`vm-mruby-compare`) is no longer necessary to justify
+   Berry on performance — parked, not pursued, unless authoring ergonomics or
+   footprint become a problem later. If Berry ever does fail outright, fall back to
    the **data-driven engine** (games as declarative JSON describing entities,
    waves and rules, interpreted natively). *mJS was rejected on expressiveness —
    no closures or classes makes for a poor cartridge language.*
@@ -458,15 +472,35 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
 ### Phase 6 — Games as scripts *(2–3 days)*
 > *Goal: the cartridge model, working locally.*
 
-1. Expose the full Beam API to the VM.
-2. Port Wormfight from C++ to `game.be`. Iterate until it plays identically.
-3. Launcher enumerates `/games/*/meta.json` — installed games are now *data*, not code.
-4. **Sandboxing:** cap script memory, and enforce a per-tick instruction limit so a buggy
-   game can't hang the console — on overrun, abort the game and return to the launcher.
-5. Dev quality-of-life: a `dev` build that pushes `game.be` over serial or HTTP and hot-reloads
-   it, so iterating on a game takes seconds, not a flash cycle.
+> **Update:** `beam` API bound, Reflex ported to a script and confirmed playing
+> identically to the native version on real ESP32-S3 hardware, and cartridges
+> now load from `/games/` on LittleFS. See
+> [`docs/phase-6-cartridges.md`](docs/phase-6-cartridges.md) for the API
+> surface, the cartridge format, and what's still open.
 
-✅ *Visible result: write a game, push it, play it — no reflash.*
+1. ✅ Expose the full Beam API to the VM (`src/vm/beam_api.*`).
+2. ✅ Port a game from C++ to script. **Reflex**, not Wormfight -- deliberately
+   the smaller cartridge, chosen in docs/phase-5-vm-bakeoff.md as "the natural
+   first cartridge to port... small enough to reason about completely."
+   **Result: plays identically, confirmed on hardware, no bugs found.**
+   Wormfight itself is not yet ported.
+3. ✅ Launcher enumerates `/games/*/meta.json` — installed games are now *data*, not code.
+   `src/core/cartridge_store.*` scans the filesystem at boot and merges what it
+   finds with the built-in registry into one list, so the launcher, score filing
+   and `beam.highscore()` are unchanged. Format is documented in
+   `beam-boy-hw/data/README.md`; `data/games/reflexfs/` is a working example.
+4. ⬜ **Sandboxing:** cap script memory, and enforce a per-tick instruction limit so a buggy
+   game can't hang the console — on overrun, abort the game and return to the launcher.
+   Not yet built: nothing stops an infinite loop in a script's `update()` today. **This is
+   now the gating item** — cartridges can arrive as data, so this should close before
+   anything is installed from the network.
+5. ⬜ Dev quality-of-life: a `dev` build that pushes `game.be` over serial or HTTP and hot-reloads
+   it, so iterating on a game takes seconds, not a flash cycle. Partially eased: `uploadfs`
+   already reloads a script without a firmware flash, and the source is re-read on each launch.
+
+✅ *Visible result: write a game, push it, play it — no reflash.* **(Met via
+`uploadfs`: a game can be added or edited without rebuilding firmware. Pushing
+it over the air is item 5.)*
 
 ### Phase 7 — The store *(2 days)*
 > *Goal: download games from the internet.*

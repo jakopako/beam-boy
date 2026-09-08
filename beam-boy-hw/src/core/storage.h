@@ -8,9 +8,9 @@
 // rather spend on games.
 //
 // The record is versioned and checksummed. A Beam Boy is expected to be
-// reflashed often (that is the whole point of the cartridge model), and a struct
-// layout will change between firmware versions. Rather than corrupting a save,
-// a mismatched version or a bad checksum resets to defaults silently.
+// reflashed often (that is the whole point of the cartridge model), and a
+// struct layout will change between firmware versions. Rather than corrupting a
+// save, a mismatched version or a bad checksum resets to defaults silently.
 //
 // Highscores are keyed by a game's string id, not by its index in the registry.
 // Installing a new game must not shuffle everyone else's scores.
@@ -60,8 +60,13 @@ class Storage {
   void reset();
 
  private:
-  static constexpr uint8_t kVersion = 1;
-  static constexpr uint8_t kMaxScores = 12;
+  static constexpr uint8_t kVersion = 2;
+  // Distinct games that can hold a highscore. Must cover the built-in registry
+  // *plus* every installable cartridge (kMaxCartridges), since both compete for
+  // this one table -- once it is full, a new game's first record is silently
+  // dropped. Sized with headroom rather than exactly, because growing it later
+  // invalidates every existing save (see kVersion).
+  static constexpr uint8_t kMaxScores = 24;
   // Storage key size, including the terminating NUL. An id must therefore be at
   // most kGameIdLength - 1 characters; submitScore() rejects longer ones rather
   // than truncating, since two ids sharing a prefix would silently collide.

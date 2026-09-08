@@ -50,9 +50,9 @@ void NetworkScene::idle(Engine& engine) {
   (void)engine;
   // The whole reason idle servicing exists. Between frames there is nothing to
   // draw and nothing to animate, but the WiFi stack still has deadlines --
-  // association, DHCP, RF calibration -- and the HTTP and DNS servers still have
-  // requests waiting. Servicing them only at 60 Hz left the SDK starved during
-  // exactly the operations that are most sensitive to it.
+  // association, DHCP, RF calibration -- and the HTTP and DNS servers still
+  // have requests waiting. Servicing them only at 60 Hz left the SDK starved
+  // during exactly the operations that are most sensitive to it.
   net_.tick();
 }
 
@@ -74,9 +74,9 @@ void NetworkScene::update(Engine& engine, float dt) {
   const NetState state = net_.state();
   if (state != last_state_) {
     last_state_ = state;
-    settled_at_ms_ = (state == NetState::kConnected || state == NetState::kFailed)
-                         ? millis()
-                         : 0;
+    settled_at_ms_ =
+        (state == NetState::kConnected || state == NetState::kFailed) ? millis()
+                                                                      : 0;
     if (state == NetState::kPortalActive) {
       Serial.print(F("[net] portal open -- join '"));
       Serial.print(F("BeamBoy-Setup' then open http://"));
@@ -106,9 +106,11 @@ void NetworkScene::update(Engine& engine, float dt) {
   if (state != NetState::kOff) {
     // Once connected, A starts a firmware update. This is the only route to
     // OTA, so it cannot be reached without deliberately connecting first.
-    if (state == NetState::kConnected && !ota_active_ && input.pressed(Button::kA)) {
+    if (state == NetState::kConnected && !ota_active_ &&
+        input.pressed(Button::kA)) {
       ota_active_ = true;
-      phase_ = 0.0f;  // The OTA animations are timed from here, not scene entry.
+      phase_ =
+          0.0f;  // The OTA animations are timed from here, not scene entry.
 
       // Paint the "working" frame before starting, because the download blocks:
       // flash writes disable interrupts in bursts and would corrupt the WS2812
@@ -148,7 +150,8 @@ void NetworkScene::update(Engine& engine, float dt) {
     if (net_.hasCredentials()) {
       int8_t index = static_cast<int8_t>(menu_) + step;
       if (index < 0) index = 0;
-      if (index > static_cast<int8_t>(Menu::kForget)) index = static_cast<int8_t>(Menu::kForget);
+      if (index > static_cast<int8_t>(Menu::kForget))
+        index = static_cast<int8_t>(Menu::kForget);
       menu_ = static_cast<Menu>(index);
     } else {
       menu_ = Menu::kSetup;
@@ -159,7 +162,8 @@ void NetworkScene::update(Engine& engine, float dt) {
   }
 
   // An armed Forget also expires on its own, so it cannot sit primed
-  // indefinitely waiting to catch a press the user has forgotten the context of.
+  // indefinitely waiting to catch a press the user has forgotten the context
+  // of.
   if (forget_armed_ && millis() - forget_armed_at_ms_ > kForgetArmMs) {
     forget_armed_ = false;
   }
@@ -187,8 +191,8 @@ void NetworkScene::applyMenu(Engine& engine) {
     }
     case Menu::kForget:
       // Two presses, because this is destructive and there is no text to warn
-      // with. The first arms it (the entry starts flashing urgently), the second
-      // within kForgetArmMs commits. Navigating away disarms.
+      // with. The first arms it (the entry starts flashing urgently), the
+      // second within kForgetArmMs commits. Navigating away disarms.
       if (!forget_armed_) {
         forget_armed_ = true;
         forget_armed_at_ms_ = millis();
@@ -293,12 +297,13 @@ void NetworkScene::drawMenu(Engine& engine) {
     if (!provisioned && item.menu != Menu::kSetup) continue;
 
     const bool selected = item.menu == menu_;
-    // Every entry is drawn the same width, and only brightness plus motion marks
-    // the selection. An earlier version drew unselected entries a third of the
-    // width, which on a short strip made them single dim pixels of three
+    // Every entry is drawn the same width, and only brightness plus motion
+    // marks the selection. An earlier version drew unselected entries a third
+    // of the width, which on a short strip made them single dim pixels of three
     // different colours -- indistinguishable from rendering artefacts rather
     // than reading as a row of deliberate choices.
-    float breathe = selected ? 0.65f + 0.35f * wrappedSin(phase_ * 4.0f) : 0.10f;
+    float breathe =
+        selected ? 0.65f + 0.35f * wrappedSin(phase_ * 4.0f) : 0.10f;
 
     // An armed Forget blinks hard and fast rather than breathing calmly, so the
     // "press again and I erase" state cannot be mistaken for the resting one.
@@ -331,7 +336,8 @@ void NetworkScene::drawStatus(Engine& engine) {
       // Slow amber breathing across the whole tube -- deliberately calm and
       // unhurried, because the user is meant to be looking at their phone, not
       // at the console.
-      const float level = 0.25f + 0.35f * wrappedSin(phase_ * kPulseSpeed * 6.283f);
+      const float level =
+          0.25f + 0.35f * wrappedSin(phase_ * kPulseSpeed * 6.283f);
       display.span(0.0f, 1.0f, kPortalColor, level);
 
       // A scan is invisible from the tube otherwise, and it is the one moment
@@ -350,7 +356,8 @@ void NetworkScene::drawStatus(Engine& engine) {
       if (since < kSettleMs) {
         // Celebrate briefly: a green wipe outward from the centre.
         const float t = static_cast<float>(since) / kSettleMs;
-        display.span(0.5f - t * 0.5f, 0.5f + t * 0.5f, kOkColor, 1.0f - t * 0.5f);
+        display.span(0.5f - t * 0.5f, 0.5f + t * 0.5f, kOkColor,
+                     1.0f - t * 0.5f);
       } else {
         // Then settle to a calm heartbeat so the tube is not a lamp.
         const float level = 0.12f + 0.08f * wrappedSin(phase_ * 2.0f);
@@ -374,16 +381,21 @@ void NetworkScene::drawStatus(Engine& engine) {
       //   3 flashes       anything else (timed out, or the link dropped)
       uint8_t flashes = 3;
       switch (net_.failReason()) {
-        case Network::FailReason::kBadPassword: flashes = 2; break;
-        case Network::FailReason::kNotFound: flashes = 4; break;
-        default: break;
+        case Network::FailReason::kBadPassword:
+          flashes = 2;
+          break;
+        case Network::FailReason::kNotFound:
+          flashes = 4;
+          break;
+        default:
+          break;
       }
 
       if (since < kSettleMs) {
         const float t = static_cast<float>(since) / kSettleMs;
-        // Plain sinf is fine here, unlike the animated states: the branch bounds
-        // t to 0..1, so the argument never exceeds ~25 and cannot reach the
-        // huge-argument path that needs wrappedSin.
+        // Plain sinf is fine here, unlike the animated states: the branch
+        // bounds t to 0..1, so the argument never exceeds ~25 and cannot reach
+        // the huge-argument path that needs wrappedSin.
         const float flash = sinf(t * flashes * 6.283f);
         if (flash > 0.0f) display.span(0.0f, 1.0f, kFailColor, flash);
       } else {

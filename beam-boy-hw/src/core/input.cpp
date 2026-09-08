@@ -52,8 +52,8 @@ void Input::calibrateCenter() {
     total += analogRead(board::kPinStickX);
     delay(2);
   }
-  stick_center_ =
-      static_cast<float>(total) / (kSamples * static_cast<float>(board::kAdcMax));
+  stick_center_ = static_cast<float>(total) /
+                  (kSamples * static_cast<float>(board::kAdcMax));
 }
 
 void Input::update(uint32_t now_ms) {
@@ -131,7 +131,8 @@ void Input::updateNav() {
   const int8_t direction = stick_x_ > 0.0f ? 1 : -1;
 
   // Released, or pushed the other way: reset and allow an immediate step.
-  if (magnitude < kNavRelease || (nav_direction_ != 0 && direction != nav_direction_)) {
+  if (magnitude < kNavRelease ||
+      (nav_direction_ != 0 && direction != nav_direction_)) {
     nav_direction_ = 0;
     nav_hold_ms_ = 0;
     return;
