@@ -595,8 +595,19 @@ void Network::handleRoot() {
     // scan that failed.
     server_.sendContent(F("Still scanning &mdash; <a href=\"/\">reload</a> in a moment."));
   } else {
-    server_.sendContent(F("Network missing? <a href=\"/rescan\">Scan again</a> &mdash; "
-                          "a scan can miss networks, and 5 GHz-only ones never appear."));
+    // Plain navigation gives no feedback until the response starts arriving,
+    // which is instant on the firmware side but still a blank pause on the
+    // phone. The onclick swaps the link for "Scanning..." synchronously, then
+    // defers the actual navigation by one tick (setTimeout 0) so the browser
+    // gets a chance to paint that text before it starts the request. No
+    // external script, so this does not violate the no-external-reference
+    // rule -- it never runs if JS is disabled, and the link still works, just
+    // without the instant feedback.
+    server_.sendContent(
+        F("Network missing? <a href=\"/rescan\" id=r "
+          "onclick=\"event.preventDefault();r.textContent='Scanning...';"
+          "setTimeout(()=>location.href='/rescan',0)\">Scan again</a> &mdash; "
+          "a scan can miss networks, and 5 GHz-only ones never appear."));
   }
   server_.sendContent(F("</p></body></html>"));
   // Zero-length chunk: terminates a chunked response. Without it the browser
