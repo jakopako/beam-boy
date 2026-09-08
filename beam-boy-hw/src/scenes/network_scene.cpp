@@ -84,9 +84,9 @@ void NetworkScene::update(Engine& engine, float dt) {
     } else if (state == NetState::kConnected) {
       Serial.print(F("[net] connected, ip "));
       Serial.print(net_.address());
-      // TLS needs ~16-22 KB for a handshake on the ESP8266. If this number is
-      // close to that, OTA will fail at the handshake rather than the download,
-      // which looks identical from the tube -- so it is worth logging.
+      // TLS needs ~16-22 KB for a handshake. If this number is close to that,
+      // OTA will fail at the handshake rather than the download, which looks
+      // identical from the tube -- so it is worth logging.
       Serial.print(F("  free heap "));
       Serial.println(ESP.getFreeHeap());
     } else if (state == NetState::kFailed && !net_.hasCredentials()) {

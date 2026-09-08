@@ -1,16 +1,9 @@
 #include "ota.h"
 
-#if defined(ARDUINO_ARCH_ESP8266)
-#include <ESP8266HTTPClient.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266httpUpdate.h>
-#include <WiFiClientSecure.h>
-#else
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#endif
 
 namespace beamboy {
 namespace {
@@ -25,18 +18,6 @@ constexpr char kManifestUrl[] =
 // string, so any difference means "install", including a downgrade. That is
 // intentional -- rolling users back off a bad release must be possible.
 constexpr char kVersion[] = "0.4.0";
-
-// TLS on the ESP8266 is the expensive part of this whole feature: BearSSL needs
-// ~16-22 KB of heap for a handshake, against the ~46 KB the device has free.
-// It fits only because OTA runs from the launcher with no game loaded.
-//
-// A smaller receive buffer is the difference between fitting and not. 1 KB is
-// below the 16 KB maximum TLS record size, which works only because servers
-// negotiate the smaller buffer via max_fragment_length. If a server refuses
-// that extension the handshake fails -- hence the explicit error message rather
-// than a bare "connection failed".
-constexpr uint16_t kTlsRxBuffer = 1024;
-constexpr uint16_t kTlsTxBuffer = 512;
 
 }  // namespace
 
@@ -64,9 +45,6 @@ bool Ota::checkForUpdate() {
 
   WiFiClientSecure client;
   client.setInsecure();  // See the note at the end of this file.
-#if defined(ARDUINO_ARCH_ESP8266)
-  client.setBufferSizes(kTlsRxBuffer, kTlsTxBuffer);
-#endif
 
   HTTPClient http;
   if (!http.begin(client, kManifestUrl)) {
@@ -154,14 +132,8 @@ bool Ota::install() {
 
   WiFiClientSecure client;
   client.setInsecure();
-#if defined(ARDUINO_ARCH_ESP8266)
-  client.setBufferSizes(kTlsRxBuffer, kTlsTxBuffer);
-  ESP8266HTTPUpdate updater;
-  updater.rebootOnUpdate(false);
-#else
   HTTPUpdate updater;
   updater.rebootOnUpdate(false);
-#endif
 
   // The image is written to the inactive slot. Nothing about the running
   // firmware is touched until this returns successfully.
@@ -208,8 +180,8 @@ bool Ota::install() {
 // over plain HTTP from a hostile server. Signatures do not expire, which means
 // this also works on a device that has been offline for years.
 //
-// That would additionally let the ESP8266 drop TLS entirely for the download
-// and reclaim ~20 KB of heap. Deferred to Phase 9 because it needs a signing
-// key and a release pipeline, which do not exist yet.
+// That would additionally let this device drop TLS entirely for the download
+// and reclaim heap. Deferred to Phase 9 because it needs a signing key and a
+// release pipeline, which do not exist yet.
 
 }  // namespace beamboy

@@ -62,8 +62,9 @@ void Display::addToPixel(uint16_t index, const Color& color, float weight) {
 
   // Scale and blend in one pass. Converting the weight to fixed-point here,
   // rather than calling scaled() and blending the result, keeps the single
-  // unavoidable float->int conversion and drops the temporary Color entirely.
-  // On the FPU-less ESP8266 this is the difference that matters.
+  // unavoidable float->int conversion and drops the temporary Color entirely --
+  // cheap on any target, and the difference that matters on a core without an
+  // FPU.
   const uint16_t f =
       weight >= 1.0f ? 256 : static_cast<uint16_t>(weight * 256.0f);
   if (f == 0) return;
@@ -157,20 +158,10 @@ void Display::rawPixel(uint16_t index, const Color& color) {
 }
 
 void Display::present() {
-  // Skip the strip entirely on divided frames. The framebuffer still holds the
-  // latest drawing, so nothing is lost -- the tube simply updates less often
-  // while something more timing-critical than animation is happening.
-  if (refresh_divider_ > 1) {
-    if (++refresh_counter_ < refresh_divider_) return;
-    refresh_counter_ = 0;
-  }
-
-  // Never wait for the previous DMA transfer. NeoPixelBus's Update() spins on
-  // yield() until the I2S buffer has drained, and yield() on the ESP8266 runs
-  // the SDK's scheduled work -- so blocking here hands control back to the
-  // network stack from the middle of the render path, which is exactly the kind
-  // of surprise re-entrancy that has crashed this device before. Dropping the
-  // frame instead is invisible at 60 fps and keeps present() bounded.
+  // Never wait for the previous transfer. On the ESP32-S3 the RMT peripheral
+  // drives WS2812 timing in hardware, so this should basically never be
+  // false, but skipping a frame if it ever is stays invisible at 60 fps and
+  // keeps present() bounded no matter what.
   if (!strip_.CanShow()) return;
 
   // The brightness cap is applied here, at the boundary, so games cannot exceed

@@ -30,10 +30,10 @@ struct Color {
 
   // Scale all channels by 0..1, used for anti-aliasing and fading.
   //
-  // Deliberately fixed-point: the ESP8266's LX106 core has no FPU, so every
-  // float multiply here is a soft-float library call. Converting the factor to
-  // a 0..256 integer once turns float multiplies and casts into integer
-  // multiplies and shifts.
+  // Deliberately fixed-point rather than float: converting the factor to a
+  // 0..256 integer once turns float multiplies and casts into integer
+  // multiplies and shifts, which is cheap on any target and free of soft-float
+  // library calls on cores without an FPU.
   //
   // Note this TRUNCATES rather than rounds, unlike the blend path in
   // addToPixel(). That is required, not an oversight: fade() calls this
@@ -64,12 +64,14 @@ constexpr Color kAmber(255, 140, 0);
 
 // Sine for animation, safe to call with a phase that grows without bound.
 //
-// This exists because plain sinf() crashes the ESP8266 once its argument gets
-// large. For |x| beyond a few hundred, newlib falls out of its fast path into
-// __kernel_rem_pio2f, the "huge argument" argument-reduction routine, which
-// allocates a large local array. The cont task's stack is only ~4 KB, so that
-// allocation overflows it and the device resets -- after several minutes of
-// running perfectly, since the argument has to grow first.
+// This exists because plain sinf() can crash on constrained cores once its
+// argument gets large. For |x| beyond a few hundred, newlib falls out of its
+// fast path into __kernel_rem_pio2f, the "huge argument" argument-reduction
+// routine, which allocates a large local array -- enough to overflow a small
+// task stack and reset the device, after several minutes of running
+// perfectly, since the argument has to grow first. This was the actual cause
+// of a real crash on the ESP8266 prototype (its ~4 KB cont stack); kept as
+// cheap insurance now that the firmware targets ESP32.
 //
 // Every animated scene has a phase that increases every frame, so every one of
 // them is a latent version of this bug. Wrapping the phase into a single period
@@ -129,27 +131,6 @@ class Display {
 
   void present();
 
-  // Limits how often present() actually drives the strip, in frames. 1 is every
-  // frame (the default); 4 means every fourth frame, and so on.
-  //
-  // This exists because WS2812 output and WiFi contend for the same hardware.
-  // The I2S/DMA method is interrupt-safe, which is why it was chosen, but it is
-  // not free: it drives GPIO3 continuously for the length of the strip plus a
-  // reset gap, and NeoPixelBus's Update() calls yield() while waiting for the
-  // previous transfer to drain. During radio-critical work (a scan, an
-  // association, RF calibration) that steady drumbeat of DMA and yields is
-  // enough to disturb the PHY, which faults inside the SDK's own timing
-  // callbacks -- DefFreqCalTimerCB, ppCheckTxIdle, pp_tx_idle_timeout -- with a
-  // perfectly healthy heap.
-  //
-  // Slowing the refresh rather than stopping it keeps the tube alive so the user
-  // can still see what the device is doing, which is the whole point of having a
-  // display during provisioning.
-  void setRefreshDivider(uint8_t divider) {
-    refresh_divider_ = divider < 1 ? 1 : divider;
-    refresh_counter_ = 0;
-  }
-
   // --- Effects -------------------------------------------------------------
 
   // Offset everything drawn afterwards by a normalised amount. Used for screen
@@ -178,8 +159,9 @@ class Display {
   void setReversed(bool reversed) { reversed_ = reversed; }
 
 #if defined(BEAMBOY_NATIVE)
-  // Host-only: how many times the strip was actually driven. Used to test the
-  // refresh divider, which skips transfers rather than changing their content.
+  // Host-only: how many times the strip was actually driven. Used to test that
+  // present() skips a frame rather than driving the strip when CanShow() is
+  // false, without modelling real DMA timing.
   uint32_t shownCount() const { return strip_.shownCount(); }
 #endif
 
@@ -191,9 +173,6 @@ class Display {
   uint8_t brightness_ = board::kBrightnessCap;
   bool reversed_ = false;
 
-  // See setRefreshDivider(). 1 = drive the strip every frame.
-  uint8_t refresh_divider_ = 1;
-  uint8_t refresh_counter_ = 0;
   float shake_ = 0.0f;
 };
 

@@ -6,12 +6,12 @@
 // free of any WiFi headers.
 //
 // This split exists so the rules can be tested on the host. network.h drags in
-// the whole ESP8266WiFi/WiFi stack, which cannot be compiled natively without
-// shimming a large and rapidly-moving driver API -- but the interesting part is
-// not the driver, it is the question "given this outcome, do we keep the
-// credentials?". That question is a two-input truth table, and getting it wrong
-// either strands the user with an unusable Connect entry or silently erases a
-// working configuration. It deserves tests; the driver call around it does not.
+// the whole WiFi stack, which cannot be compiled natively without shimming a
+// large and rapidly-moving driver API -- but the interesting part is not the
+// driver, it is the question "given this outcome, do we keep the credentials?".
+// That question is a two-input truth table, and getting it wrong either strands
+// the user with an unusable Connect entry or silently erases a working
+// configuration. It deserves tests; the driver call around it does not.
 
 namespace beamboy {
 

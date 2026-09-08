@@ -5,10 +5,7 @@
 // of games lives in the registry.
 
 #include <Arduino.h>
-
-#if defined(ARDUINO_ARCH_ESP8266)
-#include <ESP8266WiFi.h>
-#endif
+#include <WiFi.h>
 
 #include "core/engine.h"
 #include "core/game_registry.h"
@@ -34,15 +31,13 @@ void setup() {
     delay(10);
   }
 
-  // The radio powers up automatically at boot and draws ~70-120 mA even when
+  // The radio powers up automatically at boot and draws tens of mA even when
   // idle, several times the LED budget. Beam Boy is offline by default, so keep
-  // it off until the user explicitly opts in (Phase 4).
-#if defined(ARDUINO_ARCH_ESP8266)
+  // it off until the user explicitly opts in (Phase 4). Network::begin() does
+  // this too, but only runs on Network-scene entry -- this is the guard for
+  // every boot before the user ever visits that scene.
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
-  WiFi.forceSleepBegin();
-  delay(1);
-#endif
 
   // Calibrates the joystick centre, so leave the stick untouched at boot.
   engine.begin();

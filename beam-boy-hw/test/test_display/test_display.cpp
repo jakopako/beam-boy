@@ -109,50 +109,14 @@ void test_hsv_zero_saturation_is_grey(void) {
   TEST_ASSERT_EQUAL_UINT8(grey.g, grey.b);
 }
 
-void test_refresh_divider_of_one_shows_every_frame(void) {
+void test_present_shows_every_frame(void) {
   Display d;
   for (int i = 0; i < 10; ++i) {
     d.rawPixel(0, colors::kWhite);
     d.present();
   }
-  // Divider 1 is the default and must not skip: games rely on every frame
-  // reaching the strip.
+  // Games rely on every frame reaching the strip.
   TEST_ASSERT_EQUAL_UINT32(10, d.shownCount());
-}
-
-void test_refresh_divider_shows_one_frame_in_n(void) {
-  Display d;
-  d.setRefreshDivider(4);
-  for (int i = 0; i < 12; ++i) {
-    d.rawPixel(0, colors::kWhite);
-    d.present();
-  }
-  // Exactly a quarter of the frames reach the strip. This is what keeps the
-  // WS2812 DMA off the radio's back during provisioning.
-  TEST_ASSERT_EQUAL_UINT32(3, d.shownCount());
-}
-
-void test_refresh_divider_of_zero_is_treated_as_one(void) {
-  Display d;
-  // A zero divider would mean "never show" if taken literally, blanking the
-  // tube permanently. Clamped to 1 so a bad caller cannot black out the only
-  // output the device has.
-  d.setRefreshDivider(0);
-  d.present();
-  TEST_ASSERT_EQUAL_UINT32(1, d.shownCount());
-}
-
-void test_resetting_the_divider_restores_every_frame(void) {
-  Display d;
-  d.setRefreshDivider(4);
-  for (int i = 0; i < 4; ++i) d.present();
-  TEST_ASSERT_EQUAL_UINT32(1, d.shownCount());
-
-  // NetworkScene::exit() does this. If it regressed, every game started after
-  // visiting the network scene would run at a quarter refresh rate.
-  d.setRefreshDivider(1);
-  for (int i = 0; i < 4; ++i) d.present();
-  TEST_ASSERT_EQUAL_UINT32(5, d.shownCount());
 }
 
 int main(int, char**) {
@@ -165,9 +129,6 @@ int main(int, char**) {
   RUN_TEST(test_scaled_endpoints);
   RUN_TEST(test_hsv_primaries);
   RUN_TEST(test_hsv_zero_saturation_is_grey);
-  RUN_TEST(test_refresh_divider_of_one_shows_every_frame);
-  RUN_TEST(test_refresh_divider_shows_one_frame_in_n);
-  RUN_TEST(test_refresh_divider_of_zero_is_treated_as_one);
-  RUN_TEST(test_resetting_the_divider_restores_every_frame);
+  RUN_TEST(test_present_shows_every_frame);
   return UNITY_END();
 }

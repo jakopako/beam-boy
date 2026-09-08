@@ -10,8 +10,7 @@ constexpr char kApName[] = "BeamBoy-Setup";
 
 // The setup page. Deliberately one self-contained string with no external CSS,
 // fonts or scripts: the portal has no internet route, so any external reference
-// would hang until it times out. Kept in PROGMEM to keep it out of RAM on the
-// ESP8266, where it would otherwise cost ~1.5 KB of the ~46 KB we have.
+// would hang until it times out. Kept in PROGMEM to keep it out of RAM.
 const char kSetupPageHead[] PROGMEM = R"HTML(<!DOCTYPE html>
 <html><head><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Beam Boy</title><style>
@@ -95,9 +94,6 @@ void Network::begin() {
   // radio-off-by-default rule before our code ever runs.
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
-#if defined(ARDUINO_ARCH_ESP8266)
-  WiFi.setAutoConnect(false);
-#endif
   WiFi.setAutoReconnect(false);
 
   state_ = NetState::kOff;
@@ -188,14 +184,11 @@ Network::FailReason Network::classifyFailure(bool deadline_reached) const {
   // authoritative.
   //
   // wl_status_t deliberately is not used to detect a bad password. It cannot:
-  //   - The value 6 is WL_WRONG_PASSWORD on the ESP8266 but WL_DISCONNECTED on
-  //     the ESP32, so any numeric comparison means opposite things per core.
-  //   - WL_CONNECT_FAILED is not an authentication verdict on either core. On
-  //     the ESP32 it also covers WIFI_REASON_ASSOC_FAIL -- an AP at capacity,
-  //     for instance -- and reading it as "wrong password" would erase perfectly
-  //     good credentials.
-  //   - On the ESP32 it is a cached value updated by events, so straight after
-  //     WiFi.begin() it can still describe the *previous* attempt.
+  //   - WL_CONNECT_FAILED is not an authentication verdict -- it also covers
+  //     WIFI_REASON_ASSOC_FAIL (an AP at capacity, for instance), and reading it
+  //     as "wrong password" would erase perfectly good credentials.
+  //   - It is a cached value updated by events, so straight after WiFi.begin()
+  //     it can still describe the *previous* attempt.
   if (authRejectedThisAttempt()) return FailReason::kBadPassword;
 
   // Not-found is safe to read from status: it says the AP was never heard, and
@@ -280,33 +273,24 @@ void Network::registerEventHandlers() {
   wifi_events_registered_ = true;
 
   // Why events rather than WiFi.status(): the status word collapses every kind
-  // of failure into a handful of values that mean different things on the two
-  // cores, and on the ESP32 it lags behind the driver. The disconnect *reason*
-  // is the only place the radio says why it gave up, and it is the difference
-  // between "your password is wrong" and "that access point is full".
+  // of failure into a handful of values, and it lags behind the driver. The
+  // disconnect *reason* is the only place the radio says why it gave up, and it
+  // is the difference between "your password is wrong" and "that access point
+  // is full".
 
-#if defined(ARDUINO_ARCH_ESP8266)
-  // Keep the handler alive for the object's lifetime -- the core holds it by
-  // weak reference and silently stops delivering if it is destroyed.
-  sta_disconnected_handler_ = WiFi.onStationModeDisconnected(
-      [this](const WiFiEventStationModeDisconnected& event) {
-        onDisconnected(static_cast<int>(event.reason));
-      });
-#else
   WiFi.onEvent(
       [this](arduino_event_id_t, arduino_event_info_t info) {
         onDisconnected(info.wifi_sta_disconnected.reason);
       },
       ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-#endif
 }
 
 void Network::onDisconnected(int reason) {
-  // Runs on the WiFi event task on ESP32, not the loop task, so everything it
-  // touches is atomic and it stays short.
+  // Runs on the WiFi event task, not the loop task, so everything it touches
+  // is atomic and it stays short.
   //
-  // Correlation is by *generation*, not by an in-progress flag. ESP32 queues
-  // events to another task, so a failure generated while tearing down one
+  // Correlation is by *generation*, not by an in-progress flag. Events are
+  // queued to another task, so a failure generated while tearing down one
   // attempt can be delivered after the next has already begun -- and
   // attributing that to freshly corrected credentials is precisely how a
   // password the user just got right would get erased. Stamping the event with
@@ -315,23 +299,10 @@ void Network::onDisconnected(int reason) {
   const uint32_t gen = attempt_gen_.load();
   if (gen == kNoAttempt) return;
 
-#if defined(ARDUINO_ARCH_ESP8266)
-  // Only reasons that specifically mean "the key was refused".
-  //
-  // REASON_AUTH_EXPIRE is excluded: it means a *previous* authentication
-  // lapsed, not that this one was rejected. The generic REASON_HANDSHAKE_TIMEOUT
-  // is excluded for the same reason it is on ESP32 -- interference and packet
-  // loss reach it too. Reason 15 is the 4-way handshake specifically, which is
-  // where a wrong WPA key actually fails, and it was missing before.
-  if (reason == REASON_AUTH_FAIL || reason == REASON_4WAY_HANDSHAKE_TIMEOUT) {
-    auth_rejected_gen_.store(gen);
-  }
-  if (reason == REASON_NO_AP_FOUND) no_ap_found_gen_.store(gen);
-#else
-  // A wrong WPA key on ESP32 nearly always fails in the 4-way handshake: the AP
-  // accepts association, then goes quiet once it sees the wrong MIC. Reaching
-  // the handshake proves association succeeded, so the key is the only thing
-  // left that can be wrong.
+  // A wrong WPA key nearly always fails in the 4-way handshake: the AP accepts
+  // association, then goes quiet once it sees the wrong MIC. Reaching the
+  // handshake proves association succeeded, so the key is the only thing left
+  // that can be wrong.
   //
   // Excluded deliberately: ASSOC_FAIL and neighbours (capacity and
   // compatibility, not credentials); AUTH_EXPIRE (a lapsed prior
@@ -349,7 +320,6 @@ void Network::onDisconnected(int reason) {
     default:
       break;
   }
-#endif
 }
 
 
@@ -373,8 +343,7 @@ void Network::startPortal() {
   // expected 204/success body.
   dns_.setErrorReplyCode(DNSReplyCode::NoError);
   // DNSServer::start() takes its port by reference, which odr-uses the constant
-  // and would demand an out-of-line definition (a link error on ESP32, though
-  // not on ESP8266 where it gets inlined away). Copying to a local sidesteps it.
+  // and would demand an out-of-line definition. Copying to a local sidesteps it.
   uint16_t dns_port = kDnsPort;
   dns_.start(dns_port, "*", WiFi.softAPIP());
 
@@ -457,13 +426,13 @@ void Network::startRequestedScan() {
   if (!scan_requested_ || scan_pending_) return;
   scan_requested_ = false;
 
-  // Asynchronous, and this is not optional. A synchronous scan blocks for 1-2 s
-  // on the ESP8266 and up to ~6.5 s on the ESP32 (13 channels x 500 ms dwell).
+  // Asynchronous, and this is not optional. A synchronous scan blocks for up to
+  // ~6.5 s (13 channels x 500 ms dwell).
   //
-  // "Asynchronous" is weaker than it sounds on the ESP8266, which is why this
-  // call is reached only from tick() and never directly from a caller. Two
-  // properties of the core's scanNetworks() make it unsafe to treat as an
-  // ordinary non-blocking function:
+  // "Asynchronous" is weaker than it sounds, which is why this call is reached
+  // only from tick() and never directly from a caller. Two properties of the
+  // core's scanNetworks() make it unsafe to treat as an ordinary non-blocking
+  // function:
   //
   //  - Even on the async path it ends with esp_yield(), which suspends the loop
   //    continuation and returns to the SDK, "to give the OS time to trigger the
@@ -488,14 +457,11 @@ void Network::startRequestedScan() {
   //
   // show_hidden = true: a hidden AP reports an empty SSID, which is filtered out
   // when rendering, but asking costs nothing.
-#if defined(ARDUINO_ARCH_ESP8266)
-  WiFi.scanNetworks(true, true);
-#else
-  // ESP32 exposes the per-channel dwell. The default is 300 ms; 500 gives
-  // slow-beaconing APs another chance to be heard. Async, so the cost is paid in
-  // wall-clock time rather than in a stalled loop.
+  //
+  // The per-channel dwell is exposed as a 4th argument. The default is 300 ms;
+  // 500 gives slow-beaconing APs another chance to be heard. Async, so the cost
+  // is paid in wall-clock time rather than in a stalled loop.
   WiFi.scanNetworks(true, true, false, 500);
-#endif
   scan_pending_ = true;
 }
 
@@ -531,26 +497,11 @@ void Network::pollScan() {
 // the largest contiguous block, since fragmentation can starve a single large
 // allocation while the total still looks healthy.
 void Network::logHeap(const __FlashStringHelper* label) {
-#if defined(ARDUINO_ARCH_ESP8266)
-  uint32_t free_heap = 0;
-  uint32_t max_block = 0;
-  uint8_t frag = 0;
-  ESP.getHeapStats(&free_heap, &max_block, &frag);
-  Serial.print(label);
-  Serial.print(F(" free="));
-  Serial.print(free_heap);
-  Serial.print(F(" max_block="));
-  Serial.print(max_block);
-  Serial.print(F(" frag="));
-  Serial.print(frag);
-  Serial.println('%');
-#else
   Serial.print(label);
   Serial.print(F(" free="));
   Serial.print(ESP.getFreeHeap());
   Serial.print(F(" max_block="));
   Serial.println(ESP.getMaxAllocHeap());
-#endif
 }
 
 void Network::handleRescan() {
@@ -734,9 +685,8 @@ void Network::tick() {
         setState(NetState::kConnected);
       } else {
         // Wait for the deadline rather than acting the instant a rejection
-        // arrives. The ESP32 core retries the first disconnect internally for
-        // every reason (WiFiGeneric.cpp), so aborting on the first event would
-        // cut short a retry that might well have succeeded -- and, with the
+        // arrives. The core retries the first disconnect internally for every
+        // reason (WiFiGeneric.cpp), so aborting on the first event would cut short a retry that might well have succeeded -- and, with the
         // discard rule below, erase valid credentials over one flaky handshake.
         // The verdict is still used; it is just read at the end, by which point
         // the core has had its retry and any late-queued event has landed.
@@ -795,8 +745,8 @@ void Network::tick() {
       break;
   }
 
-  // Last thing in tick(), deliberately. On the ESP8266 this suspends the loop
-  // continuation and does not return until the SDK has run, so nothing may
+  // Last thing in tick(), deliberately. This suspends the loop continuation via
+  // esp_yield() and does not return until the SDK has run, so nothing may
   // follow it here -- anything that did would be skipped for the duration.
   // Guarded on the portal state so a scan requested just before the portal was
   // torn down is dropped rather than waking the radio again.

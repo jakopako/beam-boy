@@ -25,13 +25,8 @@
 
 #include <Arduino.h>
 
-#if defined(ARDUINO_ARCH_ESP8266)
-#include <ESP8266WebServer.h>
-#include <ESP8266WiFi.h>
-#else
 #include <WebServer.h>
 #include <WiFi.h>
-#endif
 
 #include <DNSServer.h>
 
@@ -132,10 +127,7 @@ class Network {
   bool loadCredentials();
   bool saveCredentials(const char* ssid, const char* password);
 
-  // Classifies a failed connection attempt from the driver's status. Split out
-  // because the two cores disagree about the enum, and the disagreement is a
-  // trap: value 6 is WL_WRONG_PASSWORD on the ESP8266 but WL_DISCONNECTED on
-  // the ESP32.
+  // Classifies a failed connection attempt from the driver's status.
   FailReason classifyFailure(bool deadline_reached) const;
   bool authRejectedThisAttempt() const;
   void registerEventHandlers();
@@ -185,8 +177,8 @@ class Network {
 
   // Verdict capture, written by the disconnect event handler.
   //
-  // On ESP32 that handler runs on the WiFi event task while tick() runs on the
-  // loop task, so these must be atomic -- plain bools would be a data race, and
+  // That handler runs on the WiFi event task while tick() runs on the loop
+  // task, so these must be atomic -- plain bools would be a data race, and
   // there would be no guarantee tick() ever observed the writes.
   //
   // They hold a *generation* rather than a flag. Events are queued, so one
@@ -206,12 +198,6 @@ class Network {
 
   bool wifi_events_registered_ = false;
 
-#if defined(ARDUINO_ARCH_ESP8266)
-  // Must outlive registration: the core holds event handlers by weak reference
-  // and stops delivering silently if this is destroyed.
-  WiFiEventHandler sta_disconnected_handler_;
-#endif
-
   FailReason fail_reason_ = FailReason::kNone;
 
   // begin() is called on every scene entry, not once at boot. This distinguishes
@@ -223,11 +209,7 @@ class Network {
   uint32_t state_started_ms_ = 0;
 
   DNSServer dns_;
-#if defined(ARDUINO_ARCH_ESP8266)
-  ESP8266WebServer server_{kHttpPort};
-#else
   WebServer server_{kHttpPort};
-#endif
   bool server_running_ = false;
   // Routes are registered once for the lifetime of the object; see startServer().
   bool handlers_registered_ = false;

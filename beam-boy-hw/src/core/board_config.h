@@ -45,39 +45,12 @@ static_assert(kPixelCount > 0, "BEAMBOY_PIXEL_COUNT must be positive");
 // looks good; re-measure the full-white figure after any change.
 constexpr uint8_t kBrightnessCap = 64;
 
-#if defined(ARDUINO_ARCH_ESP8266)
-
-// Prototype wiring. The ESP8266 has only one ADC (A0), which is enough because
-// a 1D display only needs the joystick's X axis -- VRy is left unconnected.
-constexpr uint8_t kPinButtonA = 5;   // D1
-constexpr uint8_t kPinButtonB = 4;   // D2
-constexpr uint8_t kPinStickSw = 14;  // D5
-constexpr uint8_t kPinStickX = A0;
-
-// A0 on a NodeMCU reads 0-1023 over 0-3.3V thanks to an onboard divider.
-constexpr uint16_t kAdcMax = 1023;
-
-// The DMA method drives the strip from the I2S peripheral, so interrupts are
-// never disabled. The bit-banged default (as used by Adafruit_NeoPixel) starves
-// the WiFi stack and causes flicker and watchdog resets, so it must not be used
-// here even though WiFi only arrives later in the project.
-//
-// Note: this method ignores any pin argument -- output is fixed to GPIO3 (RX).
-// That shares the pin with serial receive, so Serial.print() and uploads work
-// but Serial.read() does not. Nothing in the firmware needs it.
-//
-// If GPIO3 is ever needed for something else, NeoEsp8266Uart1800KbpsMethod
-// outputs on GPIO2 instead and is equally interrupt-safe.
-constexpr uint8_t kPinLedData = 3;
-using LedMethod = NeoEsp8266Dma800KbpsMethod;
-
-#elif defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32)
 
 #if defined(BEAMBOY_BOARD_S3_DEVKIT)
 
-// Espressif ESP32-S3-DevKitC-1 N16R8, used to get off the ESP8266 before the
-// Feather arrives. Pins differ from the Feather because this board has real
-// constraints the Feather does not:
+// Espressif ESP32-S3-DevKitC-1 N16R8, the bring-up/dev board. Pins differ from
+// the Feather because this board has real constraints the Feather does not:
 //
 //   * GPIO35-37 are wired to the octal PSRAM and must never be used, even
 //     though the headers expose them and nothing stops you.
@@ -117,8 +90,8 @@ constexpr uint8_t kPinStickX = A2;
 constexpr uint16_t kAdcMax = 4095;
 
 // The ESP32 RMT peripheral generates WS2812 timing in hardware, so LED output
-// does not contend with the WiFi stack. This is the main reason to move off the
-// ESP8266: see docs/phase-4-wifi.md for the crash that motivated it.
+// does not contend with the WiFi stack -- see docs/phase-4-wifi.md for the
+// contention crash this avoids.
 using LedMethod = NeoEsp32Rmt0800KbpsMethod;
 
 #elif defined(BEAMBOY_NATIVE)

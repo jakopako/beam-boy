@@ -9,9 +9,8 @@
 //   * The joystick is analog, giving velocity control ("creep left" as distinct
 //     from "dash left") that a stepped encoder cannot express.
 //
-// Only the joystick's X axis is read. On a 1D display Y has no natural meaning,
-// and skipping it means the prototype works on the ESP8266, which has a single
-// ADC channel.
+// Only the joystick's X axis is read. On a 1D display Y has no natural
+// meaning, so it is skipped.
 
 #include <Arduino.h>
 

@@ -9,9 +9,9 @@ namespace beamboy {
 namespace {
 
 // Static instances rather than heap allocation: the whole set of games is known
-// at build time, and a fixed layout keeps RAM usage predictable on the ESP8266.
-// When cartridges become scripts, these are replaced by a single script host
-// scene reused for every game.
+// at build time, and a fixed layout keeps RAM usage predictable. When
+// cartridges become scripts, these are replaced by a single script host scene
+// reused for every game.
 WormfightScene wormfight;
 ReflexScene reflex;
 BenchScene bench;

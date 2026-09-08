@@ -1023,6 +1023,19 @@ cd beam-boy-hw
 the console must boot straight into the launcher with no delay and no scanning.
 If boot got slower, something is wrong.
 
+> **Benign log noise on the ESP32:** `[E][WebServer.cpp:638] _handleRequest():
+> request handler not found` appears in the serial log whenever a request
+> doesn't match one of our registered routes (`/`, `/rescan`, `/save`) — mainly
+> the OS's own captive-portal probes (`/hotspot-detect.html`,
+> `/library/test/success.html`, etc.), which are never registered on purpose.
+> Despite the `E` tag it is not a fault: `WebServer::_handleRequest()` logs this
+> line and then **falls through to call `onNotFound()` anyway**, which is
+> `Network::handleNotFound()` — the 302 redirect that makes captive-portal
+> detection work in the first place. The request is still served correctly one
+> line later. Confirmed harmless by watching `free=`/`max_block=` stay flat
+> across repeated occurrences. Not present on the ESP8266's `WebServer`, whose
+> equivalent code path doesn't log.
+
 1. **Portal:** open Network → Setup. Tube breathes amber. Join `BeamBoy-Setup` on
    your phone. The form should auto-open; if not, browse to `192.168.4.1`.
 2. Submit real credentials. Expect the confirmation page, then a blue sweep, then
