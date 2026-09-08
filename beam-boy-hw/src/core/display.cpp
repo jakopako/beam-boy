@@ -157,6 +157,22 @@ void Display::rawPixel(uint16_t index, const Color& color) {
 }
 
 void Display::present() {
+  // Skip the strip entirely on divided frames. The framebuffer still holds the
+  // latest drawing, so nothing is lost -- the tube simply updates less often
+  // while something more timing-critical than animation is happening.
+  if (refresh_divider_ > 1) {
+    if (++refresh_counter_ < refresh_divider_) return;
+    refresh_counter_ = 0;
+  }
+
+  // Never wait for the previous DMA transfer. NeoPixelBus's Update() spins on
+  // yield() until the I2S buffer has drained, and yield() on the ESP8266 runs
+  // the SDK's scheduled work -- so blocking here hands control back to the
+  // network stack from the middle of the render path, which is exactly the kind
+  // of surprise re-entrancy that has crashed this device before. Dropping the
+  // frame instead is invisible at 60 fps and keeps present() bounded.
+  if (!strip_.CanShow()) return;
+
   // The brightness cap is applied here, at the boundary, so games cannot exceed
   // it however they draw. It bounds worst-case current draw as well as setting
   // the overall look.

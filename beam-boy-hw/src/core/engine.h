@@ -32,6 +32,15 @@ class Scene {
   virtual void update(Engine& engine, float dt) = 0;
   virtual void render(Engine& engine) = 0;
 
+  // Called on frames the engine skips, when the scene has opted in via
+  // Engine::setIdleServiced(). Intended for work with a deadline of its own
+  // that the 60 Hz frame gate would otherwise starve -- in practice, servicing
+  // the WiFi stack.
+  //
+  // Must stay cheap and non-blocking: it runs far more often than update().
+  // Nothing here may draw, since no present() follows it.
+  virtual void idle(Engine& engine) { (void)engine; }
+
   // The score to record when this scene is left. Games that keep score override
   // this; the launcher and other non-game scenes leave it at zero.
   virtual uint32_t score() const { return 0; }
@@ -44,6 +53,22 @@ class Engine {
   // Runs one frame if the timestep has elapsed; returns immediately otherwise.
   // Called from loop().
   void tick();
+
+  // Lets the current scene ask to be serviced between frames as well as on
+  // them. This is the one sanctioned exception to "nothing may block the frame
+  // loop" (PLAN.md §2), and it is deliberately narrow.
+  //
+  // The rule assumes the frame loop is the only thing with a deadline. That is
+  // true for games, and false for the WiFi stack: association, scanning and RF
+  // calibration have their own timing requirements enforced in the SDK, and
+  // when they are not met the device faults inside the SDK's timing callbacks
+  // rather than merely dropping frames. Gating the network's service call to
+  // 60 Hz starved exactly that work.
+  //
+  // Note this does not let a scene *block*. It lets a scene be called more
+  // often, in the idle time the frame gate would otherwise spin away. Games
+  // still see a fixed timestep and are unaffected.
+  void setIdleServiced(bool serviced) { idle_serviced_ = serviced; }
 
   void setScene(Scene* scene);
 
@@ -121,6 +146,9 @@ class Engine {
   Scene* launcher_ = nullptr;
   int8_t current_game_ = -1;
   bool paused_ = false;
+  // See setIdleServiced(). When true, tick() calls the scene's idle() on
+  // frames it would otherwise skip entirely.
+  bool idle_serviced_ = false;
   bool exit_armed_ = false;
   float exit_gesture_progress_ = 0.0f;
 

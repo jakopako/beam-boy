@@ -190,9 +190,9 @@ void BenchScene::render(Engine& engine) {
 
   if (complete_) {
     // A slow green sweep: the benchmark finished and the numbers are on serial.
-    const float pulse = 0.3f + 0.3f * sinf(millis() / 1000.0f * 2.0f);
-    display.rawPixel(0, colors::kGreen.scaled(pulse));
-    display.rawPixel(display.pixelCount() - 1, colors::kGreen.scaled(pulse));
+    const float level = 0.3f + 0.3f * pulse(millis() / 1000.0f, 2.0f);
+    display.rawPixel(0, colors::kGreen.scaled(level));
+    display.rawPixel(display.pixelCount() - 1, colors::kGreen.scaled(level));
     return;
   }
 

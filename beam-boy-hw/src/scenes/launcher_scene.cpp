@@ -121,8 +121,8 @@ void LauncherScene::renderList(Engine& engine) {
     float intensity;
     if (distance < 1.0f) {
       // Selected: breathing, so it is unmistakable even among similar colours.
-      const float pulse = 0.75f + 0.25f * sinf(millis() / 1000.0f * 4.0f);
-      intensity = (0.22f + 0.78f * (1.0f - distance)) * pulse;
+      const float level = 0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
+      intensity = (0.22f + 0.78f * (1.0f - distance)) * level;
     } else {
       intensity = 0.22f;
     }
@@ -150,8 +150,8 @@ void LauncherScene::render(Engine& engine) {
 
   if (games::kGameCount == 0) {
     // Nothing installed: a slow red pulse rather than a dark, dead-looking tube.
-    const float pulse = 0.3f + 0.3f * sinf(millis() / 1000.0f * 2.0f);
-    display.point(0.5f, colors::kRed, pulse);
+    const float level = 0.3f + 0.3f * pulse(millis() / 1000.0f, 2.0f);
+    display.point(0.5f, colors::kRed, level);
     return;
   }
 

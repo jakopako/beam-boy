@@ -21,8 +21,12 @@ constexpr uint32_t kSettleMs = 2500;  // Flash duration before settling.
 }  // namespace
 
 void NetworkScene::enter(Engine& engine) {
-  (void)engine;
   net_.begin();
+
+  // Ask to be called between frames as well as on them. The WiFi stack has
+  // deadlines of its own that the 60 Hz gate would otherwise starve; see
+  // Engine::setIdleServiced().
+  engine.setIdleServiced(true);
 
   // Offer the most likely action first: connect if we know a network, set one
   // up if we do not.
@@ -36,19 +40,36 @@ void NetworkScene::enter(Engine& engine) {
 }
 
 void NetworkScene::exit(Engine& engine) {
-  (void)engine;
-
   // Leaving the scene always takes the radio down. Anything else would let a
   // user wander back to the launcher with WiFi silently draining the battery,
   // which is exactly the failure the opt-in design exists to prevent.
   net_.disconnect();
 }
 
+void NetworkScene::idle(Engine& engine) {
+  (void)engine;
+  // The whole reason idle servicing exists. Between frames there is nothing to
+  // draw and nothing to animate, but the WiFi stack still has deadlines --
+  // association, DHCP, RF calibration -- and the HTTP and DNS servers still have
+  // requests waiting. Servicing them only at 60 Hz left the SDK starved during
+  // exactly the operations that are most sensitive to it.
+  net_.tick();
+}
+
 void NetworkScene::update(Engine& engine, float dt) {
   Input& input = engine.input();
 
+  // Also serviced from idle() between frames, which is where the bulk of the
+  // work now happens. Kept here too so the state machine still advances on the
+  // frame itself, and so the scene behaves correctly if idle servicing is ever
+  // switched off.
   net_.tick();
   phase_ += dt;
+  // Keep the phase bounded. Left alone it grows forever, which first costs
+  // float precision (a large float has coarse spacing, so animation goes jerky)
+  // and then crashes in sinf's huge-argument path. An hour is far longer than
+  // any animation period here, so wrapping is invisible.
+  if (phase_ > 3600.0f) phase_ -= 3600.0f;
 
   const NetState state = net_.state();
   if (state != last_state_) {
@@ -68,6 +89,12 @@ void NetworkScene::update(Engine& engine, float dt) {
       // which looks identical from the tube -- so it is worth logging.
       Serial.print(F("  free heap "));
       Serial.println(ESP.getFreeHeap());
+    } else if (state == NetState::kFailed && !net_.hasCredentials()) {
+      // The credentials were discarded as unusable, so the menu entry the user
+      // is sitting on no longer exists. Move the selection to Setup now rather
+      // than leaving it pointing at nothing -- the same reason forget() does.
+      menu_ = Menu::kSetup;
+      forget_armed_ = false;
     }
 
     // Any state change invalidates an OTA result being displayed.
@@ -203,7 +230,7 @@ void NetworkScene::drawOta(Engine& engine) {
       display.span(0.0f, t * 0.5f, kOkColor, 0.9f);
       display.span(1.0f - t * 0.5f, 1.0f, kOkColor, 0.9f);
       if (t >= 1.0f) {
-        const float pulse = 0.5f + 0.5f * sinf(phase_ * 5.0f);
+        const float pulse = 0.5f + 0.5f * wrappedSin(phase_ * 5.0f);
         display.span(0.45f, 0.55f, colors::kWhite, pulse);
       }
       break;
@@ -271,12 +298,12 @@ void NetworkScene::drawMenu(Engine& engine) {
     // width, which on a short strip made them single dim pixels of three
     // different colours -- indistinguishable from rendering artefacts rather
     // than reading as a row of deliberate choices.
-    float breathe = selected ? 0.65f + 0.35f * sinf(phase_ * 4.0f) : 0.10f;
+    float breathe = selected ? 0.65f + 0.35f * wrappedSin(phase_ * 4.0f) : 0.10f;
 
     // An armed Forget blinks hard and fast rather than breathing calmly, so the
     // "press again and I erase" state cannot be mistaken for the resting one.
     if (selected && item.menu == Menu::kForget && forget_armed_) {
-      breathe = sinf(phase_ * 18.0f) > 0.0f ? 1.0f : 0.05f;
+      breathe = wrappedSin(phase_ * 18.0f) > 0.0f ? 1.0f : 0.05f;
     }
 
     const float half = display.pixelWidth() * 1.5f;
@@ -304,7 +331,7 @@ void NetworkScene::drawStatus(Engine& engine) {
       // Slow amber breathing across the whole tube -- deliberately calm and
       // unhurried, because the user is meant to be looking at their phone, not
       // at the console.
-      const float level = 0.25f + 0.35f * sinf(phase_ * kPulseSpeed * 6.283f);
+      const float level = 0.25f + 0.35f * wrappedSin(phase_ * kPulseSpeed * 6.283f);
       display.span(0.0f, 1.0f, kPortalColor, level);
 
       // A scan is invisible from the tube otherwise, and it is the one moment
@@ -326,7 +353,7 @@ void NetworkScene::drawStatus(Engine& engine) {
         display.span(0.5f - t * 0.5f, 0.5f + t * 0.5f, kOkColor, 1.0f - t * 0.5f);
       } else {
         // Then settle to a calm heartbeat so the tube is not a lamp.
-        const float level = 0.12f + 0.08f * sinf(phase_ * 2.0f);
+        const float level = 0.12f + 0.08f * wrappedSin(phase_ * 2.0f);
         display.span(0.0f, 1.0f, kOkColor, level);
       }
       break;
@@ -334,11 +361,30 @@ void NetworkScene::drawStatus(Engine& engine) {
 
     case NetState::kFailed: {
       const uint32_t since = millis() - settled_at_ms_;
+
+      // Encode *why* it failed in the number of flashes. The user's next action
+      // differs completely between these -- retype the password versus move
+      // closer or just try again later -- so a single generic red flash makes
+      // them guess. Counting flashes is the same trick the score readout uses:
+      // on a 1D display, rhythm is the only channel available for a small
+      // number.
+      //
+      //   2 fast flashes  password rejected; the credentials have been dropped
+      //   4 flashes       network not found
+      //   3 flashes       anything else (timed out, or the link dropped)
+      uint8_t flashes = 3;
+      switch (net_.failReason()) {
+        case Network::FailReason::kBadPassword: flashes = 2; break;
+        case Network::FailReason::kNotFound: flashes = 4; break;
+        default: break;
+      }
+
       if (since < kSettleMs) {
-        // Three sharp flashes: distinct from the connected wipe by rhythm as
-        // well as by colour.
         const float t = static_cast<float>(since) / kSettleMs;
-        const float flash = sinf(t * 3.0f * 6.283f);
+        // Plain sinf is fine here, unlike the animated states: the branch bounds
+        // t to 0..1, so the argument never exceeds ~25 and cannot reach the
+        // huge-argument path that needs wrappedSin.
+        const float flash = sinf(t * flashes * 6.283f);
         if (flash > 0.0f) display.span(0.0f, 1.0f, kFailColor, flash);
       } else {
         display.span(0.0f, 1.0f, kFailColor, 0.1f);

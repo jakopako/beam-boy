@@ -448,10 +448,10 @@ void WormfightScene::renderPlayfield(Engine& engine) {
   if (charging_ && charge_ > 0.0f) {
     const float ratio = clampf(charge_ / kChargeTimeFull, 0.0f, 1.0f);
     const float rate = 6.0f + 18.0f * ratio;
-    const float pulse =
-        0.55f + 0.45f * sinf(millis() / 1000.0f * rate);
+    const float level =
+        0.55f + 0.45f * pulse(millis() / 1000.0f, rate);
 
-    display.point(player_, kChargeColor, ratio * pulse);
+    display.point(player_, kChargeColor, ratio * level);
     if (charge_ >= kChargeTimeFull) {
       // Fully charged: a steady white core, unmistakable at a glance.
       display.point(player_, colors::kWhite, 0.8f);

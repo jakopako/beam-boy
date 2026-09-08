@@ -24,6 +24,8 @@ class NetworkScene : public Scene {
   void exit(Engine& engine) override;
   void update(Engine& engine, float dt) override;
   void render(Engine& engine) override;
+  // Services the WiFi stack between frames; see Engine::setIdleServiced().
+  void idle(Engine& engine) override;
 
  private:
   // What the scene is offering, which depends on whether we have credentials.

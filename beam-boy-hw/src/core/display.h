@@ -62,6 +62,41 @@ constexpr Color kBlue(0, 150, 255);
 constexpr Color kAmber(255, 140, 0);
 }  // namespace colors
 
+// Sine for animation, safe to call with a phase that grows without bound.
+//
+// This exists because plain sinf() crashes the ESP8266 once its argument gets
+// large. For |x| beyond a few hundred, newlib falls out of its fast path into
+// __kernel_rem_pio2f, the "huge argument" argument-reduction routine, which
+// allocates a large local array. The cont task's stack is only ~4 KB, so that
+// allocation overflows it and the device resets -- after several minutes of
+// running perfectly, since the argument has to grow first.
+//
+// Every animated scene has a phase that increases every frame, so every one of
+// them is a latent version of this bug. Wrapping the phase into a single period
+// keeps the argument small and the fast path taken.
+inline float wrappedSin(float phase) {
+  constexpr float kTwoPi = 6.28318531f;
+  return sinf(fmodf(phase, kTwoPi));
+}
+
+// As wrappedSin, but takes seconds and a rate in cycles per second -- the shape
+// most call sites want, and it keeps the multiply inside the wrap.
+//
+// The wrap matters most here, because the usual argument is millis()/1000.0f,
+// which climbs to ~4.3 million before the 32-bit rollover. Multiplied by a rate
+// that is well past the point where sinf takes the huge-argument path, and past
+// the point where a float has enough precision left to animate smoothly.
+//
+// That second point is worth stating plainly, because this function cannot fix
+// it: past a phase of ~1e5 a float's steps are coarser than the fraction of a
+// radian a smooth animation needs, so the wrap keeps the device *alive* but the
+// motion still stutters. Scenes must therefore wrap their own accumulating
+// phase (every hour is the convention here) rather than treating pulse() as a
+// licence to let one grow without bound.
+inline float pulse(float seconds, float rate) {
+  return wrappedSin(seconds * rate);
+}
+
 class Display {
  public:
   Display();
@@ -94,6 +129,27 @@ class Display {
 
   void present();
 
+  // Limits how often present() actually drives the strip, in frames. 1 is every
+  // frame (the default); 4 means every fourth frame, and so on.
+  //
+  // This exists because WS2812 output and WiFi contend for the same hardware.
+  // The I2S/DMA method is interrupt-safe, which is why it was chosen, but it is
+  // not free: it drives GPIO3 continuously for the length of the strip plus a
+  // reset gap, and NeoPixelBus's Update() calls yield() while waiting for the
+  // previous transfer to drain. During radio-critical work (a scan, an
+  // association, RF calibration) that steady drumbeat of DMA and yields is
+  // enough to disturb the PHY, which faults inside the SDK's own timing
+  // callbacks -- DefFreqCalTimerCB, ppCheckTxIdle, pp_tx_idle_timeout -- with a
+  // perfectly healthy heap.
+  //
+  // Slowing the refresh rather than stopping it keeps the tube alive so the user
+  // can still see what the device is doing, which is the whole point of having a
+  // display during provisioning.
+  void setRefreshDivider(uint8_t divider) {
+    refresh_divider_ = divider < 1 ? 1 : divider;
+    refresh_counter_ = 0;
+  }
+
   // --- Effects -------------------------------------------------------------
 
   // Offset everything drawn afterwards by a normalised amount. Used for screen
@@ -121,6 +177,12 @@ class Display {
   // set this rather than rewiring; all coordinates flip.
   void setReversed(bool reversed) { reversed_ = reversed; }
 
+#if defined(BEAMBOY_NATIVE)
+  // Host-only: how many times the strip was actually driven. Used to test the
+  // refresh divider, which skips transfers rather than changing their content.
+  uint32_t shownCount() const { return strip_.shownCount(); }
+#endif
+
  private:
   void addToPixel(uint16_t index, const Color& color, float weight);
 
@@ -128,6 +190,10 @@ class Display {
   Color buffer_[board::kPixelCount];
   uint8_t brightness_ = board::kBrightnessCap;
   bool reversed_ = false;
+
+  // See setRefreshDivider(). 1 = drive the strip every frame.
+  uint8_t refresh_divider_ = 1;
+  uint8_t refresh_counter_ = 0;
   float shake_ = 0.0f;
 };
 

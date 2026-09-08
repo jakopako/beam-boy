@@ -76,9 +76,9 @@ void Engine::renderPauseOverlay() {
     return;
   }
 
-  const float pulse = 0.35f + 0.35f * sinf(millis() / 1000.0f * 3.0f);
-  display_.rawPixel(0, colors::kAmber.scaled(pulse));
-  display_.rawPixel(display_.pixelCount() - 1, colors::kAmber.scaled(pulse));
+  const float level = 0.35f + 0.35f * pulse(millis() / 1000.0f, 3.0f);
+  display_.rawPixel(0, colors::kAmber.scaled(level));
+  display_.rawPixel(display_.pixelCount() - 1, colors::kAmber.scaled(level));
 }
 
 void Engine::resetDiagnostics() {
@@ -92,6 +92,10 @@ void Engine::tick() {
 
   // Unsigned subtraction handles the ~71 minute micros() rollover correctly.
   if (now_us - last_frame_us_ < kFrameIntervalUs) {
+    // Not a frame. Normally this is dead time, but a scene that has opted in
+    // gets serviced here -- see Engine::setIdleServiced(). This is what keeps
+    // the WiFi stack responsive without giving it a whole frame's budget.
+    if (idle_serviced_ && scene_ != nullptr) scene_->idle(*this);
     return;
   }
   last_frame_us_ = now_us;
@@ -104,6 +108,10 @@ void Engine::tick() {
     paused_ = false;
     exit_armed_ = false;
     exit_gesture_progress_ = 0.0f;
+    // Opt-in, per scene. Cleared before enter() so a scene that wants idle
+    // servicing must ask for it, and one that does not cannot inherit it from
+    // whatever ran previously.
+    idle_serviced_ = false;
     if (scene_ != nullptr) scene_->enter(*this);
     resetDiagnostics();
   }

@@ -73,6 +73,36 @@ using LedMethod = NeoEsp8266Dma800KbpsMethod;
 
 #elif defined(ARDUINO_ARCH_ESP32)
 
+#if defined(BEAMBOY_BOARD_S3_DEVKIT)
+
+// Espressif ESP32-S3-DevKitC-1 N16R8, used to get off the ESP8266 before the
+// Feather arrives. Pins differ from the Feather because this board has real
+// constraints the Feather does not:
+//
+//   * GPIO35-37 are wired to the octal PSRAM and must never be used, even
+//     though the headers expose them and nothing stops you.
+//   * GPIO0, 45 and 46 are strapping pins; a button or a pull-up on one can
+//     stop the board booting.
+//   * GPIO19/20 are USB D-/D+, needed for the CDC serial console.
+//   * GPIO38 (or 48 on some revisions) drives the onboard WS2812.
+//
+// Everything below lands in the 4-18 range, clear of all of the above, with the
+// analog input on ADC1 -- ADC2 is unusable while WiFi is on, which is exactly
+// when the stick still has to work.
+constexpr uint8_t kPinLedData = 17;
+constexpr uint8_t kPinButtonA = 15;
+constexpr uint8_t kPinButtonB = 16;
+constexpr uint8_t kPinStickSw = 18;
+constexpr uint8_t kPinStickX = 4;  // ADC1_CH3
+
+// ⚠️ No battery on this board. The DevKitC has no LiPo charger and no
+// battery-sense divider, so it runs from USB only and there is deliberately no
+// kPinBatterySense here. Power management is Feather-only work; if a build
+// error ever points at a missing battery pin, the fix is to guard that feature,
+// not to invent a pin number for this board.
+
+#else
+
 // Provisional: confirm against the Feather ESP32-S3 pinout before wiring.
 // Analog inputs (thumbstick, battery sense) must land on ADC1, since ADC2 is
 // unusable while WiFi is active.
@@ -82,11 +112,29 @@ constexpr uint8_t kPinButtonB = 9;
 constexpr uint8_t kPinStickSw = 10;
 constexpr uint8_t kPinStickX = A2;
 
+#endif  // BEAMBOY_BOARD_S3_DEVKIT
+
 constexpr uint16_t kAdcMax = 4095;
 
 // The ESP32 RMT peripheral generates WS2812 timing in hardware, so LED output
-// does not contend with the WiFi stack.
+// does not contend with the WiFi stack. This is the main reason to move off the
+// ESP8266: see docs/phase-4-wifi.md for the crash that motivated it.
 using LedMethod = NeoEsp32Rmt0800KbpsMethod;
+
+#elif defined(BEAMBOY_NATIVE)
+
+// Host build, used only by the unit tests under test/. The pin numbers are
+// arbitrary but must be distinct, since the fake digitalRead() in the Arduino
+// shim keys its per-pin state off them.
+constexpr uint8_t kPinLedData = 0;
+constexpr uint8_t kPinButtonA = 1;
+constexpr uint8_t kPinButtonB = 2;
+constexpr uint8_t kPinStickSw = 3;
+constexpr uint8_t kPinStickX = 4;
+
+constexpr uint16_t kAdcMax = 1023;
+
+using LedMethod = NeoNativeMethod;
 
 #else
 #error "Unsupported board -- add a section to board_config.h"

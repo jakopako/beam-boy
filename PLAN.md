@@ -132,6 +132,17 @@ a rewrite:
    on the ESP8266 and `NeoEsp32RmtNWs2812xMethod` on the S3. Same API, same library — only
    the method typedef differs. Do *not* start on `Adafruit_NeoPixel`; its bit-banged output
    is the exact thing that breaks WiFi later.
+
+   ⚠️ **DMA is interrupt-safe, not contention-free — on the ESP8266.** It still drives the
+   data pin for the length of the strip plus a reset gap on every refresh, and
+   `NeoPixelBus::Update()` spins on `yield()` waiting for the previous transfer — which on the
+   ESP8266 runs the SDK's scheduled work from inside the render path. Refreshing every frame
+   while the radio was associating crashed the device in the PHY layer (`DefFreqCalTimerCB`,
+   `ppCheckTxIdle`) with 39 KB of heap free. `Display::setRefreshDivider()` reduced but did not
+   eliminate the crash there. **Confirmed fixed on the ESP32-S3**, whose RMT peripheral and
+   FreeRTOS scheduling remove the contention structurally — `NetworkScene` no longer calls
+   `setRefreshDivider()` at all. The ESP8266 remains broken here by design; see
+   `docs/phase-4-wifi.md`.
 2. **All hardware access lives behind `Display` and `Input`.** Game and scene code never
    touches a GPIO.
 
@@ -309,6 +320,13 @@ Every phase ends with **something you can see or play**.
    `pressed()` / `held()` / `released()` edges. Stub the stick behind the same interface —
    the ESP8266's single ADC can't drive it, so wire it up in Phase 2 on the S3.
 3. Fixed-timestep game loop at 60 fps with a frame-time budget assert.
+
+   **Sanctioned exception:** the frame gate assumes the frame loop is the only thing with a
+   deadline. That is true for games and false for the WiFi stack, whose deadlines are enforced
+   in the SDK — a missed one is a fault in the PHY, not a dropped frame. `Scene::idle()` +
+   `Engine::setIdleServiced()` let a scene be serviced on the frames the engine *skips*. This
+   permits being called **more often**, never blocking, and is opt-in per scene (cleared on
+   every scene change). Games are unaffected and still see a fixed timestep.
 4. `beam.show_score()`: the binary score readout, animated bit-by-bit.
 5. A `demo` scene: a wheel-controlled anti-aliased dot with a fading trail.
 
@@ -380,11 +398,15 @@ the BOM specifies 8 MB flash — two complete copies must fit.
 Both current environments already have OTA-capable layouts (ESP8266: 325 KB of a
 1019 KB slot; ESP32-S3: 366 KB of 2 MB).
 
-1. **Provisioning via captive portal.** ✅ Trigger: a "Network" entry at the end of the
+1. ✅ **Provisioning via captive portal.** Trigger: a "Network" entry at the end of the
    launcher list. Radio stays **off** until then. WiFiManager was rejected during
    implementation — it blocks the main loop, which would freeze the tube for the whole
    portal session. Hand-rolled instead (SoftAP + DNS hijack + small web server), serviced
-   from the frame loop.
+   from the frame loop. **Crashed on the ESP8266** in the WiFi PHY — LED DMA contending
+   with the radio — and was left unfixed there deliberately; **confirmed fixed on the
+   ESP32-S3 DevKitC**, where the same repro is stable. The ESP8266 remains dev-only for
+   anything touching the radio; WiFiManager stays rejected, since the S3 doesn't need the
+   protection its blocking portal would have accidentally provided.
 2. ✅ Show provisioning state *on the tube*: portal-active = slow amber pulse; connecting =
    blue sweep; connected = green flash; failed = red flash. Each state has a distinct
    *motion* as well as a colour, since hue quantises badly when dim and red/green alone
@@ -397,7 +419,9 @@ Both current environments already have OTA-capable layouts (ESP8266: 325 KB of a
 
 ✅ *Visible result: configure WiFi from your phone with no display, and push firmware updates over the air.*
 
-*Untested on hardware. Four bugs were caught in review — see the doc.*
+*Four bugs were caught in review; five more crashes were found on hardware. The last of
+those was confirmed fixed on ESP32-S3 hardware and left unfixed on the ESP8266 by
+design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
 
 ### Phase 5 — VM bake-off ⚠️ *(1–2 days — do this before Phase 6)*
 > *Goal: prove the scripting model before betting the architecture on it.*
@@ -640,6 +664,111 @@ Since you want to accept community games eventually, two things move from "nice"
   the previous result buffer while `scan_count_` still holds the old value. The drivers
   bounds-check, so it was safe rather than a crash — but it rendered an empty dropdown that read
   as "scan found nothing". Decide on rendered output, not on the stale count.
+- **Never call `sinf()` on an ever-growing argument.** Beyond a few hundred, newlib leaves its
+  fast path for `__kernel_rem_pio2f`, which allocates a large local array — and the ESP8266's
+  cont stack is ~4 KB, so it overflows and resets the device. Every animated scene had a phase
+  that grows every frame, so every one was a latent instance. Use `wrappedSin()`/`pulse()` from
+  `display.h`. This is also why `millis()/1000.0f * rate` is dangerous: it climbs to millions
+  before rollover.
+- **"It crashed after a few minutes" points at an accumulator, not at whatever you changed
+  last.** The crash arrived while testing WiFi scanning, in a scene whose animation had simply
+  been on screen longer than any before it. The scan was innocent. A decoded stack trace names
+  the function; guessing from the feature under test does not.
+- **On the ESP8266, "async" does not mean "does not suspend".** `WiFi.scanNetworks(async)`
+  calls `esp_yield()` before returning — it suspends the loop continuation and hands control
+  to the SDK, so the call does not return until arbitrary driver code has run, and it
+  reconfigures the radio while it does. Whatever the caller had not finished yet stays
+  unfinished across that gap. Called partway through `startPortal()`, it left the device in
+  the SDK with a half-built portal (no AP, no DNS, wrong state) and crashed as soon as a phone
+  associated. Called from an HTTP handler, it suspends with `server_.handleClient()` beneath
+  it. **Rule: any SDK call that might suspend is requested by setting a flag and issued from a
+  single known-safe point at the end of `tick()`, never inline.**
+- **Freeing a result buffer is not cancelling the operation that fills it.** `WiFi.scanDelete()`
+  releases the completed scan buffer but leaves an in-flight scan running, and the SDK's
+  completion callback runs in *SDK context* and writes to driver-owned state. Tearing the
+  soft-AP down and switching to STA with a scan outstanding crashed inside `hostap_input`
+  (`ctx: sys`) almost every time the user connected. **Rule: an uncancellable SDK callback is a
+  constraint on teardown ordering — wait for it before reconfiguring the radio underneath it.**
+- **Peak heap matters while a radio is receiving.** The soft-AP allocates a pbuf per frame, and
+  it cannot wait. Building an HTML fragment into its own `String` before appending it to the
+  page doubled peak usage for the length of the build. Stream long responses with
+  `setContentLength(CONTENT_LENGTH_UNKNOWN)` rather than materialising them, and remember that
+  growing a `String` holds both buffers at once and fragments the heap behind it.
+- **A crash address that moves between unrelated allocating functions means out of memory, not
+  a bug at either address.** The ESP8266 core mostly does not check allocation failure, so OOM
+  presents as a fault inside whichever function was allocating. **Rule: when the PC wanders,
+  stop reading backtraces and measure the heap — the largest contiguous block and
+  fragmentation, not just the free total.** ⚠️ In this project that measurement *disproved* the
+  OOM theory (39 KB free, 3 % fragmented at the moment of the crash) and pointed at RF timing
+  instead. That is the rule working, not failing.
+- **Instrument the resource before changing the code.** Three crashes here were confidently
+  attributed to three different causes; only the last was supported by measurement. **A decoded
+  address is a hypothesis, not a diagnosis** — especially when it lands in a subsystem you did
+  not write. Add the counter, get the number, *then* edit.
+- **Peripherals contend with the radio even when they are "interrupt-safe".** WS2812 DMA output
+  every frame starved the ESP8266 PHY into faulting inside its own timing callbacks. Anything
+  driven continuously at frame rate should back off while the radio is doing timing-critical
+  work, and should skip rather than wait when the peripheral is busy — `NeoPixelBus::Update()`
+  spins on `yield()`, which runs SDK work from inside the render path.
+- **Test the invariant the fix relies on, not the crash.** None of the three hardware crashes is
+  reproducible on a host — a stack overflow in newlib, driver re-entrancy, and an SDK callback
+  outliving a radio reconfiguration. But the `sinf` crash had a precondition that *is* testable: the phase stays
+  small. `test/test_soak` asserts exactly that over 6 simulated hours. See `test/README.md`.
+- **Float precision, not just stack depth, bounds an animation phase.** Past ~1e5 radians a
+  `float`'s steps are coarser than a smooth animation needs, so `wrappedSin()` keeps the device
+  alive but the motion stutters regardless. Scenes must wrap their own phase; the helper is a
+  safety net, not a licence for an unbounded accumulator.
+
+### Testing
+
+Host tests run with `pio test -e native` in about 13 seconds and need no board. They cover the
+logic that is a function of time and input — debounce, auto-repeat, fades, colour maths,
+long-run accumulators — because `hostshim/` makes the clock and the pins variables the test
+sets. They deliberately do **not** cover WiFi, OTA or LED timing; those are hardware behaviour
+and are verified with the checklist in `docs/phase-4-wifi.md`.
+
+**When hardware logic resists testing, split the decision out from the driver call.** The
+credential-retention rule is the worked example: `Network` cannot be compiled on the host
+without shimming the whole WiFi API, but the part worth testing was never the driver — it was
+the two-input question "given this outcome, do we keep the credentials?". Moving that into
+`net_policy.h` as a free `constexpr` function made the entire truth table testable in
+microseconds, while the untestable part shrank to a single `if`. Prefer this over either
+shimming a large driver API or leaving the rule uncovered.
+
+### Storing credentials that failed
+
+Discard only on a **definite rejection** (`kBadPassword`) **and** only while the credentials
+are **unproven** — never tested successfully. A mistyped password otherwise strands the user
+on a Connect entry that can never work; but discarding on *every* failure would erase a good
+configuration whenever the router reboots or the console is carried out of range. `kNotFound`
+is deliberately kept, because a typo'd SSID is indistinguishable from being out of range and
+out of range is far more common. `unproven_` is never persisted: anything that survived a
+reboot is treated as proven.
+
+**⚠️ Never derive an authentication verdict from `wl_status_t`.** Value 6 is `WL_WRONG_PASSWORD`
+on ESP8266 and `WL_DISCONNECTED` on ESP32; `WL_CONNECT_FAILED` is not an auth verdict on either
+core (on ESP32 it also covers an AP at capacity); and on ESP32 the status is an event-updated
+cache that can still describe the *previous* attempt right after `WiFi.begin()`. Use the
+**disconnect reason**, captured in an event handler. This is the fourth silent divergence
+between the two cores; **always build both targets after a WiFi change.**
+
+**Correlate driver events to an attempt with a generation counter, not a boolean.** ESP32
+queues events to a separate task, so a failure produced while tearing down one attempt can be
+delivered *after* the next has begun. A "attempt in progress" flag attributes it to the new
+attempt — which, for credential handling, means erasing the password the user just corrected.
+Stamp each event with the generation current when it arrived and accept only matching ones.
+Anything shared with an event handler must be `std::atomic`; on ESP32 the handler and `tick()`
+run on different tasks.
+
+**Let the driver finish its own retries.** The ESP32 core retries the first disconnect
+internally for every reason, so acting on the first failure event cuts short a retry that might
+have succeeded. Read the verdict at the deadline instead.
+
+**Only claim state changed if it actually changed.** If `LittleFS.remove()` fails, keep the
+credentials in RAM rather than clearing them: a UI that says "forgotten" while the file
+survives is worse than one that admits failure, because the next scene entry reloads it and
+the network reappears looking proven. Serial logging is not a substitute — it is invisible on
+the handheld.
 
 ### Still open
 
