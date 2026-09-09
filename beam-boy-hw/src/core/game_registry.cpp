@@ -4,6 +4,7 @@
 #include "scenes/network_scene.h"
 #include "scenes/reflex_scene.h"
 #include "scenes/reflex_script.h"
+#include "scenes/store_scene.h"
 #include "scenes/vm_bench_scene.h"
 #include "scenes/wormfight_scene.h"
 #include "vm/script_scene.h"
@@ -21,6 +22,7 @@ ScriptScene reflex_script(kReflexScript);
 BenchScene bench;
 VmBenchScene vm_bench;
 NetworkScene network;
+StoreScene store;
 
 }  // namespace
 
@@ -46,10 +48,13 @@ const GameEntry kGames[] = {
     // Same benchmark, scripted update half -- the Berry side of the bake-off.
     // Compare its CSV against "bench" above; see docs/phase-5-vm-bakeoff.md.
     {"vmbench", "VM Bench", Color(160, 0, 255), &vm_bench, false},  // violet
-    // Also not a game. Last, because the radio stays off unless the user walks
-    // all the way here and asks for it -- opt-in is enforced by the fact that
-    // this is the only scene that can switch it on.
+    // Also not a game. Near the end, because the radio stays off unless the
+    // user walks all the way here and asks for it -- opt-in is enforced by the
+    // fact that only Network/Store scenes can switch it on.
     {"network", "Network", Color(0, 255, 90), &network, false},  // green
+    // Downloads script cartridges from the configured Phase 7 store. Utility
+    // scene rather than a game: entering it is the opt-in to turn WiFi on.
+    {"store", "Store", Color(255, 80, 180), &store, false},  // pink
 };
 
 const uint8_t kGameCount = sizeof(kGames) / sizeof(kGames[0]);

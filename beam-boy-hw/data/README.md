@@ -55,3 +55,30 @@ consoles running older firmware.
 - `games/reflexfs/game.be` is currently a copy of the script embedded in
   `src/scenes/reflex_script.cpp`, kept so the built-in and filesystem paths can
   be compared side by side in the launcher.
+
+## Store index
+
+Phase 7 adds a network store. The firmware fetches one `index.json` and writes
+the selected entry into the same `games/<id>/` layout above, so downloaded games
+and `uploadfs` games are identical after installation.
+
+The first supported index format is deliberately strict and small:
+
+```json
+{
+  "games": [
+    {
+      "id": "reflexfs",
+      "title": "Reflex",
+      "color": "ff00aa",
+      "url": "https://example.test/games/reflexfs/game.be",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "size": "1234"
+    }
+  ]
+}
+```
+
+All values are strings. `id`, `title`, and `color` become the installed
+`meta.json`; `url`, `sha256`, and `size` are used only while downloading and
+verifying `game.be`. See `../../docs/phase-7-store.md` for limits and controls.

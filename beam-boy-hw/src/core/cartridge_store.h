@@ -109,6 +109,12 @@ class GameList {
   static constexpr uint8_t kMaxEntries = 16 + kMaxCartridges;
 
   GameEntry entries_[kMaxEntries];
+  // GameEntry stores id/title as const char*, so filesystem entries must point
+  // at memory owned by this list rather than at the CartridgeStore passed to
+  // build(). Boot uses a global store, but Phase 7 rescans from a temporary
+  // store after installing a game; copying here keeps both paths safe.
+  char cartridge_ids_[kMaxCartridges][kMaxCartridgeIdLength] = {};
+  char cartridge_titles_[kMaxCartridges][kMaxCartridgeTitleLength] = {};
   // One host scene per installed cartridge. Each holds only a path until it is
   // entered, so this array is cheap despite being sized for the maximum.
   ScriptScene scenes_[kMaxCartridges];

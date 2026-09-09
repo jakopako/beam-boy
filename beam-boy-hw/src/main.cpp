@@ -73,7 +73,7 @@ void setup() {
 
   Serial.println();
   Serial.println("==================================");
-  Serial.println("Beam Boy -- Phase 6: script cartridges");
+  Serial.println("Beam Boy -- Phase 7: cartridge store");
   Serial.print("Pixels:     ");
   Serial.println(engine.display().pixelCount());
   Serial.print("Brightness: ");

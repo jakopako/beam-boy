@@ -221,13 +221,16 @@ void GameList::build(CartridgeStore& store) {
   for (uint8_t i = 0; i < store.count() && count_ < kMaxEntries; i++) {
     const Cartridge& cartridge = store.at(i);
 
+    strncpy(cartridge_ids_[i], cartridge.id, sizeof(cartridge_ids_[i]) - 1);
+    cartridge_ids_[i][sizeof(cartridge_ids_[i]) - 1] = '\0';
+    strncpy(cartridge_titles_[i], cartridge.title,
+            sizeof(cartridge_titles_[i]) - 1);
+    cartridge_titles_[i][sizeof(cartridge_titles_[i]) - 1] = '\0';
     scenes_[i].setScriptPath(cartridge.script_path);
 
     GameEntry entry;
-    // Points into the store's cartridge table rather than copying: the store
-    // outlives the list (both are globals), so the strings stay valid.
-    entry.id = cartridge.id;
-    entry.title = cartridge.title;
+    entry.id = cartridge_ids_[i];
+    entry.title = cartridge_titles_[i];
     entry.accent = cartridge.accent;
     entry.scene = &scenes_[i];
     // Filesystem cartridges are always games, never utility scenes: the engine

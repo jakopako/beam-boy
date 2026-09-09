@@ -511,11 +511,25 @@ it over the air is item 5.)*
 ### Phase 7 — The store *(2 days)*
 > *Goal: download games from the internet.*
 
-1. Publish a `games/` repo to GitHub Pages: `index.json` + one folder per game.
-2. Firmware "Store" scene: fetch index → show available games as blocks → **A** downloads →
-   progress bar → SHA-256 verify → install → appears in the launcher.
-3. Show updates for installed games; allow deleting a game (hold **B** on it in the launcher).
-4. Handle failure gracefully: no WiFi, bad hash, full flash — each with a distinct color code.
+> **Update:** first firmware slice implemented. A **Store** utility scene connects
+> using stored credentials, fetches a strict `index.json`, shows remote games as
+> coloured blocks, downloads the selected `game.be`, checks size + SHA-256, writes
+> `/games/<id>/{meta.json,game.be}`, rescans cartridges, and makes the install
+> playable without rebooting. The store URL defaults to this repo's GitHub Pages
+> index (`https://jakopako.github.io/beam-boy/games/index.json`) and remains
+> configurable via `BEAMBOY_STORE_INDEX_URL`. See
+> [`docs/phase-7-store.md`](docs/phase-7-store.md).
+
+1. ✅ Publish a first `games/` index to GitHub Pages: `docs/games/index.json`
+   plus `docs/games/reflexfs/game.be`. GitHub Pages still has to be enabled for
+   the repo if `https://jakopako.github.io/beam-boy/` returns 404.
+2. ✅ Firmware "Store" scene: fetch index → show available games as blocks → **A** downloads →
+   SHA-256 verify → install → appears in the launcher. First slice uses a static working
+   animation during the blocking download/write; this is acceptable while LittleFS writes
+   make smooth animation unreliable anyway.
+3. ⬜ Show updates for installed games; allow deleting a game (hold **B** on it in the launcher).
+4. ✅ Handle failure gracefully: no credentials/network, bad index, bad length, bad hash,
+   full/unwritable flash all land in a red failure state with the exact reason on serial.
 
 ✅ *Visible result: your friend picks a game on the device and plays it 20 seconds later.*
 
