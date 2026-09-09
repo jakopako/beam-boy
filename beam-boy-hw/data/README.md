@@ -52,9 +52,10 @@ consoles running older firmware.
   can install is bounded by flash rather than RAM.
 - Because the file is re-read on every launch, editing `game.be` and running
   `uploadfs` picks up the change without a firmware flash.
-- `games/reflexfs/game.be` is currently a copy of the script embedded in
-  `src/scenes/reflex_script.cpp`, kept so the built-in and filesystem paths can
-  be compared side by side in the launcher.
+- `games/reflexfs/game.be` is the Reflex cartridge, published from
+  [`docs/games/reflexfs/game.be`](../../docs/games/reflexfs/game.be) so the
+  fixture here and the real store copy stay in sync -- see
+  `tools/build_store_index.py`.
 
 ## Store index
 

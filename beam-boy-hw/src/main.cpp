@@ -92,7 +92,12 @@ void setup() {
     const beamboy::GameEntry& game = beamboy::gameList().at(i);
     // Mark which entries came off the filesystem, so a cartridge that failed
     // to load is obvious here rather than only in the [games] lines above.
-    const bool installed = i >= beamboy::games::kGameCount;
+    // Installed cartridges sit strictly between the built-ins and the fixed
+    // trailing utility entries (Store, Network) -- see
+    // GameList::build() in core/cartridge_store.cpp.
+    const bool installed = i >= beamboy::games::kGameCount &&
+                            i < beamboy::games::kGameCount +
+                                    cartridge_store.count();
     Serial.print(installed ? "  * " : "  - ");
     Serial.print(game.title);
     Serial.print("  (best ");

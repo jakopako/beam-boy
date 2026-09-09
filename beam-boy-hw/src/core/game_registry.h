@@ -52,5 +52,11 @@ namespace games {
 extern const GameEntry kGames[];
 extern const uint8_t kGameCount;
 
+// Fixed utility entries that always sit at the very end of the launcher,
+// after every built-in and installed game -- Store, then Network. See
+// cartridge_store.h for how GameList stitches these three groups together.
+extern const GameEntry kUtilities[];
+extern const uint8_t kUtilityCount;
+
 }  // namespace games
 }  // namespace beamboy

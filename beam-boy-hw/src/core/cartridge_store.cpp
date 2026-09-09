@@ -117,13 +117,22 @@ bool CartridgeStore::loadMeta(const char* dir_name, Cartridge& out) {
   }
 
   // Uniqueness among folders is not enough: nothing stops a cartridge folder
-  // being named "reflex" and colliding with a *built-in* game's id. Since
+  // being named "wormfight" and colliding with a *built-in* game's id, or
+  // "store"/"network" and colliding with a fixed utility entry. Since
   // highscores are keyed by id string, that would let a downloaded cartridge
-  // read and overwrite a built-in's record. Refuse the id rather than let
-  // content from the games repo shadow a game shipped in the firmware.
+  // read and overwrite a built-in's record, or shadow a launcher-critical
+  // utility scene. Refuse the id rather than let content from the games repo
+  // shadow anything shipped in the firmware.
   for (uint8_t i = 0; i < games::kGameCount; i++) {
     if (strcmp(dir_name, games::kGames[i].id) == 0) {
       Serial.print("[games] id collides with a built-in game, skipping: ");
+      Serial.println(dir_name);
+      return false;
+    }
+  }
+  for (uint8_t i = 0; i < games::kUtilityCount; i++) {
+    if (strcmp(dir_name, games::kUtilities[i].id) == 0) {
+      Serial.print("[games] id collides with a utility entry, skipping: ");
       Serial.println(dir_name);
       return false;
     }
@@ -239,6 +248,14 @@ void GameList::build(CartridgeStore& store) {
     entry.is_game = true;
 
     entries_[count_++] = entry;
+  }
+
+  // Store and Network always come last, in that order, after every built-in
+  // and installed cartridge -- see game_registry.h. Appended here rather than
+  // folded into kGames, precisely so the loop above can insert cartridges
+  // between the two groups.
+  for (uint8_t i = 0; i < games::kUtilityCount && count_ < kMaxEntries; i++) {
+    entries_[count_++] = games::kUtilities[i];
   }
 }
 

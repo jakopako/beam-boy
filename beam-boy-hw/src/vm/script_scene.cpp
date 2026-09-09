@@ -67,8 +67,8 @@ void ScriptScene::enter(Engine& engine) {
 
   // Load and run the script's top level in one step: a well-formed cartridge
   // only *defines* init/update/render at this point, so running it should
-  // never do visible work -- but be_pcall runs it regardless, matching how
-  // VmBenchScene registers its functions (see vm_bench_scene.cpp).
+  // never do visible work -- but be_pcall runs it regardless of whether the
+  // top level itself does anything visible.
   beginSandboxedCall();
   if (be_loadstring(vm_, source_) != 0 || be_pcall(vm_, 0) != 0) {
     reportError("script load");

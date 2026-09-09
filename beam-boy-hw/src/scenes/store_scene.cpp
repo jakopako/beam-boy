@@ -180,6 +180,9 @@ bool collidesWithBuiltIn(const char* id) {
   for (uint8_t i = 0; i < games::kGameCount; i++) {
     if (strcmp(id, games::kGames[i].id) == 0) return true;
   }
+  for (uint8_t i = 0; i < games::kUtilityCount; i++) {
+    if (strcmp(id, games::kUtilities[i].id) == 0) return true;
+  }
   return false;
 }
 
