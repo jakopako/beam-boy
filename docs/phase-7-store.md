@@ -73,6 +73,36 @@ Constraints:
 - `size`: decimal string, 1 to 32768 bytes.
 - At most 12 entries are accepted in one index.
 
+## Publishing a cartridge to the store
+
+`docs/games/index.json` is the trust root for every downloaded script: the
+device verifies each `game.be` against the `sha256`/`size` recorded there. That
+means the recorded hash/size must match the *exact bytes* GitHub Pages serves —
+not whatever a local editor/OS happens to have on disk. Windows checkouts in
+particular can silently reintroduce CRLF line endings, which changes the bytes
+(and therefore the hash) without changing how the script reads.
+
+To avoid computing/copying hashes by hand, use
+[`tools/build_store_index.py`](../tools/build_store_index.py):
+
+1. Add or update a cartridge folder under `docs/games/<id>/`, containing:
+   - `game.be` — the Berry script, LF line endings only.
+   - `meta.json` — `{"id": "<id>", "title": "...", "color": "rrggbb"}`.
+2. Run `python tools/build_store_index.py` from the repo root. It reads each
+   `game.be` directly, computes `sha256`/`size` from those bytes, and rewrites
+   `docs/games/index.json` deterministically.
+3. Commit `docs/games/**` and the regenerated `index.json` together, then push.
+
+The script refuses to run if a `game.be` contains CR bytes, so a CRLF
+regression is caught before it's published rather than causing a confusing
+"size mismatch" on the device later. Run `python tools/build_store_index.py
+--check` to verify the index is already up to date without writing anything
+(useful before committing or in CI).
+
+[`.gitattributes`](../.gitattributes) marks `*.be` and cartridge `meta.json`
+files as binary (`-text`) so Git never rewrites their line endings on checkout
+or commit, regardless of a contributor's `core.autocrlf` setting.
+
 ## Controls and tube vocabulary
 
 - Enter **Store** from the launcher.
