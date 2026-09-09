@@ -143,7 +143,7 @@ sketch was final -- exactly the value of doing Reflex first.
 
 ## Open items (not yet done)
 
-Phase 6 listed five items; three are complete:
+Phase 6 listed five items; four are complete:
 
 1. ✅ Expose the full Beam API to the VM.
 2. ✅ Port Reflex from C++ to a script. (Wormfight, the more complex game, not
@@ -152,24 +152,33 @@ Phase 6 listed five items; three are complete:
    are *data*, merged with the built-in registry into one list. Installing a
    game is now a filesystem write, which is exactly the hook Phase 7's
    downloader needs.
-4. ⬜ **Sandboxing:** cap script memory and enforce a per-tick instruction
-   limit so a buggy cartridge cannot hang the console. Nothing in
-   `ScriptScene` currently prevents an infinite loop in `update()` from
-   freezing the frame loop -- this is a real gap, not a nice-to-have, and it
-   matters *more* now that cartridges can come from the filesystem rather than
-   only from code in this repo.
-5. ⬜ Dev quality-of-life: push a script over serial/HTTP and hot-reload it,
-   so iterating on a cartridge takes seconds rather than a flash cycle.
-   Partially eased already: `uploadfs` reloads a script without a firmware
-   flash, and the source is re-read on every launch.
+4. ✅ **Sandboxing:** a per-call time budget (8 ms -- half the 60 fps frame
+   budget) and a VM memory ceiling (64 KB). `installSandbox()`
+   (`src/vm/beam_api.h`/`.cpp`) registers a Berry observability hook
+   (`be_set_obs_hook`) once per VM; it fires periodically from inside the
+   interpreter loop and on GC completion, checking elapsed wall-clock time
+   since the current call started (`beginSandboxedCall()`, called before every
+   `update()`/`render()`/`init()`/script-load `be_pcall()` in
+   `ScriptScene`) and `vm->gc.usage`. On overrun it calls `be_raise()`, which
+   longjmps straight back to the enclosing `be_pcall()` -- the existing
+   `reportError()` path handles it, with `update()`/`render()` now also
+   forcing `exitToLauncher()` immediately rather than sitting on a blank
+   screen retrying every frame. No changes to vendored Berry source were
+   needed; `BE_USE_PERF_COUNTERS`/the obshook were already compiled in.
+5. ⏸️ **Deferred.** Dev quality-of-life: push a script over serial/HTTP and
+   hot-reload it, so iterating on a cartridge takes seconds rather than a
+   flash cycle. Explicitly parked: `uploadfs` already covers occasional
+   installs (single command, source re-read on every launch, no firmware
+   flash), and it isn't worth building until day-to-day iteration speed
+   actually becomes painful. Revisit if that changes.
 
-## Status: cartridges load from storage; sandboxing is the remaining gap
+## Status: cartridges load from storage and are sandboxed
 
 The hard question Phase 5 and this first port were meant to answer --
 *can a script cartridge actually replace a native game without the player
-noticing* -- is answered yes, and games now load from the filesystem rather
-than from firmware.
-
-The honest remaining risk is **item 4**. A cartridge is now data that can
-arrive from outside this repo, but nothing yet stops a bad one from hanging the
-console. That should be closed before anything is installed from the network.
+noticing* -- is answered yes, games load from the filesystem rather than
+firmware, and a buggy or hostile cartridge can no longer hang the console or
+run away with RAM. Phase 6 is functionally complete; item 5 remains
+deliberately parked rather than dropped -- see above. That closes the
+prerequisite Phase 7's networked downloader needs before anything installs
+from outside this repo.

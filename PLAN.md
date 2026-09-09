@@ -473,8 +473,10 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
 > *Goal: the cartridge model, working locally.*
 
 > **Update:** `beam` API bound, Reflex ported to a script and confirmed playing
-> identically to the native version on real ESP32-S3 hardware, and cartridges
-> now load from `/games/` on LittleFS. See
+> identically to the native version on real ESP32-S3 hardware, cartridges load
+> from `/games/` on LittleFS, and script cartridges are now sandboxed (time
+> budget + memory ceiling). Phase 6 is functionally complete; item 5
+> (hot-reload) is deliberately deferred. See
 > [`docs/phase-6-cartridges.md`](docs/phase-6-cartridges.md) for the API
 > surface, the cartridge format, and what's still open.
 
@@ -489,14 +491,18 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
    finds with the built-in registry into one list, so the launcher, score filing
    and `beam.highscore()` are unchanged. Format is documented in
    `beam-boy-hw/data/README.md`; `data/games/reflexfs/` is a working example.
-4. ⬜ **Sandboxing:** cap script memory, and enforce a per-tick instruction limit so a buggy
-   game can't hang the console — on overrun, abort the game and return to the launcher.
-   Not yet built: nothing stops an infinite loop in a script's `update()` today. **This is
-   now the gating item** — cartridges can arrive as data, so this should close before
-   anything is installed from the network.
-5. ⬜ Dev quality-of-life: a `dev` build that pushes `game.be` over serial or HTTP and hot-reloads
-   it, so iterating on a game takes seconds, not a flash cycle. Partially eased: `uploadfs`
-   already reloads a script without a firmware flash, and the source is re-read on each launch.
+4. ✅ **Sandboxing:** a per-call time budget (8 ms, half the 60 fps frame budget) and a VM memory
+   ceiling (64 KB) so a buggy game can't hang the console or exhaust RAM — on overrun, the
+   script call is aborted via a Berry exception and the console returns to the launcher.
+   Built on Berry's existing observability hook (`be_set_obs_hook`), which fires periodically
+   from inside the interpreter loop and on GC events, with no changes to vendored Berry source.
+   See `src/vm/beam_api.h`/`.cpp` (`installSandbox`, `beginSandboxedCall`) and
+   `src/vm/script_scene.cpp`.
+5. ⏸️ **Deferred.** Dev quality-of-life: a `dev` build that pushes `game.be` over serial or HTTP
+   and hot-reloads it, so iterating on a game takes seconds, not a flash cycle. Parked
+   deliberately: `uploadfs` already covers occasional installs (single command, no firmware
+   flash, source re-read on each launch), so this isn't worth building until iteration speed
+   is actually painful in practice. Revisit later if that changes.
 
 ✅ *Visible result: write a game, push it, play it — no reflash.* **(Met via
 `uploadfs`: a game can be added or edited without rebuilding firmware. Pushing

@@ -62,12 +62,14 @@ void ScriptScene::enter(Engine& engine) {
 
   vm_ = be_vm_new();
   bindBeamApi(vm_);
+  installSandbox(vm_);
   setBeamApiContext(&ctx_);
 
   // Load and run the script's top level in one step: a well-formed cartridge
   // only *defines* init/update/render at this point, so running it should
   // never do visible work -- but be_pcall runs it regardless, matching how
   // VmBenchScene registers its functions (see vm_bench_scene.cpp).
+  beginSandboxedCall();
   if (be_loadstring(vm_, source_) != 0 || be_pcall(vm_, 0) != 0) {
     reportError("script load");
     be_pop(vm_, be_top(vm_));
@@ -77,6 +79,7 @@ void ScriptScene::enter(Engine& engine) {
   be_pop(vm_, be_top(vm_));
 
   if (be_getglobal(vm_, "init")) {
+    beginSandboxedCall();
     if (be_pcall(vm_, 0) != 0) {
       reportError("init()");
       be_pop(vm_, be_top(vm_));
@@ -110,8 +113,12 @@ void ScriptScene::update(Engine& engine, float dt) {
 
   if (be_getglobal(vm_, "update")) {
     be_pushreal(vm_, dt);
+    beginSandboxedCall();
     if (be_pcall(vm_, 1) != 0) {
       reportError("update()");
+      be_pop(vm_, be_top(vm_));
+      engine.exitToLauncher();
+      return;
     }
   }
   be_pop(vm_, be_top(vm_));
@@ -127,8 +134,12 @@ void ScriptScene::render(Engine& engine) {
   setBeamApiContext(&ctx_);
 
   if (be_getglobal(vm_, "render")) {
+    beginSandboxedCall();
     if (be_pcall(vm_, 0) != 0) {
       reportError("render()");
+      be_pop(vm_, be_top(vm_));
+      engine.exitToLauncher();
+      return;
     }
   }
   be_pop(vm_, be_top(vm_));

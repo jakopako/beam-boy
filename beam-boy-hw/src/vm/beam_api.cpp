@@ -1,5 +1,6 @@
 #include "vm/beam_api.h"
 
+#include <stdarg.h>
 #include <string.h>
 
 #include "core/cartridge_store.h"
@@ -9,6 +10,56 @@ namespace beamboy {
 namespace {
 
 BeamApiContext* g_ctx = nullptr;
+
+// --- Sandbox -----------------------------------------------------------
+//
+// A script gets one call (update() or render()) per frame; if a single call
+// runs longer than this, it is not going to finish on its own -- an infinite
+// or merely very slow loop looks identical from here, and either one must not
+// be allowed to freeze the console. Half the 60 fps frame budget leaves
+// plenty of room for any legitimate cartridge (see docs/phase-6-cartridges.md
+// findings: real games use a small fraction of the budget) while still
+// catching a runaway well before it becomes visible as a hang.
+constexpr uint32_t kMaxCallMicros = 8000;
+
+// VM memory ceiling. Generous relative to what Reflex/Wormfight actually use
+// (a script's own state is a handful of numbers), but tight enough that a
+// cartridge cannot quietly grow without bound (e.g. an accidentally unbounded
+// list) and starve the rest of the device of heap.
+constexpr size_t kMaxVmBytes = 64 * 1024;
+
+// Wall-clock time (micros()) the currently guarded call started at. Set by
+// beginSandboxedCall(), read by the observability hook below.
+uint32_t g_call_start_us = 0;
+
+// Fires periodically from inside the Berry interpreter loop (see
+// BE_VM_OBSERVABILITY_SAMPLING in berry_conf.h) and on GC/malloc events.
+// be_raise() longjmps straight back to the enclosing be_pcall(), which
+// ScriptScene already treats as a script error -- no new error path needed,
+// just a trigger for the existing one.
+void sandboxObsHook(bvm* vm, int event, ...) {
+  switch (event) {
+    case BE_OBS_VM_HEARTBEAT: {
+      const uint32_t elapsed = micros() - g_call_start_us;
+      if (elapsed > kMaxCallMicros) {
+        be_raise(vm, "sandbox_error", "script exceeded per-call time budget");
+      }
+      break;
+    }
+    case BE_OBS_GC_END: {
+      va_list args;
+      va_start(args, event);
+      const size_t usage = va_arg(args, size_t);
+      va_end(args);
+      if (usage > kMaxVmBytes) {
+        be_raise(vm, "sandbox_error", "script exceeded memory budget");
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
 
 Engine& engine() { return *g_ctx->engine; }
 
@@ -197,6 +248,10 @@ int beam_log(bvm* vm) {
 void setBeamApiContext(BeamApiContext* ctx) { g_ctx = ctx; }
 
 BeamApiContext* beamApiContext() { return g_ctx; }
+
+void installSandbox(bvm* vm) { be_set_obs_hook(vm, sandboxObsHook); }
+
+void beginSandboxedCall() { g_call_start_us = micros(); }
 
 void bindBeamApi(bvm* vm) {
   be_newmodule(vm);

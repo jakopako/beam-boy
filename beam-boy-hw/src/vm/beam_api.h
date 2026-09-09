@@ -41,4 +41,23 @@ BeamApiContext* beamApiContext();
 // it. Call once, right after creating vm.
 void bindBeamApi(bvm* vm);
 
+// Installs the sandbox: a per-call time budget and a VM memory ceiling that
+// abort a runaway script rather than let it hang the console or exhaust RAM.
+// Cartridges can come from the filesystem and, eventually, the internet --
+// this is what makes a buggy or hostile one a caught exception instead of a
+// frozen device. Call once, right after bindBeamApi().
+//
+// Implemented on top of Berry's observability hook (be_set_obs_hook), which
+// fires periodically from inside the interpreter loop (see
+// BE_VM_OBSERVABILITY_SAMPLING in generate/berry_conf.h -- tightened from the
+// upstream default so the time check actually fires often enough to catch an
+// overrun before it costs multiple frames) -- no changes to the vendored
+// Berry source are needed.
+void installSandbox(bvm* vm);
+
+// Marks the start of one guarded call (update() or render()) so the sandbox's
+// time budget is measured per call, not cumulatively across a scene's whole
+// lifetime. Call immediately before each be_pcall() that may run script code.
+void beginSandboxedCall();
+
 }  // namespace beamboy

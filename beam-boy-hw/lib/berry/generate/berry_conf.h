@@ -38,7 +38,7 @@
 
 #define BE_USE_PERF_COUNTERS            1
 
-#define BE_VM_OBSERVABILITY_SAMPLING    20
+#define BE_VM_OBSERVABILITY_SAMPLING    12  /* CHANGED from upstream default 20: the Phase 6 sandbox (src/vm/beam_api.cpp) checks its per-call time budget from this heartbeat. At the default (every ~1M instructions), the Phase 5 bake-off's measured per-instruction cost means the heartbeat could fire tens of milliseconds apart -- looser than the 8 ms budget it is meant to enforce. Every 4096 instructions catches an overrun promptly without measurably slowing normal cartridges (the check itself is one branch). */
 
 #define BE_STACK_TOTAL_MAX              20000
 
