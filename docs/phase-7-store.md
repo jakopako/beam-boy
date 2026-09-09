@@ -42,6 +42,26 @@ appear in the launcher without a firmware flash.
 - **Immediate availability:** after a successful install, `CartridgeStore` is
   rescanned and `gameList()` is rebuilt, so the new cartridge is available in
   the launcher without rebooting.
+- **Update indicator:** each installed cartridge's `meta.json` now also records
+  the `sha256` verified at install time. After every index fetch and every
+  install, the Store recomputes, per index entry, whether it is not installed,
+  installed and current, or installed with a different hash than the index
+  offers ("update available"). Status is shown as brightness/animation on the
+  same coloured block, not a new colour, since colour is reserved for game
+  identity: dim = up to date, breathing = update available, normal = not
+  installed. Pressing **A**/nav on an up-to-date entry is a harmless no-op (a
+  quick green flash) rather than re-downloading. A cartridge with no recorded
+  hash (hand-authored, or copied in via `uploadfs`) can only ever read as "not
+  installed" or "up to date" by id — never "update available", since there is
+  no trustworthy prior hash to compare against.
+- **Deleting a cartridge:** in the launcher, holding **B** on an installed
+  cartridge past the highscore readout (~2.5 s total) deletes it: `game.be`,
+  `meta.json` and its `/games/<id>/` folder are removed, cartridges are
+  rescanned, and `gameList()` is rebuilt immediately. The readout bleeds from
+  the normal highscore display toward solid red as the hold approaches the
+  threshold, so the deletion is never a surprise. Built-in games and the
+  Store/Network utility entries are not deletable this way — the gesture only
+  fires for entries `GameList::build()` populated from `CartridgeStore`.
 
 ## Store index format
 
@@ -109,12 +129,18 @@ or commit, regardless of a contributor's `core.autocrlf` setting.
 - Blue sweep: connecting to stored WiFi.
 - Amber sweep: fetching the index.
 - Store entries: coloured blocks from the index; selected block breathes.
-- **A** / nav press: install selected cartridge.
+  Status overlays brightness: dim = already installed and current, breathing
+  (independent of selection) = update available, normal = not installed.
+- **A** / nav press: install selected cartridge, or a quick green flash and
+  no-op if it is already up to date.
 - White bar: install in progress.
 - Green centre-out flash: install succeeded.
 - Red pulse: failure; read the serial log for the precise reason.
 - Hold **B**: return to the launcher, using the existing utility-scene exit
   gesture.
+
+In the **launcher**, holding **B** on an installed cartridge past the
+highscore readout deletes it; see "Deleting a cartridge" above.
 
 ## Current limitations
 

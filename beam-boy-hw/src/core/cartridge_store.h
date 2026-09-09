@@ -50,6 +50,7 @@ constexpr uint8_t kMaxCartridges = 12;
 // record.
 constexpr uint8_t kMaxCartridgeIdLength = 12;
 constexpr uint8_t kMaxCartridgeTitleLength = 24;
+constexpr uint8_t kMaxCartridgeShaLength = 65;  // 64 hex + NUL
 
 struct Cartridge {
   char id[kMaxCartridgeIdLength] = {0};
@@ -57,6 +58,12 @@ struct Cartridge {
   // Path to the script, kept so launching doesn't have to rebuild it.
   char script_path[48] = {0};
   Color accent;
+  // The hash the Store verified this script against at install time, empty
+  // for a cartridge without one (hand-authored, or copied in via uploadfs).
+  // Not used to re-verify game.be -- only to let the Store scene tell whether
+  // an installed cartridge matches what the index currently offers, so it can
+  // show an update is available. See StoreScene::computeStatuses().
+  char sha256[kMaxCartridgeShaLength] = {0};
 };
 
 class CartridgeStore {
@@ -77,6 +84,12 @@ class CartridgeStore {
   // Returns nullptr if the file is missing or too large. The size cap matters:
   // this is loading a file that, after Phase 7, arrived over the network.
   static char* readScript(const char* path);
+
+  // Deletes /games/<id>/ entirely: game.be, meta.json, then the now-empty
+  // directory. Used by the launcher's hold-B-to-delete gesture and safe to
+  // call even if some of those paths are already missing. Does not rescan --
+  // callers rebuild the GameList themselves afterwards, same as an install.
+  static bool remove(const char* id);
 
   static constexpr size_t kMaxScriptBytes = 32 * 1024;
 

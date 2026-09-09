@@ -527,11 +527,28 @@ it over the air is item 5.)*
    SHA-256 verify → install → appears in the launcher. First slice uses a static working
    animation during the blocking download/write; this is acceptable while LittleFS writes
    make smooth animation unreliable anyway.
-3. ⬜ Show updates for installed games; allow deleting a game (hold **B** on it in the launcher).
+3. ✅ Show updates for installed games; allow deleting a game (hold **B** on it in the launcher).
 4. ✅ Handle failure gracefully: no credentials/network, bad index, bad length, bad hash,
    full/unwritable flash all land in a red failure state with the exact reason on serial.
 
 ✅ *Visible result: your friend picks a game on the device and plays it 20 seconds later.*
+
+**Known issues to fix (reported after real-hardware use):**
+
+- ⬜ Launcher hold-B is now overloaded: it used to only show the selected
+  game's highscore, but the delete gesture (item 3 above) reuses the same
+  hold-B, so the two now conflict. Needs a redesign — e.g. a duration
+  threshold, a different button/gesture for delete, or a confirmation step —
+  so showing a highscore can never be mistaken for the start of a delete and
+  vice versa.
+- ⬜ After installing a game in the Store, exiting back to the launcher
+  requires pressing the joystick/nav button first and *then* holding B — the
+  same two-step gesture games use (pause, then hold-B-while-paused). The Store
+  is a utility scene, not a game, and per its own documented behaviour
+  ("Hold B: return to the launcher") a plain hold-B should be enough on its
+  own, without the extra nav-button press. Something regressed or was never
+  wired up for the post-install state.
+
 
 ### Phase 8 — Enclosure *(2–4 days, iterative)*
 > *Goal: a real object.*

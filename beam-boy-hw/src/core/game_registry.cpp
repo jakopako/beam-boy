@@ -22,7 +22,8 @@ const GameEntry kGames[] = {
     // Accent colours are spread deliberately around the hue wheel (not chosen
     // ad hoc) so adjacent launcher entries never share a colour family --
     // easy to do by accident with blue, since it is the "default" tech colour.
-    {"wormfight", "Wormfight", Color(255, 40, 30), &wormfight, true},  // red
+    {"wormfight", "Wormfight", Color(255, 40, 30), &wormfight, true,
+     false},  // red
 };
 
 const uint8_t kGameCount = sizeof(kGames) / sizeof(kGames[0]);
@@ -34,8 +35,10 @@ const uint8_t kGameCount = sizeof(kGames) / sizeof(kGames[0]);
 // it -- opt-in is enforced by the fact that only Network/Store scenes can
 // switch it on.
 const GameEntry kUtilities[] = {
-    {"store", "Store", Color(255, 80, 180), &store, false},      // pink
-    {"network", "Network", Color(0, 255, 90), &network, false},  // green
+    {"store", "Store", Color(255, 80, 180), &store, false,
+     false},  // pink
+    {"network", "Network", Color(0, 255, 90), &network, false,
+     false},  // green
 };
 
 const uint8_t kUtilityCount = sizeof(kUtilities) / sizeof(kUtilities[0]);

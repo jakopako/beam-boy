@@ -42,6 +42,13 @@ struct GameEntry {
   // with, and the brace-initialised table below would stop compiling. Every
   // entry sets the flag explicitly, so a default would be unused anyway.
   bool is_game;
+
+  // True only for entries GameList::build() copied in from CartridgeStore --
+  // never for a built-in or a utility scene. The launcher uses this to decide
+  // whether holding B long enough may delete the entry: a built-in game or
+  // Store/Network itself must never be removable this way. Also given no
+  // default initializer, for the same reason as is_game above.
+  bool is_installed;
 };
 
 namespace games {

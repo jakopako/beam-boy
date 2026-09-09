@@ -54,7 +54,25 @@ struct MetaFields {
   char title[kMaxCartridgeTitleLength] = {0};
   Color accent = Color(255, 255, 255);
   bool has_color = false;
+  // Optional: only present for cartridges the Store installed. Absent for a
+  // hand-authored or uploadfs-sideloaded cartridge, which is fine -- it just
+  // means the Store can never report an update for that one (see
+  // StoreScene::computeStatuses()).
+  char sha256[kMaxCartridgeShaLength] = {0};
 };
+
+bool isHexDigit(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+         (c >= 'A' && c <= 'F');
+}
+
+bool validSha256(const char* text) {
+  if (strlen(text) != 64) return false;
+  for (uint8_t i = 0; i < 64; i++) {
+    if (!isHexDigit(text[i])) return false;
+  }
+  return true;
+}
 
 bool onMetaPair(void* user, const char* key, const char* value) {
   MetaFields* fields = static_cast<MetaFields*>(user);
@@ -67,6 +85,13 @@ bool onMetaPair(void* user, const char* key, const char* value) {
   } else if (strcmp(key, "color") == 0) {
     if (!parseHexColor(value, fields->accent)) return false;
     fields->has_color = true;
+  } else if (strcmp(key, "sha256") == 0) {
+    // A present-but-malformed hash is rejected outright rather than silently
+    // ignored: meta.json is only ever written by this firmware (see
+    // StoreScene), so a bad value here means the file was corrupted or
+    // tampered with, not that an older/newer format is in play.
+    if (!validSha256(value)) return false;
+    strcpy(fields->sha256, value);
   }
   return true;
 }
@@ -103,6 +128,22 @@ char* readFile(const char* path, size_t max_bytes) {
 
 char* CartridgeStore::readScript(const char* path) {
   return readFile(path, kMaxScriptBytes);
+}
+
+bool CartridgeStore::remove(const char* id) {
+  char script_path[48];
+  char meta_path[40];
+  char dir_path[32];
+  snprintf(script_path, sizeof(script_path), "%s/%s/game.be", kGamesDir, id);
+  snprintf(meta_path, sizeof(meta_path), "%s/%s/meta.json", kGamesDir, id);
+  snprintf(dir_path, sizeof(dir_path), "%s/%s", kGamesDir, id);
+
+  // Best-effort: a partially-installed cartridge (a failed download left only
+  // one of the two files) must still be removable, so a missing file is not
+  // treated as failure. Only report failure if the directory itself survives.
+  LittleFS.remove(script_path);
+  LittleFS.remove(meta_path);
+  return LittleFS.rmdir(dir_path);
 }
 
 bool CartridgeStore::loadMeta(const char* dir_name, Cartridge& out) {
@@ -178,6 +219,7 @@ bool CartridgeStore::loadMeta(const char* dir_name, Cartridge& out) {
   }
   out.accent = fields.accent;
   strcpy(out.script_path, script_path);
+  strcpy(out.sha256, fields.sha256);
   return true;
 }
 
@@ -246,6 +288,9 @@ void GameList::build(CartridgeStore& store) {
     // must own the pause/exit gesture for them, so a downloaded game can never
     // trap the player.
     entry.is_game = true;
+    // Marks this entry as deletable via the launcher's hold-B gesture; a
+    // built-in or utility entry never carries this flag.
+    entry.is_installed = true;
 
     entries_[count_++] = entry;
   }

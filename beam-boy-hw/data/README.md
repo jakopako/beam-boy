@@ -38,6 +38,7 @@ files will eventually arrive from the games repo as community submissions.
 | `id` | no | Ignored; the folder name wins. Kept for readability. |
 | `title` | no | Launcher name. Falls back to the id, so a missing title never hides a game. |
 | `color` | no | Accent as `rrggbb` or `#rrggbb`. Defaults to white. A malformed value rejects the cartridge, rather than showing black and looking like a launcher bug. |
+| `sha256` | no | The hash the Store verified `game.be` against at install time. Written automatically by the Store; a hand-authored or `uploadfs`-copied cartridge normally omits it. Not re-verified against `game.be` — used only so the Store can tell whether an installed cartridge matches what the index currently offers ("update available"). A malformed (present but not 64 hex digits) value rejects the cartridge, like `color`. |
 
 Unknown keys are ignored, so adding a field later (author, version) won't break
 consoles running older firmware.

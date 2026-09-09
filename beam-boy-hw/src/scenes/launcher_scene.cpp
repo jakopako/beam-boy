@@ -11,6 +11,12 @@ namespace {
 constexpr float kHighlightEase = 12.0f;
 constexpr float kLaunchFlashTime = 0.35f;
 
+// How long B must be held on an installed cartridge, beyond the highscore
+// readout, before it is deleted. Long enough that showing the highscore (the
+// gesture's first, harmless outcome) is never mistaken for the start of a
+// delete; short enough that deleting a game does not feel like a chore.
+constexpr uint32_t kDeleteHoldMs = 2500;
+
 // A game needs at least this many pixels to read as a block rather than a dot.
 constexpr uint8_t kMinBlockPixels = 2;
 constexpr uint8_t kMaxBlockPixels = 6;
@@ -102,6 +108,24 @@ void LauncherScene::update(Engine& engine, float dt) {
     launching_ = true;
     launch_timer_ = kLaunchFlashTime;
   }
+
+  // Deleting only applies to installed cartridges -- a built-in or a utility
+  // scene (Store, Network) must never disappear from the launcher this way.
+  if (!deleting_ && gameList().at(selected_).is_installed &&
+      input.heldFor(Button::kB, kDeleteHoldMs)) {
+    deleting_ = true;
+    CartridgeStore::remove(gameList().at(selected_).id);
+    rescan_store_.scan();
+    gameList().build(rescan_store_);
+    // The list just shrank; clamp rather than let selected_ point past the
+    // end or land on a different game than the player expects to see next.
+    if (selected_ >= gameList().count()) {
+      selected_ = gameList().count() == 0 ? 0 : gameList().count() - 1;
+    }
+    highlight_ = static_cast<float>(selected_);
+  } else if (!input.held(Button::kB)) {
+    deleting_ = false;
+  }
 }
 
 void LauncherScene::renderList(Engine& engine) {
@@ -159,8 +183,29 @@ void LauncherScene::render(Engine& engine) {
   }
 
   // Holding B shows the selected game's highscore, so records are visible from
-  // the menu without launching anything.
+  // the menu without launching anything. Once the hold has crossed the delete
+  // threshold (see update()), the game is already gone -- show a solid red
+  // confirmation instead of a score that no longer belongs to anything
+  // selected_ still points at.
+  if (deleting_) {
+    display.span(0.0f, 1.0f, colors::kRed, 1.0f);
+    return;
+  }
+
   if (engine.input().held(Button::kB)) {
+    // As the hold nears the delete threshold on a deletable entry, bleed the
+    // readout toward red so the countdown is visible before it fires --
+    // otherwise deleting a game would look instantaneous and accidental.
+    if (gameList().at(selected_).is_installed) {
+      const float warn =
+          static_cast<float>(engine.input().holdDuration(Button::kB)) /
+          static_cast<float>(kDeleteHoldMs);
+      if (warn > 0.5f) {
+        const float mix = (warn - 0.5f) / 0.5f;
+        display.span(0.0f, 1.0f, colors::kRed, mix > 1.0f ? 1.0f : mix);
+        return;
+      }
+    }
     engine.renderScore(engine.storage().highscore(gameList().at(selected_).id),
                        engine.input().holdDuration(Button::kB));
     return;

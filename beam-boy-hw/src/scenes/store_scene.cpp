@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <ctype.h>
 #include <math.h>
 #include <mbedtls/sha256.h>
 #include <stdlib.h>
@@ -186,6 +187,18 @@ bool collidesWithBuiltIn(const char* id) {
   return false;
 }
 
+// Case-insensitive: the index and a cartridge's meta.json both carry sha256 as
+// hex text, but nothing forces them to agree on letter case.
+bool shaTextEqual(const char* a, const char* b) {
+  for (; *a != '\0' && *b != '\0'; a++, b++) {
+    if (tolower(static_cast<unsigned char>(*a)) !=
+        tolower(static_cast<unsigned char>(*b))) {
+      return false;
+    }
+  }
+  return *a == *b;
+}
+
 bool installedGameVisible(const char* id) {
   for (uint8_t i = games::kGameCount; i < gameList().count(); i++) {
     if (strcmp(gameList().at(i).id, id) == 0) return true;
@@ -226,6 +239,8 @@ bool writeMeta(const StoreIndex::Entry& entry, const char* path) {
   ok = ok && writeJsonString(file, entry.title);
   ok = ok && file.print(",\n  \"color\": ") == 13;
   ok = ok && writeJsonString(file, entry.color);
+  ok = ok && file.print(",\n  \"sha256\": ") == 14;
+  ok = ok && writeJsonString(file, entry.sha256);
   ok = ok && file.print("\n}\n") == 3;
   file.close();
   return ok;
@@ -400,7 +415,40 @@ bool StoreScene::fetchIndex() {
     Serial.print(index_.at(i).id);
     Serial.println(F(")"));
   }
+  computeStatuses();
   return true;
+}
+
+// Rescans /games/ and, for each index entry, decides whether it is new,
+// already installed and current, or installed with a newer version waiting.
+// Comparing sha256 rather than a version number: the Store already computes
+// and verifies it for every install (see downloadScript()), so this needs no
+// extra field a game author could forget to bump. A cartridge installed
+// without a recorded hash (hand-authored, or copied in via uploadfs) can never
+// show as "update available" -- there is nothing trustworthy to compare
+// against, so it is only ever "not installed" or "up to date" by id.
+void StoreScene::computeStatuses() {
+  installed_.scan();
+
+  for (uint8_t i = 0; i < index_.count(); i++) {
+    const StoreIndex::Entry& entry = index_.at(i);
+    CartridgeStatus status = CartridgeStatus::kNotInstalled;
+
+    for (uint8_t j = 0; j < installed_.count(); j++) {
+      const Cartridge& cartridge = installed_.at(j);
+      if (strcmp(cartridge.id, entry.id) != 0) continue;
+
+      if (cartridge.sha256[0] != '\0' &&
+          !shaTextEqual(cartridge.sha256, entry.sha256)) {
+        status = CartridgeStatus::kUpdateAvailable;
+      } else {
+        status = CartridgeStatus::kUpToDate;
+      }
+      break;
+    }
+
+    statuses_[i] = status;
+  }
 }
 
 bool StoreScene::installSelected(Engine& engine) {
@@ -484,13 +532,13 @@ bool StoreScene::installSelected(Engine& engine) {
   LittleFS.remove(bak_script);
   LittleFS.remove(bak_meta);
 
-  CartridgeStore store;
-  store.scan();
-  gameList().build(store);
+  installed_.scan();
+  gameList().build(installed_);
   if (!installedGameVisible(entry.id)) {
     fail("install not visible");
     return false;
   }
+  computeStatuses();
 
   state_ = StoreState::kSuccess;
   settled_at_ms_ = millis();
@@ -531,6 +579,16 @@ void StoreScene::update(Engine& engine, float dt) {
 
     if (engine.input().pressed(Button::kA) ||
         engine.input().pressed(Input::kNavButton)) {
+      if (statuses_[selected_] == CartridgeStatus::kUpToDate) {
+        // Already current: a quick flash of the game's own colour says so
+        // without spending time and battery re-downloading and re-verifying
+        // bytes that would come back identical.
+        Display& display = engine.display();
+        display.clear();
+        display.span(0.0f, 1.0f, kOkColor, 0.5f);
+        display.present();
+        return;
+      }
       Display& display = engine.display();
       display.clear();
       display.span(0.0f, 1.0f, kInstallColor, 0.35f);
@@ -592,16 +650,36 @@ void StoreScene::drawReady(Engine& engine) {
     const float center = (i + 0.5f) * step;
     const float half = fmaxf(display.pixelWidth(), step * 0.35f);
     const bool selected = i == selected_;
+
+    // Base intensity is status-driven, independent of selection: an
+    // up-to-date game recedes (nothing to do here), a game with an update
+    // waiting breathes so it stands out while scrolling past, and a new game
+    // sits at the same level the whole list used before status existed.
+    // Selection then adds its own breathing/brighten on top, same as before.
+    float base;
+    switch (statuses_[i]) {
+      case CartridgeStatus::kUpToDate:
+        base = 0.06f;
+        break;
+      case CartridgeStatus::kUpdateAvailable:
+        base = 0.15f + 0.15f * wrappedSin(phase_ * 3.0f);
+        break;
+      case CartridgeStatus::kNotInstalled:
+      default:
+        base = 0.15f;
+        break;
+    }
     const float intensity =
-        selected ? 0.55f + 0.35f * wrappedSin(phase_ * 5.0f) : 0.15f;
-    Color color(255, 140, 0);
+        selected ? fmaxf(base, 0.55f + 0.35f * wrappedSin(phase_ * 5.0f))
+                 : base;
+
     // Reuse CartridgeStore's stricter colour validation later during install;
     // the index parser already guarantees this is six hex digits, so this small
     // conversion cannot fail.
     uint32_t packed = strtoul(index_.at(i).color, nullptr, 16);
-    color = Color(static_cast<uint8_t>((packed >> 16) & 0xFF),
-                  static_cast<uint8_t>((packed >> 8) & 0xFF),
-                  static_cast<uint8_t>(packed & 0xFF));
+    Color color(static_cast<uint8_t>((packed >> 16) & 0xFF),
+                static_cast<uint8_t>((packed >> 8) & 0xFF),
+                static_cast<uint8_t>(packed & 0xFF));
     display.span(center - half, center + half, color, intensity);
   }
 }
