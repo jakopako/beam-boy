@@ -8,11 +8,11 @@ LED neon tube (50 px), two buttons, one scroll wheel, WiFi, and downloadable gam
 ## 1. Verdict: does the idea make sense?
 
 **Yes — and there is proven prior art.** The concept is a handheld descendant of
-*Line Wobbler* (Robin Baumgarten) and its open-source homage
+_Line Wobbler_ (Robin Baumgarten) and its open-source homage
 [**TWANG**](https://github.com/bdring/TWANG), a 1D dungeon crawler running on an
 addressable LED strip. TWANG has been built and played on strips of 60, 144, 288 and
 450 LEDs, so **50 px is a proven, playable resolution** — at the short end, which means
-game design should favour *timing and reflexes* over *spatial detail*.
+game design should favour _timing and reflexes_ over _spatial detail_.
 
 The one genuinely novel part of Beam Boy is the **downloadable game framework**. Nothing
 off-the-shelf does this for LED-strip games, so it is the part of the project that needs
@@ -20,18 +20,18 @@ the most deliberate design — which is exactly what this plan front-loads.
 
 ### Key findings from research
 
-| Topic | Finding | Consequence for Beam Boy |
-|---|---|---|
-| **MCU** | On ESP8266, the standard NeoPixel driver disables interrupts for the whole strip write, which starves the WiFi stack (flicker, dropped packets, watchdog resets). ESP32 has the **RMT peripheral**, which generates WS2812 timing *in hardware* with zero CPU blocking, and a second core for the radio. | **Move off the NodeMCU to an ESP32.** Confirmed with you. |
-| **Downloadable games** | Full-firmware OTA replaces the entire ~1 MB image: one game resident at a time, ~1 MB per switch. A scripting VM lets each game be a few-KB file in the flash filesystem, with dozens resident. | **Native engine + script "cartridges."** Confirmed with you. |
-| **Which VM** | MicroPython/Espruino are too heavy to drive a 60 fps loop. **Berry** (the Tasmota scripting language) and **Lua** are lightweight bytecode VMs designed for this class of device. wasm3 is fast and sandboxed but is in "minimal maintenance." | Start with **Berry** as the front-runner, but **prototype-benchmark it before committing** (Phase 5 has an explicit bake-off). **Update: research confirms Berry is ESP32-only** — it cannot run on the ESP8266, so the bake-off happens on the S3 Feather. |
-| **Frame budget** | 50 px × 24 bits × 1.25 µs ≈ **1.5 ms per frame** on the wire — trivial. At 60 fps that is 9 % of the time budget, all handled by RMT hardware. | Rendering is a non-issue. The VM has ~15 ms/frame of headroom. |
-| **WiFi setup** | `WiFiManager` (captive portal) is the most battle-tested and needs no companion app, but phone captive-portal auto-popup is inconsistent and Android may drop an AP it deems internet-less. `improv-wifi` (BLE) is purpose-built for screenless devices but has no iOS web support. | **WiFiManager**, with the fallback "open `192.168.4.1` manually" documented. It also fits your "offline must work" requirement naturally. |
-| **Power** | **Measured** (10 px @ cap 25/255): 39 mA full white, 9.5 mA for a realistic game frame → ~3.9 mA/px. Projected to 50 px: **~195 mA full white, ~33 mA in normal play**. | With the MCU at ~35 mA, normal play is **~70 mA** → **30+ hours** from a 2500 mAh cell. Power is a non-issue; the brightness cap was raised from 25 to **64** and can go higher. |
-| **Charging** | A bare TP4056 has no load sharing: playing while plugged in draws through the battery, confusing end-of-charge detection and wasting cycles. A DevKitC + TP4056 build also ends up with two USB ports. | **Use a board with integrated LiPo charging** (Adafruit Feather ESP32-S3): one USB-C port for charge *and* flash, correct load sharing, battery sense pre-wired. See §2.1. |
-| **LiPo direct drive** | WS2812B tolerates ~3.5–5.3 V. Driving the strip straight off the LiPo (3.7–4.2 V) avoids both a boost converter *and* the 3.3 V→5 V data level shifter, since VCC and logic level then nearly match. | **Skip the boost converter and the level shifter.** The cell's protection cutoff (~3.4 V) keeps the strip in range; firmware shuts down cleanly before it trips. Verify on your specific tube in Phase 0. |
-| **Input** | TWANG's spring-doorstop + MPU6050 controller is genre-defining but built for a floor-standing cabinet. Its feel depends on *analog* input — an encoder cannot express "move slowly left". | **EC11 encoder + analog thumbstick + 2 buttons.** Encoder = relative/detented (menus, precise steps); stick = absolute/self-centering (velocity). Both, for €2 extra and much wider game range. |
-| **Monetization** | Paid cartridges need a backend, accounts, per-device keys and signed+encrypted code — and DRM on an openly self-flashable device is defeatable by rebuilding the firmware. Comparable projects (TWANG, ESPboy) monetize via hardware. | **Keep games free and open; sell hardware kits.** The free library is what makes the hardware worth buying. Store design leaves the door open for paid games later. |
+| Topic                  | Finding                                                                                                                                                                                                                                                                                                  | Consequence for Beam Boy                                                                                                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MCU**                | On ESP8266, the standard NeoPixel driver disables interrupts for the whole strip write, which starves the WiFi stack (flicker, dropped packets, watchdog resets). ESP32 has the **RMT peripheral**, which generates WS2812 timing _in hardware_ with zero CPU blocking, and a second core for the radio. | **Move off the NodeMCU to an ESP32.** Confirmed with you.                                                                                                                                                                                                   |
+| **Downloadable games** | Full-firmware OTA replaces the entire ~1 MB image: one game resident at a time, ~1 MB per switch. A scripting VM lets each game be a few-KB file in the flash filesystem, with dozens resident.                                                                                                          | **Native engine + script "cartridges."** Confirmed with you.                                                                                                                                                                                                |
+| **Which VM**           | MicroPython/Espruino are too heavy to drive a 60 fps loop. **Berry** (the Tasmota scripting language) and **Lua** are lightweight bytecode VMs designed for this class of device. wasm3 is fast and sandboxed but is in "minimal maintenance."                                                           | Start with **Berry** as the front-runner, but **prototype-benchmark it before committing** (Phase 5 has an explicit bake-off). **Update: research confirms Berry is ESP32-only** — it cannot run on the ESP8266, so the bake-off happens on the S3 Feather. |
+| **Frame budget**       | 50 px × 24 bits × 1.25 µs ≈ **1.5 ms per frame** on the wire — trivial. At 60 fps that is 9 % of the time budget, all handled by RMT hardware.                                                                                                                                                           | Rendering is a non-issue. The VM has ~15 ms/frame of headroom.                                                                                                                                                                                              |
+| **WiFi setup**         | `WiFiManager` (captive portal) is the most battle-tested and needs no companion app, but phone captive-portal auto-popup is inconsistent and Android may drop an AP it deems internet-less. `improv-wifi` (BLE) is purpose-built for screenless devices but has no iOS web support.                      | **WiFiManager**, with the fallback "open `192.168.4.1` manually" documented. It also fits your "offline must work" requirement naturally.                                                                                                                   |
+| **Power**              | **Measured** (10 px @ cap 25/255): 39 mA full white, 9.5 mA for a realistic game frame → ~3.9 mA/px. Projected to 50 px: **~195 mA full white, ~33 mA in normal play**.                                                                                                                                  | With the MCU at ~35 mA, normal play is **~70 mA** → **30+ hours** from a 2500 mAh cell. Power is a non-issue; the brightness cap was raised from 25 to **64** and can go higher.                                                                            |
+| **Charging**           | A bare TP4056 has no load sharing: playing while plugged in draws through the battery, confusing end-of-charge detection and wasting cycles. A DevKitC + TP4056 build also ends up with two USB ports.                                                                                                   | **Use a board with integrated LiPo charging** (Adafruit Feather ESP32-S3): one USB-C port for charge _and_ flash, correct load sharing, battery sense pre-wired. See §2.1.                                                                                  |
+| **LiPo direct drive**  | WS2812B tolerates ~3.5–5.3 V. Driving the strip straight off the LiPo (3.7–4.2 V) avoids both a boost converter _and_ the 3.3 V→5 V data level shifter, since VCC and logic level then nearly match.                                                                                                     | **Skip the boost converter and the level shifter.** The cell's protection cutoff (~3.4 V) keeps the strip in range; firmware shuts down cleanly before it trips. Verify on your specific tube in Phase 0.                                                   |
+| **Input**              | TWANG's spring-doorstop + MPU6050 controller is genre-defining but built for a floor-standing cabinet. Its feel depends on _analog_ input — an encoder cannot express "move slowly left".                                                                                                                | **EC11 encoder + analog thumbstick + 2 buttons.** Encoder = relative/detented (menus, precise steps); stick = absolute/self-centering (velocity). Both, for €2 extra and much wider game range.                                                             |
+| **Monetization**       | Paid cartridges need a backend, accounts, per-device keys and signed+encrypted code — and DRM on an openly self-flashable device is defeatable by rebuilding the firmware. Comparable projects (TWANG, ESPboy) monetize via hardware.                                                                    | **Keep games free and open; sell hardware kits.** The free library is what makes the hardware worth buying. Store design leaves the door open for paid games later.                                                                                         |
 
 ### Risks, honestly
 
@@ -39,7 +39,7 @@ the most deliberate design — which is exactly what this plan front-loads.
    is a "data-driven engine" (games are declarative level/behaviour descriptions interpreted
    by native C++ code) — less flexible but guaranteed fast. Phase 5 decides this with a benchmark, early.
    **Update — measured, and the risk is retired.** On the ESP8266 (the pessimistic board,
-   no FPU) at 100 entities the whole frame costs 11 % of budget. ~84 % of that is *draw*
+   no FPU) at 100 entities the whole frame costs 11 % of budget. ~84 % of that is _draw_
    calls, which stay native under any VM; only the update half is interpreted. That leaves
    **~52× of headroom on the interpreted half**. The native+scripted architecture is sound.
    See [`docs/phase-5-vm-bakeoff.md`](docs/phase-5-vm-bakeoff.md).
@@ -57,17 +57,17 @@ the most deliberate design — which is exactly what this plan front-loads.
 
 ### Bill of materials
 
-| Part | Choice | Notes |
-|---|---|---|
-| MCU | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — *recommended* | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and a battery voltage divider already wired. Solves the charging design in one part. |
-| *MCU alternative* | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1. |
-| Display | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67** | Already owned. |
-| Wheel | **EC11 rotary encoder with integrated push switch** | The push doubles as a button — this *is* your "reuse buttons" principle. |
-| Stick | **2-axis analog thumbstick with push switch** (PS2-style module) | ~€2. Gives absolute + velocity control the encoder can't. Y axis is spare on a 1D display — that's deliberate headroom for future games. |
-| Buttons | **2 × 6 mm tactile switches** | Named **A** (action/confirm) and **B** (back/cancel). |
-| Battery | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection** | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do). |
-| Power switch | Slide switch in the battery line | Cuts battery to everything. Charging still works with it off. |
-| Misc | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing. |
+| Part              | Choice                                                                                     | Notes                                                                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                     | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and a battery voltage divider already wired. Solves the charging design in one part. |
+| _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                             | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                 |
+| Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                     | Already owned.                                                                                                                                                                                                                                      |
+| Wheel             | **EC11 rotary encoder with integrated push switch**                                        | The push doubles as a button — this _is_ your "reuse buttons" principle.                                                                                                                                                                            |
+| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control the encoder can't. Y axis is spare on a 1D display — that's deliberate headroom for future games.                                                                                                            |
+| Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                               |
+| Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                  |
+| Power switch      | Slide switch in the battery line                                                           | Cuts battery to everything. Charging still works with it off.                                                                                                                                                                                       |
+| Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                |
 
 **Total: roughly €35–45** on top of what you own (Feather route), or €27–37 with the
 DevKitC + separate charger.
@@ -77,12 +77,12 @@ DevKitC + separate charger.
 The device must be **rechargeable over USB-C** — no consumable batteries, ever. Three things
 have to be right, and the naive build gets all three wrong:
 
-**1. One USB port, not two.** A DevKitC + TP4056 build ends up with *two* USB ports: one to
+**1. One USB port, not two.** A DevKitC + TP4056 build ends up with _two_ USB ports: one to
 charge, one to flash. That's confusing for users and awkward to lay out in a case. The Feather
 route collapses them into one connector.
 
 **2. Load sharing.** ⚠️ A bare TP4056 wires the load directly across the battery terminals, so
-playing while plugged in draws current *through* the battery. This confuses the charger's
+playing while plugged in draws current _through_ the battery. This confuses the charger's
 end-of-charge detection and causes needless charge cycles that shorten the cell's life. Proper
 load sharing powers the system from USB and charges the battery separately when both are
 present. The Feather's charger does this correctly; if you go the DevKitC route, buy a
@@ -91,7 +91,7 @@ FS8205 with separate `OUT+`/`OUT-` pads), and power the system from `OUT`, never
 battery pads directly.
 
 **3. Low-voltage cutoff.** The cell's protection circuit must cut off around **3.0–3.5 V**.
-This protects the battery *and* keeps the WS2812 tube inside its ~3.5 V minimum operating
+This protects the battery _and_ keeps the WS2812 tube inside its ~3.5 V minimum operating
 range — below that the LEDs start to misbehave before the battery is actually flat. Firmware
 should warn well before this point (see below).
 
@@ -117,7 +117,7 @@ constraint** — the cap exists to bound the worst case, not to ration the batte
 - **Critical cutoff:** below ~3.4 V, save state, show a red sweep, and deep-sleep before the
   protection circuit cuts out mid-game.
 - **Charging indicator:** while charging, animate a slow filling green sweep along the tube;
-  solid green when full. The tube *is* the status LED — no extra indicator needed, which
+  solid green when full. The tube _is_ the status LED — no extra indicator needed, which
   suits the minimalist brief.
 - **Idle sleep:** after ~2 minutes with no input, fade out and deep-sleep; wake on a button
   press. This is the single biggest real-world battery win.
@@ -130,7 +130,7 @@ a rewrite:
 
 1. **Use `NeoPixelBus` from the very first line of code**, with `NeoEsp8266DmaWs2812xMethod`
    on the ESP8266 and `NeoEsp32RmtNWs2812xMethod` on the S3. Same API, same library — only
-   the method typedef differs. Do *not* start on `Adafruit_NeoPixel`; its bit-banged output
+   the method typedef differs. Do _not_ start on `Adafruit_NeoPixel`; its bit-banged output
    is the exact thing that breaks WiFi later.
 
    ⚠️ **DMA is interrupt-safe, not contention-free — on the ESP8266.** It still drives the
@@ -143,6 +143,7 @@ a rewrite:
    FreeRTOS scheduling remove the contention structurally — `NetworkScene` no longer calls
    `setRefreshDivider()` at all. The ESP8266 remains broken here by design; see
    `docs/phase-4-wifi.md`.
+
 2. **All hardware access lives behind `Display` and `Input`.** Game and scene code never
    touches a GPIO.
 
@@ -153,16 +154,16 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 
 ### Pin map (ESP32-S3, starting point)
 
-| Signal | GPIO | Notes |
-|---|---|---|
-| LED data | 4 | Must be RMT-capable. Via 330 Ω. |
-| Encoder A / B | 5 / 6 | Quadrature, interrupt-driven. |
-| Encoder push | 7 | `INPUT_PULLUP` |
-| Button A | 8 | `INPUT_PULLUP` |
-| Button B | 9 | `INPUT_PULLUP` |
-| Stick X / Y | 10 / 11 | ADC1 channels — ADC2 is unusable while WiFi is active on ESP32. |
-| Stick push | 12 | `INPUT_PULLUP` |
-| Battery sense | 13 (ADC1) | Via 2:1 divider — lets you show a battery warning *on the tube*. |
+| Signal        | GPIO      | Notes                                                            |
+| ------------- | --------- | ---------------------------------------------------------------- |
+| LED data      | 4         | Must be RMT-capable. Via 330 Ω.                                  |
+| Encoder A / B | 5 / 6     | Quadrature, interrupt-driven.                                    |
+| Encoder push  | 7         | `INPUT_PULLUP`                                                   |
+| Button A      | 8         | `INPUT_PULLUP`                                                   |
+| Button B      | 9         | `INPUT_PULLUP`                                                   |
+| Stick X / Y   | 10 / 11   | ADC1 channels — ADC2 is unusable while WiFi is active on ESP32.  |
+| Stick push    | 12        | `INPUT_PULLUP`                                                   |
+| Battery sense | 13 (ADC1) | Via 2:1 divider — lets you show a battery warning _on the tube_. |
 
 ⚠️ Keep every analog input on **ADC1**. ADC2 is shared with the WiFi radio and reads garbage
 whenever WiFi is on — a classic ESP32 trap that would silently break the stick in Phase 4.
@@ -273,9 +274,18 @@ Deliberately dumb, and therefore robust: a **static JSON index plus script files
 GitHub Pages** (or any static host).
 
 ```json
-{ "api_version": 1,
-  "games": [ { "id": "wormfight", "name": "Wormfight", "version": "1.2",
-               "url": "https://.../wormfight/game.be", "sha256": "..." } ] }
+{
+  "api_version": 1,
+  "games": [
+    {
+      "id": "wormfight",
+      "name": "Wormfight",
+      "version": "1.2",
+      "url": "https://.../wormfight/game.be",
+      "sha256": "..."
+    }
+  ]
+}
 ```
 
 The device fetches the index, shows the list on the tube, downloads the chosen script,
@@ -288,8 +298,9 @@ publishing a new game is a `git push`. Firmware updates use ordinary HTTPS OTA o
 
 Every phase ends with **something you can see or play**.
 
-### Phase 0 — Hardware bring-up *(½ day — start today on the ESP8266)*
-> *Goal: the tube lights up, on battery.*
+### Phase 0 — Hardware bring-up _(½ day — start today on the ESP8266)_
+
+> _Goal: the tube lights up, on battery._
 
 1. Order the MCU (**Adafruit Feather ESP32-S3** recommended — see §2.1 for why charging drives
    this choice), EC11 encoder, thumbstick module, buttons, and a **2000–2500 mAh LiPo with
@@ -309,10 +320,11 @@ Every phase ends with **something you can see or play**.
    multimeter. This converts the 7–15 h estimate in §2.1 into a real number and sets the
    final brightness default.
 
-✅ *Visible result: a glowing 1 m tube running off a rechargeable battery, charging over USB-C.*
+✅ _Visible result: a glowing 1 m tube running off a rechargeable battery, charging over USB-C._
 
-### Phase 1 — Core engine *(1–2 days — ESP8266 is fine)*
-> *Goal: the foundation everything else stands on.*
+### Phase 1 — Core engine _(1–2 days — ESP8266 is fine)_
+
+> _Goal: the foundation everything else stands on._
 
 1. `Display` class: float 0..1 coordinate space, **sub-pixel anti-aliased** `pixel()`,
    `fade()`, global brightness cap (start at 25/255), `present()`.
@@ -324,16 +336,18 @@ Every phase ends with **something you can see or play**.
    **Sanctioned exception:** the frame gate assumes the frame loop is the only thing with a
    deadline. That is true for games and false for the WiFi stack, whose deadlines are enforced
    in the SDK — a missed one is a fault in the PHY, not a dropped frame. `Scene::idle()` +
-   `Engine::setIdleServiced()` let a scene be serviced on the frames the engine *skips*. This
+   `Engine::setIdleServiced()` let a scene be serviced on the frames the engine _skips_. This
    permits being called **more often**, never blocking, and is opt-in per scene (cleared on
    every scene change). Games are unaffected and still see a fixed timestep.
+
 4. `beam.show_score()`: the binary score readout, animated bit-by-bit.
 5. A `demo` scene: a wheel-controlled anti-aliased dot with a fading trail.
 
-✅ *Visible result: a smooth, glowing dot you steer with the wheel. This is the first moment the device feels real — the anti-aliasing is the "wow".*
+✅ _Visible result: a smooth, glowing dot you steer with the wheel. This is the first moment the device feels real — the anti-aliasing is the "wow"._
 
-### Phase 2 — First real game, native *(2–3 days)*
-> *Goal: a genuinely fun game, written in C++ against the engine API.*
+### Phase 2 — First real game, native _(2–3 days)_
+
+> _Goal: a genuinely fun game, written in C++ against the engine API._
 
 Port your `main.cpp` monster-shooter into the engine as **"Wormfight"** and deepen it:
 
@@ -346,24 +360,25 @@ Port your `main.cpp` monster-shooter into the engine as **"Wormfight"** and deep
 Once the S3 arrives, wire up the thumbstick here and tune the deadzone and response curve —
 analog feel is worth spending real time on, since it defines how the console plays.
 
-Write it against the *exact* API shape you intend to expose to scripts — so the port to
+Write it against the _exact_ API shape you intend to expose to scripts — so the port to
 a script in Phase 6 is mechanical.
 
-✅ *Visible result: a game you actually want to hand to someone. Get feedback here before building any infrastructure.*
+✅ _Visible result: a game you actually want to hand to someone. Get feedback here before building any infrastructure._
 
-### Phase 3 — Launcher & persistence *(1–2 days)*
-> *Goal: more than one thing on the device.*
+### Phase 3 — Launcher & persistence _(1–2 days)_
+
+> _Goal: more than one thing on the device._
 
 1. ✅ Mount **LittleFS**; store settings and per-game highscores in NVS/LittleFS.
 2. ✅ A **launcher scene**: each installed game is a colored block on the tube; the wheel scrolls,
    the selected one pulses, **A** launches. Its accent color comes from `meta.json`.
 3. ✅ Wheel-press during a game → pause → hold **B** → back to launcher.
 4. ✅ Add a second, tiny native game (e.g. a reflex "stop the dot in the zone" game) so the
-   launcher has something to choose *between*.
+   launcher has something to choose _between_.
 5. ⏸ **Power management** (needs the ESP32; see §2.1): battery voltage sensing on ADC1 with a
    LiPo discharge curve, a hold-**B** battery meter in the launcher, the low-battery pulse,
    the critical-voltage safe shutdown, the charging sweep animation, and idle deep-sleep with
-   button wake. *Deferred until the Feather arrives.*
+   button wake. _Deferred until the Feather arrives._
 
 **Navigation without the wheel.** The encoder had not arrived, so `Input` gained `navDelta()`:
 discrete steps, synthesized from the joystick today (threshold + hysteresis + auto-repeat),
@@ -371,22 +386,23 @@ read from quadrature once the encoder is fitted. Only `Input::updateNav()` chang
 talk to a specific input device. The missing hardware forced an abstraction worth having anyway.
 
 **Exit is gated behind pause**, not a bare hold-B: Wormfight already holds B for up to 1.1 s to
-charge, and future cartridges will collide the same way. The engine handles pause/exit *before*
+charge, and future cartridges will collide the same way. The engine handles pause/exit _before_
 the scene updates, so no game — including a future community cartridge — can trap the player.
 
-✅ *Visible result: switch between two games without reflashing, and see your battery level. It's a console now.*
+✅ _Visible result: switch between two games without reflashing, and see your battery level. It's a console now._
 
-### Phase 4 — WiFi, opt-in *(1–2 days)*
-> *Goal: online, but only when you say so.*
+### Phase 4 — WiFi, opt-in _(1–2 days)_
+
+> _Goal: online, but only when you say so._
 
 **Two independent update paths — don't confuse them:**
 
-| | Games (Phases 6–7) | **Firmware OTA** (step 4 below) |
-|---|---|---|
-| Updates | Cartridge scripts + metadata | The C++ engine: renderer, input, launcher, network code |
-| Written to | LittleFS data partition | The **app partition** (executable) |
-| Reboot | No | Yes |
-| Failure risk | One broken game | **A bricked console** |
+|              | Games (Phases 6–7)           | **Firmware OTA** (step 4 below)                         |
+| ------------ | ---------------------------- | ------------------------------------------------------- |
+| Updates      | Cartridge scripts + metadata | The C++ engine: renderer, input, launcher, network code |
+| Written to   | LittleFS data partition      | The **app partition** (executable)                      |
+| Reboot       | No                           | Yes                                                     |
+| Failure risk | One broken game              | **A bricked console**                                   |
 
 Firmware OTA is what lets you fix an engine bug, extend the script API, or patch a
 security hole on a device already in a user's hands, without asking them for a USB
@@ -407,9 +423,9 @@ Both current environments already have OTA-capable layouts (ESP8266: 325 KB of a
    ESP32-S3 DevKitC**, where the same repro is stable. The ESP8266 remains dev-only for
    anything touching the radio; WiFiManager stays rejected, since the S3 doesn't need the
    protection its blocking portal would have accidentally provided.
-2. ✅ Show provisioning state *on the tube*: portal-active = slow amber pulse; connecting =
+2. ✅ Show provisioning state _on the tube_: portal-active = slow amber pulse; connecting =
    blue sweep; connected = green flash; failed = red flash. Each state has a distinct
-   *motion* as well as a colour, since hue quantises badly when dim and red/green alone
+   _motion_ as well as a colour, since hue quantises badly when dim and red/green alone
    excludes colourblind players.
 3. ✅ Verify offline behaviour is untouched: no saved credentials ⇒ never scans, never blocks,
    boots straight into the launcher.
@@ -417,14 +433,15 @@ Both current environments already have OTA-capable layouts (ESP8266: 325 KB of a
    tube. ⚠️ Uses `setInsecure()` — **image signing is required before any real release**; see
    [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).
 
-✅ *Visible result: configure WiFi from your phone with no display, and push firmware updates over the air.*
+✅ _Visible result: configure WiFi from your phone with no display, and push firmware updates over the air._
 
-*Four bugs were caught in review; five more crashes were found on hardware. The last of
+_Four bugs were caught in review; five more crashes were found on hardware. The last of
 those was confirmed fixed on ESP32-S3 hardware and left unfixed on the ESP8266 by
-design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
+design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md)._
 
-### Phase 5 — VM bake-off ⚠️ *(1–2 days — do this before Phase 6)*
-> *Goal: prove the scripting model before betting the architecture on it.*
+### Phase 5 — VM bake-off ⚠️ _(1–2 days — do this before Phase 6)_
+
+> _Goal: prove the scripting model before betting the architecture on it._
 
 > **Update:** Berry only needs an ESP32 core, not the Feather's charging
 > circuit, so this ran on the `esp32-s3-devkitc-1-n16r8` dev board rather than
@@ -436,7 +453,7 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
 1. ✅ Build the **native baseline** (`BenchScene`) — runs on the ESP8266 today, no
    Feather needed. Sweeps 10/25/50/100 entities and prints, as CSV, the frame
    cost split into update vs. draw plus **`update_headroom`**: how many times
-   slower than native the *interpreted* half may be and still hold 60 fps. That
+   slower than native the _interpreted_ half may be and still hold 60 fps. That
    number is the pass mark for every candidate. Running it on the ESP8266 is
    deliberate — it is the pessimistic board.
    **✅ Result: 52× headroom at 100 entities. Scripting is viable.** The run also
@@ -449,7 +466,7 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
    almost entirely per-call VM↔native crossing overhead. Batching (one call per
    frame over a persistent list) confirms that: headroom jumps ~20× and stops
    shrinking with entity count.
-3. ✅ Reimplement `runWorkload()` — and *only* that function — as a script. The tight
+3. ✅ Reimplement `runWorkload()` — and _only_ that function — as a script. The tight
    boundary is what makes the comparison meaningful.
 4. ✅ **Compare against the baseline.** Pass = beats `max_vm_slowdown` with headroom.
    **Passed comfortably with the batched calling convention (69.5× at 100
@@ -464,13 +481,14 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
    Berry on performance — parked, not pursued, unless authoring ergonomics or
    footprint become a problem later. If Berry ever does fail outright, fall back to
    the **data-driven engine** (games as declarative JSON describing entities,
-   waves and rules, interpreted natively). *mJS was rejected on expressiveness —
-   no closures or classes makes for a poor cartridge language.*
+   waves and rules, interpreted natively). _mJS was rejected on expressiveness —
+   no closures or classes makes for a poor cartridge language._
 
-✅ *Visible result: a hard number that de-risks the whole rest of the project. Don't skip it.*
+✅ _Visible result: a hard number that de-risks the whole rest of the project. Don't skip it._
 
-### Phase 6 — Games as scripts *(2–3 days)*
-> *Goal: the cartridge model, working locally.*
+### Phase 6 — Games as scripts _(2–3 days)_
+
+> _Goal: the cartridge model, working locally._
 
 > **Update:** `beam` API bound, Reflex ported to a script and confirmed playing
 > identically to the native version on real ESP32-S3 hardware, cartridges load
@@ -486,7 +504,7 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
    first cartridge to port... small enough to reason about completely."
    **Result: plays identically, confirmed on hardware, no bugs found.**
    Wormfight itself is not yet ported.
-3. ✅ Launcher enumerates `/games/*/meta.json` — installed games are now *data*, not code.
+3. ✅ Launcher enumerates `/games/*/meta.json` — installed games are now _data_, not code.
    `src/core/cartridge_store.*` scans the filesystem at boot and merges what it
    finds with the built-in registry into one list, so the launcher, score filing
    and `beam.highscore()` are unchanged. Format is documented in
@@ -504,12 +522,13 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).*
    flash, source re-read on each launch), so this isn't worth building until iteration speed
    is actually painful in practice. Revisit later if that changes.
 
-✅ *Visible result: write a game, push it, play it — no reflash.* **(Met via
+✅ _Visible result: write a game, push it, play it — no reflash._ \*_(Met via
 `uploadfs`: a game can be added or edited without rebuilding firmware. Pushing
-it over the air is item 5.)*
+it over the air is item 5.)_
 
-### Phase 7 — The store *(2 days)*
-> *Goal: download games from the internet.*
+### Phase 7 — The store _(2 days)_
+
+> _Goal: download games from the internet._
 
 > **Update:** first firmware slice implemented. A **Store** utility scene connects
 > using stored credentials, fetches a strict `index.json`, shows remote games as
@@ -531,7 +550,7 @@ it over the air is item 5.)*
 4. ✅ Handle failure gracefully: no credentials/network, bad index, bad length, bad hash,
    full/unwritable flash all land in a red failure state with the exact reason on serial.
 
-✅ *Visible result: your friend picks a game on the device and plays it 20 seconds later.*
+✅ _Visible result: your friend picks a game on the device and plays it 20 seconds later._
 
 **Known issues to fix (reported after real-hardware use):**
 
@@ -542,16 +561,16 @@ it over the air is item 5.)*
   so showing a highscore can never be mistaken for the start of a delete and
   vice versa.
 - ⬜ After installing a game in the Store, exiting back to the launcher
-  requires pressing the joystick/nav button first and *then* holding B — the
+  requires pressing the joystick/nav button first and _then_ holding B — the
   same two-step gesture games use (pause, then hold-B-while-paused). The Store
   is a utility scene, not a game, and per its own documented behaviour
   ("Hold B: return to the launcher") a plain hold-B should be enough on its
   own, without the extra nav-button press. Something regressed or was never
   wired up for the post-install state.
 
+### Phase 8 — Enclosure _(2–4 days, iterative)_
 
-### Phase 8 — Enclosure *(2–4 days, iterative)*
-> *Goal: a real object.*
+> _Goal: a real object._
 
 1. Design a handle/grip that holds the MCU, LiPo and controls, with the tube exiting
    through a strain-relieved gland. Consider a spine or channel supporting the 1 m tube.
@@ -565,9 +584,10 @@ it over the air is item 5.)*
 5. Print, test the feel, iterate. Expect **three revisions** — mainly on button placement,
    wheel reachability and USB port alignment.
 
-✅ *Visible result: Beam Boy v1.*
+✅ _Visible result: Beam Boy v1._
 
 ### Phase 9 — Polish
+
 A boot animation · a factory-reset gesture · brightness setting in the launcher (directly
 trades runtime for visibility) · charge-cycle-friendly "storage mode" if left unused · a
 `docs/making-games.md` so others can write cartridges · optional haptic motor (a click on hit
@@ -598,17 +618,17 @@ beam-boy/
 
 ## 6. Timeline
 
-| Phase | Effort | Cumulative |
-|---|---|---|
-| 0 Hardware bring-up | ½ d | ½ d |
-| 1 Core engine | 1–2 d | 2½ d |
-| 2 First game | 2–3 d | 5½ d |
-| 3 Launcher | 1–2 d | 7½ d |
-| 4 WiFi + OTA | 1–2 d | 9½ d |
-| 5 VM bake-off | 1–2 d | 11½ d |
-| 6 Script games | 2–3 d | 14½ d |
-| 7 Store | 2 d | 16½ d |
-| 8 Enclosure | 2–4 d | 20½ d |
+| Phase               | Effort | Cumulative |
+| ------------------- | ------ | ---------- |
+| 0 Hardware bring-up | ½ d    | ½ d        |
+| 1 Core engine       | 1–2 d  | 2½ d       |
+| 2 First game        | 2–3 d  | 5½ d       |
+| 3 Launcher          | 1–2 d  | 7½ d       |
+| 4 WiFi + OTA        | 1–2 d  | 9½ d       |
+| 5 VM bake-off       | 1–2 d  | 11½ d      |
+| 6 Script games      | 2–3 d  | 14½ d      |
+| 7 Store             | 2 d    | 16½ d      |
+| 8 Enclosure         | 2–4 d  | 20½ d      |
 
 **≈ 3 weeks of focused work**, with something playable from day 5.
 
@@ -619,12 +639,12 @@ beam-boy/
 The static-index store handles **free** games perfectly. Paid games are where it gets
 expensive, because payment fundamentally requires a server that knows who bought what.
 
-| Option | Effort | Assessment |
-|---|---|---|
-| **Sell hardware kits / assembled units** | Low | **Best ROI by far.** How TWANG, ESPboy and comparable projects actually monetize. The value you're selling is the *object*. |
-| **Donations** (Ko-fi / GitHub Sponsors, credit in the boot animation) | Very low | Fits the DIY audience genuinely well. |
-| **Paid cartridges** with signed licenses | High | Needs store backend, accounts, per-device keypairs, signed+encrypted cartridges, and firmware that refuses unsigned code. |
-| Ads | — | No. |
+| Option                                                                | Effort   | Assessment                                                                                                                  |
+| --------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Sell hardware kits / assembled units**                              | Low      | **Best ROI by far.** How TWANG, ESPboy and comparable projects actually monetize. The value you're selling is the _object_. |
+| **Donations** (Ko-fi / GitHub Sponsors, credit in the boot animation) | Very low | Fits the DIY audience genuinely well.                                                                                       |
+| **Paid cartridges** with signed licenses                              | High     | Needs store backend, accounts, per-device keypairs, signed+encrypted cartridges, and firmware that refuses unsigned code.   |
+| Ads                                                                   | —        | No.                                                                                                                         |
 
 **On paid cartridges specifically:** technically doable — the device generates a keypair, the
 store issues a license signed against that device's public key, the cartridge ships encrypted.
@@ -659,9 +679,11 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Precision** — stop a sweeping dot inside a shrinking zone. Trivial to build, brutally addictive.
 - **Pulse** — a rhythm game: pulses travel down the tube, hit **A** as they reach your end.
 - **Snake 1D** — the tail occupies pixels behind you; eat, grow, don't get boxed in by hazards.
-- **Tug of War** — *(later)* 2-player via ESP-NOW between two Beam Boys, one tube each.
+- **Tug of War** — _(later)_ 2-player via ESP-NOW between two Beam Boys, one tube each.
 - **Sonar** — a hidden target; the tube shows only "hotter/colder" as a glow intensity. A game
   the 1D format uniquely enables.
+- **crossy road** (find different title) N-player game where each player's tube is a lane and a player
+  is responsible for the 'chicken' when it is on his lane.
 
 ---
 
@@ -678,9 +700,9 @@ Since you want to accept community games eventually, two things move from "nice"
 - **USB-C rechargeable**, via a board with integrated LiPo charging. No consumable batteries.
 - **Button convention: A = primary/instant, B = hold-to-charge.** Established in Wormfight
   (Phase 2) after a push-back ability on B failed to justify occupying the only spare button.
-  A quick stab of B should always do *something* useful, so B is never a dead button. Games
+  A quick stab of B should always do _something_ useful, so B is never a dead button. Games
   should follow this so muscle memory carries across cartridges.
-- **Input state is read from button *levels*, not edges**, for anything that persists across
+- **Input state is read from button _levels_, not edges**, for anything that persists across
   frames (charging, held-to-view HUDs). An edge-driven hold sticks forever if a release edge
   is lost to debounce — this caused real bugs twice, in Phase 1 and again in Phase 2.
 - **Pick saturated hues; the brightness cap eats subtlety.** A colour drawn at low intensity
@@ -690,19 +712,19 @@ Since you want to accept community games eventually, two things move from "nice"
   as teal on hardware (Phase 3). Reserve near-primary colours for anything drawn dim.
 - **Round in write-once render paths; truncate in feedback paths.** `present()` and
   `addToPixel()` round, because the downward bias of truncation is visible exactly where
-  precision is scarcest. `Color::scaled()` must *keep* truncating: `fade()` applies it to its
+  precision is scarcest. `Color::scaled()` must _keep_ truncating: `fade()` applies it to its
   own output, and with rounding a dim pixel never reaches black.
 - **Error paths must clean up as thoroughly as success paths.** Phase 4 review found the radio
-  left on forever when a *connected* session dropped, because only the connect-*timeout* path
+  left on forever when a _connected_ session dropped, because only the connect-_timeout_ path
   powered it down. Any invariant worth having ("the radio is off unless asked for") has to hold
   on the paths nobody tests — losing signal, a rebooted router, a cancelled operation.
 - **Register callbacks once, not per-use.** Arduino `WebServer` frees route handlers only in its
   destructor, so re-registering on each portal open leaks permanently in a long-lived object.
   The symptom appears somewhere unrelated — a TLS handshake failing for want of contiguous heap.
-- **An operation that *stages* a change is not finished until the change is applied.** A
+- **An operation that _stages_ a change is not finished until the change is applied.** A
   successful OTA that never reboots reports success, changes nothing, and offers itself again.
 - **Engine-level input interception must be opt-in per scene type.** The engine grabs the nav
-  button to guarantee a game can never trap the player. But the launcher marks *every* entry as
+  button to guarantee a game can never trap the player. But the launcher marks _every_ entry as
   the "current game", so utility scenes had that button stolen too — and since the paused branch
   returns before `scene_->update()`, the Network menu could never be activated at all. It looked
   like broken WiFi; it was a swallowed button. Hence `GameEntry::is_game`: games get
@@ -725,11 +747,11 @@ Since you want to accept community games eventually, two things move from "nice"
 - **A blocking call inside a request handler is worse than one in the main loop.** The rescan
   route originally scanned synchronously. On ESP8266 the scan yields via `esp_suspend()`, which
   resumes the loop continuation, which calls `tick()`, which re-enters `server_.handleClient()`
-  *while one of its own handlers is still on the stack*. On ESP32 the same scan runs up to ~6.5 s
+  _while one of its own handlers is still on the stack_. On ESP32 the same scan runs up to ~6.5 s
   under the task watchdog. Respond first, then do slow work from `tick()`.
 - **Don't present a sampled result as an inventory.** A WiFi scan hears an AP only if a beacon
   lands in its dwell window, so a missing network is expected, not a defect. Scanning repeatedly
-  and merging is not available either — each scan *replaces* the driver's buffer. The fix is an
+  and merging is not available either — each scan _replaces_ the driver's buffer. The fix is an
   honest label plus a one-tap retry, never a claim of completeness.
 - **Cached counts describing memory you don't own go stale silently.** Starting a rescan frees
   the previous result buffer while `scan_count_` still holds the old value. The drivers
@@ -756,7 +778,7 @@ Since you want to accept community games eventually, two things move from "nice"
   single known-safe point at the end of `tick()`, never inline.**
 - **Freeing a result buffer is not cancelling the operation that fills it.** `WiFi.scanDelete()`
   releases the completed scan buffer but leaves an in-flight scan running, and the SDK's
-  completion callback runs in *SDK context* and writes to driver-owned state. Tearing the
+  completion callback runs in _SDK context_ and writes to driver-owned state. Tearing the
   soft-AP down and switching to STA with a scan outstanding crashed inside `hostap_input`
   (`ctx: sys`) almost every time the user connected. **Rule: an uncancellable SDK callback is a
   constraint on teardown ordering — wait for it before reconfiguring the radio underneath it.**
@@ -769,13 +791,13 @@ Since you want to accept community games eventually, two things move from "nice"
   a bug at either address.** The ESP8266 core mostly does not check allocation failure, so OOM
   presents as a fault inside whichever function was allocating. **Rule: when the PC wanders,
   stop reading backtraces and measure the heap — the largest contiguous block and
-  fragmentation, not just the free total.** ⚠️ In this project that measurement *disproved* the
+  fragmentation, not just the free total.** ⚠️ In this project that measurement _disproved_ the
   OOM theory (39 KB free, 3 % fragmented at the moment of the crash) and pointed at RF timing
   instead. That is the rule working, not failing.
 - **Instrument the resource before changing the code.** Three crashes here were confidently
   attributed to three different causes; only the last was supported by measurement. **A decoded
   address is a hypothesis, not a diagnosis** — especially when it lands in a subsystem you did
-  not write. Add the counter, get the number, *then* edit.
+  not write. Add the counter, get the number, _then_ edit.
 - **Peripherals contend with the radio even when they are "interrupt-safe".** WS2812 DMA output
   every frame starved the ESP8266 PHY into faulting inside its own timing callbacks. Anything
   driven continuously at frame rate should back off while the radio is doing timing-critical
@@ -783,7 +805,7 @@ Since you want to accept community games eventually, two things move from "nice"
   spins on `yield()`, which runs SDK work from inside the render path.
 - **Test the invariant the fix relies on, not the crash.** None of the three hardware crashes is
   reproducible on a host — a stack overflow in newlib, driver re-entrancy, and an SDK callback
-  outliving a radio reconfiguration. But the `sinf` crash had a precondition that *is* testable: the phase stays
+  outliving a radio reconfiguration. But the `sinf` crash had a precondition that _is_ testable: the phase stays
   small. `test/test_soak` asserts exactly that over 6 simulated hours. See `test/README.md`.
 - **Float precision, not just stack depth, bounds an animation phase.** Past ~1e5 radians a
   `float`'s steps are coarser than a smooth animation needs, so `wrappedSin()` keeps the device
@@ -810,7 +832,7 @@ shimming a large driver API or leaving the rule uncovered.
 
 Discard only on a **definite rejection** (`kBadPassword`) **and** only while the credentials
 are **unproven** — never tested successfully. A mistyped password otherwise strands the user
-on a Connect entry that can never work; but discarding on *every* failure would erase a good
+on a Connect entry that can never work; but discarding on _every_ failure would erase a good
 configuration whenever the router reboots or the console is carried out of range. `kNotFound`
 is deliberately kept, because a typo'd SSID is indistinguishable from being out of range and
 out of range is far more common. `unproven_` is never persisted: anything that survived a
@@ -819,13 +841,13 @@ reboot is treated as proven.
 **⚠️ Never derive an authentication verdict from `wl_status_t`.** Value 6 is `WL_WRONG_PASSWORD`
 on ESP8266 and `WL_DISCONNECTED` on ESP32; `WL_CONNECT_FAILED` is not an auth verdict on either
 core (on ESP32 it also covers an AP at capacity); and on ESP32 the status is an event-updated
-cache that can still describe the *previous* attempt right after `WiFi.begin()`. Use the
+cache that can still describe the _previous_ attempt right after `WiFi.begin()`. Use the
 **disconnect reason**, captured in an event handler. This is the fourth silent divergence
 between the two cores; **always build both targets after a WiFi change.**
 
 **Correlate driver events to an attempt with a generation counter, not a boolean.** ESP32
 queues events to a separate task, so a failure produced while tearing down one attempt can be
-delivered *after* the next has begun. A "attempt in progress" flag attributes it to the new
+delivered _after_ the next has begun. A "attempt in progress" flag attributes it to the new
 attempt — which, for credential handling, means erasing the password the user just corrected.
 Stamp each event with the generation current when it arrived and accept only matching ones.
 Anything shared with an event handler must be `std::atomic`; on ESP32 the handler and `tick()`
