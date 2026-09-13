@@ -106,7 +106,7 @@ void setup() {
   }
   Serial.println("            (* = installed cartridge from /games)");
   Serial.println();
-  Serial.println("Launcher : stick/wheel selects, A launches");
+  Serial.println("Launcher : stick selects, A launches");
   Serial.println("           hold nav-press to see the highscore");
   Serial.println("           hold B on an installed game to delete it");
   Serial.println("In game  : nav-press pauses, then hold B to exit");

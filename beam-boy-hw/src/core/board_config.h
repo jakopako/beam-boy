@@ -60,13 +60,14 @@ constexpr uint8_t kBrightnessCap = 64;
 //   * GPIO38 (or 48 on some revisions) drives the onboard WS2812.
 //
 // Everything below lands in the 4-18 range, clear of all of the above, with the
-// analog input on ADC1 -- ADC2 is unusable while WiFi is on, which is exactly
+// analog inputs on ADC1 -- ADC2 is unusable while WiFi is on, which is exactly
 // when the stick still has to work.
 constexpr uint8_t kPinLedData = 17;
 constexpr uint8_t kPinButtonA = 15;
 constexpr uint8_t kPinButtonB = 16;
 constexpr uint8_t kPinStickSw = 18;
 constexpr uint8_t kPinStickX = 4;  // ADC1_CH3
+constexpr uint8_t kPinStickY = 5;  // ADC1_CH4
 
 // ⚠️ No battery on this board. The DevKitC has no LiPo charger and no
 // battery-sense divider, so it runs from USB only and there is deliberately no
@@ -83,7 +84,8 @@ constexpr uint8_t kPinLedData = 5;
 constexpr uint8_t kPinButtonA = 6;
 constexpr uint8_t kPinButtonB = 9;
 constexpr uint8_t kPinStickSw = 10;
-constexpr uint8_t kPinStickX = A2;
+constexpr uint8_t kPinStickX = A2;  // ADC1 (GPIO1)
+constexpr uint8_t kPinStickY = A3;  // ADC1 (GPIO2)
 
 #endif  // BEAMBOY_BOARD_S3_DEVKIT
 
@@ -104,6 +106,7 @@ constexpr uint8_t kPinButtonA = 1;
 constexpr uint8_t kPinButtonB = 2;
 constexpr uint8_t kPinStickSw = 3;
 constexpr uint8_t kPinStickX = 4;
+constexpr uint8_t kPinStickY = 5;
 
 constexpr uint16_t kAdcMax = 1023;
 

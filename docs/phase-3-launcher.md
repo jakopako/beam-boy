@@ -16,26 +16,20 @@ Deferred: **power management** (§5 of the plan's Phase 3). Battery sensing, the
 low-battery pulse, the charging sweep and deep-sleep all need the ESP32 Feather's
 voltage divider and its LiPo charging circuit, so they wait for the hardware.
 
-## Working without the rotary encoder
+## Menu navigation via `navDelta()`
 
-The wheel hasn't arrived, so the launcher is driven by the joystick — but *not*
-by reading the joystick directly.
+The launcher is driven by the joystick — but *not* by reading the continuous
+joystick axis directly.
 
-Menus want **discrete steps**: one detent, one item. So `Input` grew
-`navDelta()`, which returns the number of steps taken since the last frame. Right
-now those steps are synthesized from the stick: push past a threshold and it
-emits one step immediately, then auto-repeats while held, like a held arrow key.
-There's hysteresis (step at 0.55 deflection, re-arm below 0.30) so a hovering
-thumb doesn't spray steps.
+Menus want **discrete steps**: one detent, one item. So `Input` provides
+`navDelta()`, which returns the number of steps taken since the last frame.
+Those steps are synthesized from the horizontal stick deflection: push past a
+threshold and it emits one step immediately, then auto-repeats while held, like
+a held arrow key. There's hysteresis (step at 0.55 deflection, re-arm below 0.30)
+so a hovering thumb doesn't spray steps.
 
-When the encoder arrives, **only `Input::updateNav()` changes** — it will read
-quadrature pulses and write the same counter. The launcher, and every future
-menu, needs no changes at all.
-
-That's the real reason to build it this way. The missing hardware forced the
-abstraction that the project wanted anyway: menu code that never talks to a
-specific input device. `Input::kNavButton` does the same job for the confirm
-button (currently the stick's push switch, later the encoder's).
+`Input::kNavButton` is the confirm/action button for navigation (the stick's
+integrated push switch).
 
 ## Build & flash
 
@@ -298,7 +292,3 @@ Power management, once the Feather arrives:
 3. The low-battery pulse and critical-voltage safe shutdown
 4. The charging sweep animation
 5. Idle deep-sleep with button wake
-
-And the encoder, when it arrives: rewrite `Input::updateNav()` to read
-quadrature, and move `kNavButton` to the encoder's push switch. Nothing else
-should need to change — if it does, the abstraction was wrong.

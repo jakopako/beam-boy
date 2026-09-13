@@ -133,13 +133,29 @@ int beam_pixel_width(bvm* vm) {
 
 // --- Input -------------------------------------------------------------
 
-int beam_wheel(bvm* vm) {
-  be_pushint(vm, engine().input().navDelta());
+int beam_stick(bvm* vm) {
+  if (be_top(vm) < 1 || !be_isstring(vm, 1)) {
+    be_raise(vm, "value_error", "beam.stick() requires an axis argument ('x' or 'y')");
+  }
+  const char* axis = be_tostring(vm, 1);
+  if (strcmp(axis, "x") == 0 || strcmp(axis, "X") == 0) {
+    be_pushreal(vm, engine().input().stickX());
+    be_return(vm);
+  }
+  if (strcmp(axis, "y") == 0 || strcmp(axis, "Y") == 0) {
+    be_pushreal(vm, engine().input().stickY());
+    be_return(vm);
+  }
+  be_raise(vm, "value_error", "invalid axis for beam.stick() (expected 'x' or 'y')");
+}
+
+int beam_stick_x(bvm* vm) {
+  be_pushreal(vm, engine().input().stickX());
   be_return(vm);
 }
 
-int beam_stick(bvm* vm) {
-  be_pushreal(vm, engine().input().stickX());
+int beam_stick_y(bvm* vm) {
+  be_pushreal(vm, engine().input().stickY());
   be_return(vm);
 }
 
@@ -280,12 +296,16 @@ void bindBeamApi(bvm* vm) {
   be_setmember(vm, -2, "pixel_width");
   be_pop(vm, 1);
 
-  be_pushntvfunction(vm, beam_wheel);
-  be_setmember(vm, -2, "wheel");
-  be_pop(vm, 1);
-
   be_pushntvfunction(vm, beam_stick);
   be_setmember(vm, -2, "stick");
+  be_pop(vm, 1);
+
+  be_pushntvfunction(vm, beam_stick_x);
+  be_setmember(vm, -2, "stick_x");
+  be_pop(vm, 1);
+
+  be_pushntvfunction(vm, beam_stick_y);
+  be_setmember(vm, -2, "stick_y");
   be_pop(vm, 1);
 
   be_pushntvfunction(vm, beam_pressed);

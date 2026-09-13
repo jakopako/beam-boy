@@ -96,8 +96,7 @@ beam.line(from, to, color, intensity)
 beam.fade(amount)
 beam.pixel_count() / beam.pixel_width()
 
-beam.wheel()                              -- navDelta(), accumulated steps
-beam.stick()                              -- stickX(), -1..1
+beam.stick(axis) / beam.stick_x/y()       -- analog axis ("x"|"y"), -1..1
 beam.pressed("a"|"b"|"stick") / beam.held(...)
 
 beam.time()                               -- ms since the scene was entered

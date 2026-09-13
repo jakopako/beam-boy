@@ -6,11 +6,11 @@
 //
 //   * Buttons are digital and edge-detected, so games can distinguish a tap
 //     from a hold without tracking timing themselves.
-//   * The joystick is analog, giving velocity control ("creep left" as distinct
-//     from "dash left") that a stepped encoder cannot express.
+//   * The joystick is analog (both X and Y axes), giving continuous velocity/
+//     position control.
 //
-// Only the joystick's X axis is read. On a 1D display Y has no natural
-// meaning, so it is skipped.
+// Discrete navigation steps for menus (navDelta) are synthesized from the
+// joystick's X axis.
 
 #include <Arduino.h>
 
@@ -54,41 +54,43 @@ class Input {
   // --- Joystick ------------------------------------------------------------
 
   // Horizontal axis, -1.0 to +1.0, with the deadzone applied and the response
-  // curve shaped. Positive is toward the far end of the strip.
+  // curve shaped. Positive is toward the far end of the strip (right).
   float stickX() const { return stick_x_; }
 
-  // Raw axis value before shaping, for calibration and diagnostics.
-  float rawStickX() const { return raw_stick_x_; }
+  // Vertical axis, -1.0 to +1.0, with the deadzone applied and the response
+  // curve shaped. Positive is forward / up.
+  float stickY() const { return stick_y_; }
 
-  // Record the stick's resting position as centre. Cheap sticks rarely rest at
-  // exactly mid-scale, so this is called at boot with the stick untouched.
+  // Raw axis values before shaping, for calibration and diagnostics.
+  float rawStickX() const { return raw_stick_x_; }
+  float rawStickY() const { return raw_stick_y_; }
+
+  // Record the stick's resting position as centre for both X and Y. Cheap
+  // sticks rarely rest at exactly mid-scale, so this is called at boot with
+  // the stick untouched.
   void calibrateCenter();
 
-  // Invert the axis if the stick is mounted the other way round in the case.
-  void setStickInverted(bool inverted) { stick_inverted_ = inverted; }
+  // Invert axes if the stick is mounted the other way round in the case.
+  void setStickInverted(bool inverted_x, bool inverted_y = false) {
+    stick_x_inverted_ = inverted_x;
+    stick_y_inverted_ = inverted_y;
+  }
+  void setStickXInverted(bool inverted) { stick_x_inverted_ = inverted; }
+  void setStickYInverted(bool inverted) { stick_y_inverted_ = inverted; }
 
   // --- Navigation ----------------------------------------------------------
   //
   // Menus want *discrete steps*, not a continuous axis: one detent, one item.
-  // This is that abstraction, and it exists so that menu code never talks to a
-  // specific input device.
-  //
-  // Today the steps are synthesized from the joystick, because the rotary
-  // encoder has not arrived yet. When it does, only Input::update() changes --
-  // it will read real quadrature pulses and feed them into the same counter.
-  // Nothing that consumes navDelta() needs to know which happened.
+  // This is that abstraction, synthesized from horizontal joystick movement.
   //
   // Push the stick past a threshold and it emits one step immediately, then
-  // auto-repeats while held, the way a held arrow key does. That is not a
-  // perfect imitation of a detented wheel, but it is the same *interaction*:
-  // discrete, countable, one item at a time.
-
+  // auto-repeats while held, the way a held arrow key does.
+  //
   // Steps since the last frame. Positive is toward the far end of the strip.
-  // Usually -1, 0 or +1; a fast encoder spin can yield more.
+  // Usually -1, 0 or +1.
   int8_t navDelta() const { return nav_delta_; }
 
-  // The button that confirms a menu selection. Currently the stick's push
-  // switch; with the encoder fitted this becomes the encoder's push switch.
+  // The button that confirms a menu selection (the stick's push switch).
   static constexpr Button kNavButton = Button::kStick;
 
  private:
@@ -110,8 +112,13 @@ class Input {
 
   float stick_x_ = 0.0f;
   float raw_stick_x_ = 0.0f;
-  float stick_center_ = 0.5f;
-  bool stick_inverted_ = false;
+  float stick_center_x_ = 0.5f;
+  bool stick_x_inverted_ = false;
+
+  float stick_y_ = 0.0f;
+  float raw_stick_y_ = 0.0f;
+  float stick_center_y_ = 0.5f;
+  bool stick_y_inverted_ = false;
 
   // Synthesized detent stepping. nav_hold_ms_ tracks how long the stick has
   // been past the threshold, which drives the auto-repeat.

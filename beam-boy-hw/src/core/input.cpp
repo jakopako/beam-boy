@@ -33,6 +33,32 @@ constexpr uint32_t kNavRepeatRateMs = 140;
 
 uint8_t indexOf(Button button) { return static_cast<uint8_t>(button); }
 
+float shapeAxis(float normalised, float center, bool inverted) {
+  // Express deflection relative to the calibrated centre. The two halves are
+  // scaled independently because the centre is rarely at exactly mid-scale, and
+  // treating them as one range would make one direction reach full speed early.
+  float offset;
+  if (normalised >= center) {
+    const float range = 1.0f - center;
+    offset = range > 0.0f ? (normalised - center) / range : 0.0f;
+  } else {
+    const float range = center;
+    offset = range > 0.0f ? (normalised - center) / range : 0.0f;
+  }
+
+  const float magnitude = fabsf(offset);
+  float shaped = 0.0f;
+  if (magnitude >= kDeadzone) {
+    // Rescale so the axis still reaches 1.0 at full deflection despite the
+    // deadzone consuming part of the travel.
+    const float scaled = (magnitude - kDeadzone) / (1.0f - kDeadzone);
+    shaped = powf(scaled, kResponseCurve);
+    if (offset < 0.0f) shaped = -shaped;
+  }
+
+  return inverted ? -shaped : shaped;
+}
+
 }  // namespace
 
 void Input::begin() {
@@ -46,14 +72,18 @@ void Input::begin() {
 void Input::calibrateCenter() {
   // Average several samples: a single ADC reading is noisy enough to bias the
   // centre by more than the deadzone.
-  uint32_t total = 0;
+  uint32_t total_x = 0;
+  uint32_t total_y = 0;
   constexpr uint8_t kSamples = 16;
   for (uint8_t i = 0; i < kSamples; i++) {
-    total += analogRead(board::kPinStickX);
+    total_x += analogRead(board::kPinStickX);
+    total_y += analogRead(board::kPinStickY);
     delay(2);
   }
-  stick_center_ = static_cast<float>(total) /
-                  (kSamples * static_cast<float>(board::kAdcMax));
+  stick_center_x_ = static_cast<float>(total_x) /
+                    (kSamples * static_cast<float>(board::kAdcMax));
+  stick_center_y_ = static_cast<float>(total_y) /
+                    (kSamples * static_cast<float>(board::kAdcMax));
 }
 
 void Input::update(uint32_t now_ms) {
@@ -88,42 +118,18 @@ void Input::update(uint32_t now_ms) {
   }
 
   // --- Joystick ------------------------------------------------------------
-  const float normalised =
+  raw_stick_x_ =
       static_cast<float>(analogRead(board::kPinStickX)) / board::kAdcMax;
-  raw_stick_x_ = normalised;
+  stick_x_ = shapeAxis(raw_stick_x_, stick_center_x_, stick_x_inverted_);
 
-  // Express deflection relative to the calibrated centre. The two halves are
-  // scaled independently because the centre is rarely at exactly mid-scale, and
-  // treating them as one range would make one direction reach full speed early.
-  float offset;
-  if (normalised >= stick_center_) {
-    const float range = 1.0f - stick_center_;
-    offset = range > 0.0f ? (normalised - stick_center_) / range : 0.0f;
-  } else {
-    const float range = stick_center_;
-    offset = range > 0.0f ? (normalised - stick_center_) / range : 0.0f;
-  }
-
-  const float magnitude = fabsf(offset);
-  if (magnitude < kDeadzone) {
-    stick_x_ = 0.0f;
-  } else {
-    // Rescale so the axis still reaches 1.0 at full deflection despite the
-    // deadzone consuming part of the travel.
-    const float scaled = (magnitude - kDeadzone) / (1.0f - kDeadzone);
-    const float shaped = powf(scaled, kResponseCurve);
-    stick_x_ = offset < 0.0f ? -shaped : shaped;
-  }
-
-  if (stick_inverted_) stick_x_ = -stick_x_;
+  raw_stick_y_ =
+      static_cast<float>(analogRead(board::kPinStickY)) / board::kAdcMax;
+  stick_y_ = shapeAxis(raw_stick_y_, stick_center_y_, stick_y_inverted_);
 
   updateNav();
 }
 
-// Turns the continuous axis into discrete steps. When the rotary encoder
-// arrives this is the *only* function that changes: it will read quadrature
-// pulses and write nav_delta_ directly. Everything downstream is unaffected,
-// which is the entire point of routing menus through navDelta().
+// Turns the continuous horizontal axis into discrete steps for menu navigation.
 void Input::updateNav() {
   nav_delta_ = 0;
 

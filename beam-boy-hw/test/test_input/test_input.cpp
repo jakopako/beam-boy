@@ -26,6 +26,11 @@ void setStick(float normalised) {
       static_cast<int>(normalised * board::kAdcMax);
 }
 
+void setStickY(float normalised) {
+  beamboy_host::state().pin_analog[board::kPinStickY] =
+      static_cast<int>(normalised * board::kAdcMax);
+}
+
 // Advances the simulated clock and samples input, the way the engine does once
 // per frame.
 void tick(Input& input, uint32_t ms) {
@@ -36,6 +41,7 @@ void tick(Input& input, uint32_t ms) {
 Input freshInput() {
   beamboy_host::state().reset();
   setStick(0.5f);
+  setStickY(0.5f);
   Input input;
   input.begin();
   return input;
@@ -145,6 +151,37 @@ void test_stick_inversion_flips_the_axis(void) {
   TEST_ASSERT_TRUE(input.stickX() < -0.9f);
 }
 
+void test_stick_y_deadzone_keeps_a_resting_hand_still(void) {
+  Input input = freshInput();
+  // Small wobble around the calibrated centre.
+  setStickY(0.52f);
+  tick(input, 100);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickY());
+
+  setStickY(0.48f);
+  tick(input, 116);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickY());
+}
+
+void test_stick_y_reaches_full_deflection_despite_deadzone(void) {
+  Input input = freshInput();
+  setStickY(1.0f);
+  tick(input, 100);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickY());
+
+  setStickY(0.0f);
+  tick(input, 116);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickY());
+}
+
+void test_stick_y_inversion_flips_the_axis(void) {
+  Input input = freshInput();
+  input.setStickYInverted(true);
+  setStickY(1.0f);
+  tick(input, 100);
+  TEST_ASSERT_TRUE(input.stickY() < -0.9f);
+}
+
 void test_nav_emits_one_step_per_flick(void) {
   Input input = freshInput();
   tick(input, 100);
@@ -235,6 +272,9 @@ int main(int, char**) {
   RUN_TEST(test_stick_deadzone_keeps_a_resting_hand_still);
   RUN_TEST(test_stick_reaches_full_deflection_despite_deadzone);
   RUN_TEST(test_stick_inversion_flips_the_axis);
+  RUN_TEST(test_stick_y_deadzone_keeps_a_resting_hand_still);
+  RUN_TEST(test_stick_y_reaches_full_deflection_despite_deadzone);
+  RUN_TEST(test_stick_y_inversion_flips_the_axis);
   RUN_TEST(test_nav_emits_one_step_per_flick);
   RUN_TEST(test_nav_auto_repeats_after_the_delay);
   RUN_TEST(test_nav_hysteresis_prevents_a_stream_of_steps);

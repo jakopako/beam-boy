@@ -1,7 +1,7 @@
 # Beam Boy — Feasibility & Implementation Plan
 
 A minimalist handheld game console with a **one-dimensional display**: a 1 m addressable
-LED neon tube (50 px), two buttons, one scroll wheel, WiFi, and downloadable games.
+LED neon tube (50 px), two buttons, an analog 2-axis joystick with push button, WiFi, and downloadable games.
 
 ---
 
@@ -30,7 +30,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 | **Power**              | **Measured** (10 px @ cap 25/255): 39 mA full white, 9.5 mA for a realistic game frame → ~3.9 mA/px. Projected to 50 px: **~195 mA full white, ~33 mA in normal play**.                                                                                                                                  | With the MCU at ~35 mA, normal play is **~70 mA** → **30+ hours** from a 2500 mAh cell. Power is a non-issue; the brightness cap was raised from 25 to **64** and can go higher.                                                                            |
 | **Charging**           | A bare TP4056 has no load sharing: playing while plugged in draws through the battery, confusing end-of-charge detection and wasting cycles. A DevKitC + TP4056 build also ends up with two USB ports.                                                                                                   | **Use a board with integrated LiPo charging** (Adafruit Feather ESP32-S3): one USB-C port for charge _and_ flash, correct load sharing, battery sense pre-wired. See §2.1.                                                                                  |
 | **LiPo direct drive**  | WS2812B tolerates ~3.5–5.3 V. Driving the strip straight off the LiPo (3.7–4.2 V) avoids both a boost converter _and_ the 3.3 V→5 V data level shifter, since VCC and logic level then nearly match.                                                                                                     | **Skip the boost converter and the level shifter.** The cell's protection cutoff (~3.4 V) keeps the strip in range; firmware shuts down cleanly before it trips. Verify on your specific tube in Phase 0.                                                   |
-| **Input**              | TWANG's spring-doorstop + MPU6050 controller is genre-defining but built for a floor-standing cabinet. Its feel depends on _analog_ input — an encoder cannot express "move slowly left".                                                                                                                | **EC11 encoder + analog thumbstick + 2 buttons.** Encoder = relative/detented (menus, precise steps); stick = absolute/self-centering (velocity). Both, for €2 extra and much wider game range.                                                             |
+| **Input**              | TWANG's spring-doorstop + MPU6050 controller is genre-defining but built for a floor-standing cabinet. Its feel depends on _analog_ input — an encoder cannot express "move slowly left".                                                                                                                | **Analog thumbstick (2-axis + push) + 2 buttons.** Stick gives absolute and velocity control for both X and Y axes; push button and buttons A/B provide rich interactions with minimalist hardware.                                                             |
 | **Monetization**       | Paid cartridges need a backend, accounts, per-device keys and signed+encrypted code — and DRM on an openly self-flashable device is defeatable by rebuilding the firmware. Comparable projects (TWANG, ESPboy) monetize via hardware.                                                                    | **Keep games free and open; sell hardware kits.** The free library is what makes the hardware worth buying. Store design leaves the door open for paid games later.                                                                                         |
 
 ### Risks, honestly
@@ -62,8 +62,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 | MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                     | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and a battery voltage divider already wired. Solves the charging design in one part. |
 | _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                             | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                 |
 | Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                     | Already owned.                                                                                                                                                                                                                                      |
-| Wheel             | **EC11 rotary encoder with integrated push switch**                                        | The push doubles as a button — this _is_ your "reuse buttons" principle.                                                                                                                                                                            |
-| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control the encoder can't. Y axis is spare on a 1D display — that's deliberate headroom for future games.                                                                                                            |
+| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                              |
 | Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                               |
 | Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                  |
 | Power switch      | Slide switch in the battery line                                                           | Cuts battery to everything. Charging still works with it off.                                                                                                                                                                                       |
@@ -148,44 +147,33 @@ a rewrite:
    touches a GPIO.
 
 Two ESP8266 limitations to be aware of: it has **only one ADC pin**, so the 2-axis thumbstick
-can't be tested until the S3 arrives (build against the encoder + buttons first, add stick
-support in Phase 2 on real hardware), and it is short on usable GPIOs — you may need to drop
+can't be tested until the S3 arrives (add stick support on real S3 hardware), and it is short on usable GPIOs — you may need to drop
 a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for the ESP32.
 
 ### Pin map (ESP32-S3, starting point)
 
 | Signal        | GPIO      | Notes                                                            |
 | ------------- | --------- | ---------------------------------------------------------------- |
-| LED data      | 4         | Must be RMT-capable. Via 330 Ω.                                  |
-| Encoder A / B | 5 / 6     | Quadrature, interrupt-driven.                                    |
-| Encoder push  | 7         | `INPUT_PULLUP`                                                   |
-| Button A      | 8         | `INPUT_PULLUP`                                                   |
-| Button B      | 9         | `INPUT_PULLUP`                                                   |
-| Stick X / Y   | 10 / 11   | ADC1 channels — ADC2 is unusable while WiFi is active on ESP32.  |
-| Stick push    | 12        | `INPUT_PULLUP`                                                   |
-| Battery sense | 13 (ADC1) | Via 2:1 divider — lets you show a battery warning _on the tube_. |
+| LED data      | 17        | RMT-capable WS2812B data line. Via 330 Ω.                        |
+| Button A      | 15        | `INPUT_PULLUP`                                                   |
+| Button B      | 16        | `INPUT_PULLUP`                                                   |
+| Stick push    | 18        | `INPUT_PULLUP`                                                   |
+| Stick X       | 4         | ADC1 channel (ADC1_CH3) — usable while WiFi is active.           |
+| Stick Y       | 5         | ADC1 channel (ADC1_CH4) — usable while WiFi is active.           |
+| Battery sense | ADC1 pin  | Via 2:1 divider (Feather) — shows battery warning _on the tube_. |
 
 ⚠️ Keep every analog input on **ADC1**. ADC2 is shared with the WiFi radio and reads garbage
-whenever WiFi is on — a classic ESP32 trap that would silently break the stick in Phase 4.
+whenever WiFi is on — a classic ESP32 trap that would silently break analog inputs in Phase 4.
 
 ### The minimalist control scheme
 
-Four physical inputs cover everything by reusing them contextually:
+Physical inputs cover everything by reusing them contextually:
 
-- **Stick** — analog movement / aim / velocity control.
-- **Wheel** — precise stepping; scrolls the launcher menu.
-- **A** — primary action; in the menu, "select".
-- **A** — primary action; in the menu, "select".
-- **B** — secondary action; in the menu, "back".
-- **Wheel press** — pause. From pause: return to the launcher.
-- **Stick press** — free for games to use.
-- **Hold B during power-on** — enter WiFi setup (starts the captive portal). This is your
-  explicit user-consent gate: **the device never touches the network unless asked**, so
-  fully-offline operation is the default.
-
-Games declare which controls they use in `meta.json`, so the launcher can hint at the scheme
-before starting — and a game that only needs the wheel still works if you later build a
-stick-less variant.
+- **Stick X / Y** — analog movement / aim / velocity control.
+- **Stick X (flick)** — discrete stepping (`navDelta`); scrolls menus.
+- **A** — primary action; in the menu, "launch / confirm".
+- **B** — secondary action; in the launcher, hold-B deletes an installed cartridge.
+- **Stick press** — in game: pause (then hold B to exit); in launcher: hold to show highscore.
 
 ---
 
@@ -218,18 +206,17 @@ beam.clear()
 beam.pixel(pos, color, brightness)      -- sub-pixel anti-aliased
 beam.line(from, to, color)
 beam.fade(amount)                        -- for trails/afterglow
-beam.present()
+beam.pixel_count() / beam.pixel_width()
 
-beam.wheel()                             -- accumulated detents since last call (+/-)
-beam.stick()                             -- analog X, deadzoned + calibrated, -1..1
-beam.stick_y()                           -- spare axis: charge, weapon select, dodge...
-beam.pressed(BTN_A)                      -- edge
-beam.held(BTN_B)                         -- level
+beam.stick(axis) / beam.stick_x/y()      -- analog axis ("x"|"y"), deadzoned + calibrated, -1..1
+beam.pressed("a"|"b"|"stick")            -- edge
+beam.held("a"|"b"|"stick")               -- level
 
 beam.time()                              -- ms since game start
-beam.random(n)
-beam.save(key, value) / beam.load(key)   -- highscores, persisted per game
-beam.show_score(n)                       -- engine-drawn binary score animation
+beam.random(n) / beam.random(lo, hi)
+beam.score(add) / beam.highscore()       -- highscores, persisted per game
+beam.show_score(elapsed_ms)              -- engine-drawn binary score animation
+beam.raw_pixel(idx, color, intensity)    -- direct index for UI chrome
 beam.exit()                              -- return to launcher
 ```
 
@@ -303,7 +290,7 @@ Every phase ends with **something you can see or play**.
 > _Goal: the tube lights up, on battery._
 
 1. Order the MCU (**Adafruit Feather ESP32-S3** recommended — see §2.1 for why charging drives
-   this choice), EC11 encoder, thumbstick module, buttons, and a **2000–2500 mAh LiPo with
+   this choice), thumbstick module, buttons, and a **2000–2500 mAh LiPo with
    JST-PH connector**. Meanwhile, do steps 2–5 on the NodeMCU you already have.
 2. Swap `Adafruit_NeoPixel` → **`NeoPixelBus`** with `NeoEsp8266DmaWs2812xMethod`
    (later `NeoEsp32RmtNWs2812xMethod`). This is the single most important early decision —
@@ -328,9 +315,8 @@ Every phase ends with **something you can see or play**.
 
 1. `Display` class: float 0..1 coordinate space, **sub-pixel anti-aliased** `pixel()`,
    `fade()`, global brightness cap (start at 25/255), `present()`.
-2. `Input` class: interrupt-driven encoder with detent decoding, debounced buttons,
-   `pressed()` / `held()` / `released()` edges. Stub the stick behind the same interface —
-   the ESP8266's single ADC can't drive it, so wire it up in Phase 2 on the S3.
+2. `Input` class: analog joystick reading with deadzone, response curve shaping, debounced buttons,
+   `pressed()` / `held()` / `released()` edges.
 3. Fixed-timestep game loop at 60 fps with a frame-time budget assert.
 
    **Sanctioned exception:** the frame gate assumes the frame loop is the only thing with a
@@ -341,9 +327,9 @@ Every phase ends with **something you can see or play**.
    every scene change). Games are unaffected and still see a fixed timestep.
 
 4. `beam.show_score()`: the binary score readout, animated bit-by-bit.
-5. A `demo` scene: a wheel-controlled anti-aliased dot with a fading trail.
+5. A `demo` scene: a joystick-controlled anti-aliased dot with a fading trail.
 
-✅ _Visible result: a smooth, glowing dot you steer with the wheel. This is the first moment the device feels real — the anti-aliasing is the "wow"._
+✅ _Visible result: a smooth, glowing dot you steer with the stick. This is the first moment the device feels real — the anti-aliasing is the "wow"._
 
 ### Phase 2 — First real game, native _(2–3 days)_
 
@@ -352,7 +338,7 @@ Every phase ends with **something you can see or play**.
 Port your `main.cpp` monster-shooter into the engine as **"Wormfight"** and deepen it:
 
 - **Stick** moves the shooter (analog — you can creep or dash); **A** fires; **B** is a
-  short cooldown-limited "push back". Wheel adjusts aim/power.
+  short cooldown-limited "push back".
 - Waves of monsters with rising speed; multiple monsters at once.
 - Life system rendered as a few pixels at your end; screen-shake / white-flash on hit.
 - Death animation, then `beam.show_score()` in binary, restart with **A**.
@@ -370,9 +356,9 @@ a script in Phase 6 is mechanical.
 > _Goal: more than one thing on the device._
 
 1. ✅ Mount **LittleFS**; store settings and per-game highscores in NVS/LittleFS.
-2. ✅ A **launcher scene**: each installed game is a colored block on the tube; the wheel scrolls,
+2. ✅ A **launcher scene**: each installed game is a colored block on the tube; the stick scrolls,
    the selected one pulses, **A** launches. Its accent color comes from `meta.json`.
-3. ✅ Wheel-press during a game → pause → hold **B** → back to launcher.
+3. ✅ Stick-press during a game → pause → hold **B** → back to launcher.
 4. ✅ Add a second, tiny native game (e.g. a reflex "stop the dot in the zone" game) so the
    launcher has something to choose _between_.
 5. ⏸ **Power management** (needs the ESP32; see §2.1): battery voltage sensing on ADC1 with a
@@ -380,10 +366,9 @@ a script in Phase 6 is mechanical.
    the critical-voltage safe shutdown, the charging sweep animation, and idle deep-sleep with
    button wake. _Deferred until the Feather arrives._
 
-**Navigation without the wheel.** The encoder had not arrived, so `Input` gained `navDelta()`:
-discrete steps, synthesized from the joystick today (threshold + hysteresis + auto-repeat),
-read from quadrature once the encoder is fitted. Only `Input::updateNav()` changes — menus never
-talk to a specific input device. The missing hardware forced an abstraction worth having anyway.
+**Navigation via stick.** `Input` has `navDelta()`:
+discrete steps synthesized from horizontal joystick movement (threshold + hysteresis + auto-repeat).
+Menus talk to `navDelta()` rather than raw continuous axis data.
 
 **Exit is gated behind pause**, not a bare hold-B: Wormfight already holds B for up to 1.1 s to
 charge, and future cartridges will collide the same way. The engine handles pause/exit _before_
@@ -585,8 +570,8 @@ it over the air is item 5.)_
    route wires so the cell is never compressed or flexed. Do not glue it in — it should be
    replaceable after a few hundred cycles.
 4. Place the power slide switch so it can't be knocked accidentally in a bag.
-5. Print, test the feel, iterate. Expect **three revisions** — mainly on button placement,
-   wheel reachability and USB port alignment.
+5. Print, test the feel, iterate. Expect **three revisions** — mainly on button and stick placement
+   and USB port alignment.
 
 ✅ _Visible result: Beam Boy v1._
 

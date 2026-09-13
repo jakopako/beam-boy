@@ -86,8 +86,8 @@ void LauncherScene::update(Engine& engine, float dt) {
 
   if (gameList().count() == 0) return;
 
-  // Navigation comes through navDelta(), not the raw stick, so this code is
-  // identical once the rotary encoder is fitted.
+  // Navigation comes through navDelta(), which turns horizontal stick
+  // deflection into discrete steps.
   const int8_t step = input.navDelta();
   if (step != 0) {
     const int16_t next = static_cast<int16_t>(selected_) + step;

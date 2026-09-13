@@ -80,8 +80,7 @@ the anti-aliasing itself is easier to see.
 
 ### Analog feel
 Push the stick a little — the dot should creep. Push it fully — it should dash. That
-velocity control is exactly what a stepped encoder cannot give you, and why the plan
-includes both.
+velocity control gives smooth and responsive control.
 
 The dot bounces gently off each end, so it can't be lost off the edge.
 

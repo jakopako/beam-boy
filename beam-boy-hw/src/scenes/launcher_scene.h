@@ -14,7 +14,7 @@
 // If there are more games than the tube can show at a readable size, the list
 // scrolls to keep the selection in view.
 //
-//   Nav (stick/wheel)  change selection
+//   Nav (stick)        change selection
 //   A                  launch (the only way to launch -- the nav button no
 //                      longer doubles as a second launch input)
 //   Nav press (hold)   show the selected game's highscore in binary,

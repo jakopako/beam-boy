@@ -204,7 +204,7 @@ def update_bar(dt)
 end
 
 def update_dot(dt)
-  var target = beam.stick() * kDotMaxSpeed
+  var target = beam.stick("x") * kDotMaxSpeed
   dot_velocity += (target - dot_velocity) * kDotAccel * dt
   dot_pos += dot_velocity * dt
 
