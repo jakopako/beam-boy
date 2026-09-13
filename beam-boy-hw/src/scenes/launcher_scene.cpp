@@ -11,10 +11,13 @@ namespace {
 constexpr float kHighlightEase = 12.0f;
 constexpr float kLaunchFlashTime = 0.35f;
 
-// How long B must be held on an installed cartridge, beyond the highscore
-// readout, before it is deleted. Long enough that showing the highscore (the
-// gesture's first, harmless outcome) is never mistaken for the start of a
-// delete; short enough that deleting a game does not feel like a chore.
+// How long the nav button must be held before it shows the highscore instead
+// of launching on release. Comfortably longer than an intentional tap (a
+// physical click rarely takes this long even when deliberate), short enough
+// that peeking at a score doesn't feel like a separate mode.
+constexpr uint32_t kHighscoreHoldMs = 350;
+
+// How long B must be held on an installed cartridge before it is deleted.
 constexpr uint32_t kDeleteHoldMs = 2500;
 
 // A game needs at least this many pixels to read as a block rather than a dot.
@@ -35,6 +38,8 @@ void LauncherScene::enter(Engine& engine) {
   scroll_ = 0;
   launching_ = false;
   launch_timer_ = 0.0f;
+  nav_hold_exceeded_ = false;
+  deleting_ = false;
 
   engine.setCurrentGame(-1);
   engine.display().clear();
@@ -104,17 +109,30 @@ void LauncherScene::update(Engine& engine, float dt) {
   highlight_ +=
       (static_cast<float>(selected_) - highlight_) * kHighlightEase * dt;
 
-  if (input.pressed(Button::kA) || input.pressed(Input::kNavButton)) {
+  if (input.pressed(Button::kA)) {
     launching_ = true;
     launch_timer_ = kLaunchFlashTime;
   }
+
+  // The nav button/stick no longer launches -- A is the only way to launch,
+  // so there is exactly one gesture for it. Holding the nav button still
+  // shows the selected game's highscore; nav_hold_exceeded_ just latches once
+  // the hold clears the threshold, so render() knows to show it.
+  nav_hold_exceeded_ = input.heldFor(Input::kNavButton, kHighscoreHoldMs);
 
   // Deleting only applies to installed cartridges -- a built-in or a utility
   // scene (Store, Network) must never disappear from the launcher this way.
   if (!deleting_ && gameList().at(selected_).is_installed &&
       input.heldFor(Button::kB, kDeleteHoldMs)) {
     deleting_ = true;
-    CartridgeStore::remove(gameList().at(selected_).id);
+    const char* deleted_id = gameList().at(selected_).id;
+    CartridgeStore::remove(deleted_id);
+    // The cartridge is gone; its highscore must go with it, or a later game
+    // that happens to reuse the same id would inherit a score it never
+    // earned. Flush immediately -- deletion is deliberate and rare enough
+    // that a flash write here is not worth deferring to the next commit().
+    engine.storage().eraseScore(deleted_id);
+    engine.storage().commit();
     rescan_store_.scan();
     gameList().build(rescan_store_);
     // The list just shrank; clamp rather than let selected_ point past the
@@ -182,32 +200,36 @@ void LauncherScene::render(Engine& engine) {
     return;
   }
 
-  // Holding B shows the selected game's highscore, so records are visible from
-  // the menu without launching anything. Once the hold has crossed the delete
-  // threshold (see update()), the game is already gone -- show a solid red
-  // confirmation instead of a score that no longer belongs to anything
-  // selected_ still points at.
+  // Once the delete hold has crossed the threshold (see update()), the game
+  // is already gone -- show a solid red confirmation flash.
   if (deleting_) {
     display.span(0.0f, 1.0f, colors::kRed, 1.0f);
     return;
   }
 
-  if (engine.input().held(Button::kB)) {
-    // As the hold nears the delete threshold on a deletable entry, bleed the
-    // readout toward red so the countdown is visible before it fires --
-    // otherwise deleting a game would look instantaneous and accidental.
-    if (gameList().at(selected_).is_installed) {
-      const float warn =
-          static_cast<float>(engine.input().holdDuration(Button::kB)) /
-          static_cast<float>(kDeleteHoldMs);
-      if (warn > 0.5f) {
-        const float mix = (warn - 0.5f) / 0.5f;
-        display.span(0.0f, 1.0f, colors::kRed, mix > 1.0f ? 1.0f : mix);
-        return;
-      }
+  // Holding B on an installed cartridge counts down to a delete: the readout
+  // bleeds toward red as the hold approaches the threshold, so it is never a
+  // surprise. B does nothing on a built-in or a utility scene -- neither can
+  // be deleted this way.
+  if (gameList().at(selected_).is_installed &&
+      engine.input().held(Button::kB)) {
+    const float warn =
+        static_cast<float>(engine.input().holdDuration(Button::kB)) /
+        static_cast<float>(kDeleteHoldMs);
+    if (warn > 0.5f) {
+      const float mix = (warn - 0.5f) / 0.5f;
+      display.span(0.0f, 1.0f, colors::kRed, mix > 1.0f ? 1.0f : mix);
+      return;
     }
+  }
+
+  // Holding the nav button past kHighscoreHoldMs shows the selected game's
+  // highscore, instantly rather than bit-by-bit, so a quick peek doesn't have
+  // to wait out a reveal animation meant for a score just earned.
+  if (nav_hold_exceeded_) {
     engine.renderScore(engine.storage().highscore(gameList().at(selected_).id),
-                       engine.input().holdDuration(Button::kB));
+                       engine.input().holdDuration(Input::kNavButton),
+                       /*instant=*/true);
     return;
   }
 

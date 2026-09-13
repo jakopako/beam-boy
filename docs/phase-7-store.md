@@ -55,13 +55,18 @@ appear in the launcher without a firmware flash.
   installed" or "up to date" by id — never "update available", since there is
   no trustworthy prior hash to compare against.
 - **Deleting a cartridge:** in the launcher, holding **B** on an installed
-  cartridge past the highscore readout (~2.5 s total) deletes it: `game.be`,
-  `meta.json` and its `/games/<id>/` folder are removed, cartridges are
-  rescanned, and `gameList()` is rebuilt immediately. The readout bleeds from
-  the normal highscore display toward solid red as the hold approaches the
-  threshold, so the deletion is never a surprise. Built-in games and the
-  Store/Network utility entries are not deletable this way — the gesture only
-  fires for entries `GameList::build()` populated from `CartridgeStore`.
+  cartridge deletes it after a ~2.5 s countdown: `game.be`, `meta.json` and its
+  `/games/<id>/` folder are removed, cartridges are rescanned, and
+  `gameList()` is rebuilt immediately. Its stored highscore is erased too
+  (`Storage::eraseScore()`), flushed to flash immediately rather than left for
+  the next `commit()` — otherwise a later cartridge that happens to reuse the
+  same id would inherit a "high score" it never earned. The tube bleeds from
+  its normal colour to solid red as the hold approaches the threshold, so the
+  deletion is never a surprise. Built-in games and the Store/Network utility
+  entries are not deletable this way — the gesture only fires for entries
+  `GameList::build()` populated from `CartridgeStore`. (Showing a highscore
+  moved off hold-B onto a hold of the nav button/stick, so the two gestures no
+  longer conflict — see `docs/phase-3-launcher.md`.)
 
 ## Store index format
 
@@ -131,16 +136,22 @@ or commit, regardless of a contributor's `core.autocrlf` setting.
 - Store entries: coloured blocks from the index; selected block breathes.
   Status overlays brightness: dim = already installed and current, breathing
   (independent of selection) = update available, normal = not installed.
-- **A** / nav press: install selected cartridge, or a quick green flash and
+- **A**: install selected cartridge, or a quick green flash and
   no-op if it is already up to date.
 - White bar: install in progress.
 - Green centre-out flash: install succeeded.
 - Red pulse: failure; read the serial log for the precise reason.
 - Hold **B**: return to the launcher, using the existing utility-scene exit
-  gesture.
+  gesture — works immediately after an install too. (Previously installing a
+  *new* cartridge id could shift the Store's numeric position in the merged
+  game list past where the engine still expected it, making the engine treat
+  the Store as the just-installed game and require the game exit gesture
+  instead; `installSelected()` now re-resolves its own index by identity
+  right after rebuilding the list.)
 
-In the **launcher**, holding **B** on an installed cartridge past the
-highscore readout deletes it; see "Deleting a cartridge" above.
+In the **launcher**, holding **B** on an installed cartridge deletes it; see
+"Deleting a cartridge" above. Holding the nav button/stick shows that entry's
+highscore; only **A** launches a game there.
 
 ## Current limitations
 

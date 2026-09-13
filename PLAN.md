@@ -554,19 +554,23 @@ it over the air is item 5.)_
 
 **Known issues to fix (reported after real-hardware use):**
 
-- ⬜ Launcher hold-B is now overloaded: it used to only show the selected
-  game's highscore, but the delete gesture (item 3 above) reuses the same
-  hold-B, so the two now conflict. Needs a redesign — e.g. a duration
-  threshold, a different button/gesture for delete, or a confirmation step —
-  so showing a highscore can never be mistaken for the start of a delete and
-  vice versa.
-- ⬜ After installing a game in the Store, exiting back to the launcher
-  requires pressing the joystick/nav button first and _then_ holding B — the
-  same two-step gesture games use (pause, then hold-B-while-paused). The Store
-  is a utility scene, not a game, and per its own documented behaviour
-  ("Hold B: return to the launcher") a plain hold-B should be enough on its
-  own, without the extra nav-button press. Something regressed or was never
-  wired up for the post-install state.
+- ✅ Launcher hold-B was overloaded (highscore + delete). Resolved: hold-B now
+  only deletes an installed cartridge (with a red countdown), and holding the
+  nav button/stick (rather than tapping it to launch) shows the selected
+  game's highscore instead — instantly, not the bit-by-bit reveal used for a
+  score just earned. See `docs/phase-3-launcher.md` and
+  `docs/phase-7-store.md` for the updated control tables.
+- ✅ After installing a game in the Store, exiting back to the launcher
+  required pressing the joystick/nav button first and _then_ holding B — the
+  same two-step gesture games use (pause, then hold-B-while-paused). Root
+  cause: `GameList::build()` re-numbers Store/Network whenever an install adds
+  a *new* id, since they always sit after every installed cartridge; the
+  engine tracked "what's currently running" by that numeric index, so after
+  install it silently mistook the Store scene for the newly-inserted game and
+  demanded the game exit gesture instead. Fixed by re-resolving the running
+  scene's index by identity (`GameList::indexOf()`) right after the rebuild,
+  in `StoreScene::installSelected()`. Plain hold-B now exits the Store
+  immediately after an install, matching its own documented behaviour.
 
 ### Phase 8 — Enclosure _(2–4 days, iterative)_
 
@@ -679,6 +683,8 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Precision** — stop a sweeping dot inside a shrinking zone. Trivial to build, brutally addictive.
 - **Pulse** — a rhythm game: pulses travel down the tube, hit **A** as they reach your end.
 - **Snake 1D** — the tail occupies pixels behind you; eat, grow, don't get boxed in by hazards.
+- **obstacles** - basically the dino jump game that you can play in Chrome when there is no internet connectivity, but viewed from above
+- **fishing** - a moving bar, player has to make sure a dot stays within the bar. If dot outside of the bar for too long -> loose
 - **Tug of War** — _(later)_ 2-player via ESP-NOW between two Beam Boys, one tube each.
 - **Sonar** — a hidden target; the tube shows only "hotter/colder" as a glow intensity. A game
   the 1D format uniquely enables.

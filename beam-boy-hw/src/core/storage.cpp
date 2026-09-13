@@ -152,6 +152,22 @@ bool Storage::submitScore(const char* game_id, uint32_t score) {
   return true;
 }
 
+void Storage::eraseScore(const char* game_id) {
+  const int index = findScore(game_id);
+  if (index < 0) return;
+
+  // Compact rather than leave a hole: shift the last entry into the freed
+  // slot and shrink the count, so score_count always matches exactly the
+  // live entries findScore() and the kMaxScores cap rely on.
+  const uint8_t last = data_.score_count - 1;
+  if (static_cast<uint8_t>(index) != last) {
+    data_.scores[index] = data_.scores[last];
+  }
+  data_.scores[last] = ScoreEntry();
+  data_.score_count = last;
+  dirty_ = true;
+}
+
 void Storage::setBrightness(uint8_t value) {
   if (data_.brightness == value) return;
   data_.brightness = value;

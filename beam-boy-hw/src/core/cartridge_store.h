@@ -118,6 +118,13 @@ class GameList {
   uint8_t count() const { return count_; }
   const GameEntry& at(uint8_t index) const { return entries_[index]; }
 
+  // Finds a scene's current position by identity rather than by a
+  // previously-remembered index. Needed because build() can shift the
+  // utility entries (Store, Network): they follow every installed cartridge,
+  // so installing a *new* id inserts an entry ahead of them and moves their
+  // index. Returns -1 if the scene is not (or no longer) in the list.
+  int8_t indexOf(const Scene* scene) const;
+
  private:
   static constexpr uint8_t kMaxEntries = 16 + kMaxCartridges;
 

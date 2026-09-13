@@ -115,7 +115,12 @@ class Engine {
   //
   // Lives in the engine rather than in each game so the presentation stays
   // consistent across cartridges.
-  void renderScore(uint32_t score, uint32_t elapsed_ms);
+  //
+  // `instant`, when true, skips the one-bit-at-a-time reveal and lights every
+  // set bit at full brightness immediately. Used for a quick glance at a
+  // score that already happened (the launcher's highscore peek) as opposed to
+  // the dramatic reveal of a score just earned.
+  void renderScore(uint32_t score, uint32_t elapsed_ms, bool instant = false);
   void drawScoreBit(uint16_t bit, float intensity);
   void renderPauseOverlay();
 

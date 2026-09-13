@@ -56,8 +56,9 @@ created by the firmware rather than shipped with it.
 | Control              | Action                                    |
 |----------------------|-------------------------------------------|
 | Stick left/right     | Change selection (one step per push)      |
-| A, or stick press    | Launch the selected game                  |
-| B (hold)             | Show that game's highscore in binary      |
+| A                    | Launch the selected game                  |
+| Stick press (hold)   | Show that game's highscore in binary      |
+| B (hold)             | *(superseded in Phase 7 — deletes an installed cartridge; see [`docs/phase-7-store.md`](phase-7-store.md))* |
 
 **In a game**
 
@@ -290,7 +291,10 @@ blocks; on the 50 px tube they'll get the 6 px maximum.
 Power management, once the Feather arrives:
 
 1. Battery voltage sensing on ADC1 with a LiPo discharge curve
-2. A hold-**B** battery meter in the launcher (the gesture is already free there)
+2. A battery meter gesture in the launcher — hold-B is no longer free (Phase 7
+   uses it to delete an installed cartridge), so this needs a different
+   trigger, e.g. holding both A+B, or folding it into the existing
+   nav-hold highscore view
 3. The low-battery pulse and critical-voltage safe shutdown
 4. The charging sweep animation
 5. Idle deep-sleep with button wake

@@ -248,7 +248,7 @@ float __attribute__((noinline)) bitIntensity(uint16_t bit, uint32_t revealed,
 
 }  // namespace
 
-void Engine::renderScore(uint32_t score, uint32_t elapsed_ms) {
+void Engine::renderScore(uint32_t score, uint32_t elapsed_ms, bool instant) {
   const uint16_t pixels = display_.pixelCount();
 
   // Only render as many bits as the score needs, so a small score does not look
@@ -264,19 +264,29 @@ void Engine::renderScore(uint32_t score, uint32_t elapsed_ms) {
   const uint16_t bits_to_show =
       significant_bits > pixels ? pixels : significant_bits;
 
-  // Reveal one bit at a time, then hold. Reading as a deliberate flourish
-  // rather than a limitation is most of the point.
-  const uint32_t per_bit_ms =
-      bits_to_show > 0 ? kScoreRevealMs / bits_to_show : kScoreRevealMs;
-  const uint32_t revealed =
-      per_bit_ms > 0 ? (elapsed_ms / per_bit_ms) : bits_to_show;
-
   // A score of zero has no bits to light, so mark it with a single dim pixel at
   // the origin -- otherwise the readout is indistinguishable from a crash.
   if (score == 0) {
     display_.rawPixel(0, Color(40, 40, 40));
     return;
   }
+
+  if (instant) {
+    // A glance at a score that already happened -- e.g. the launcher peeking
+    // at a highscore -- should read the whole value at once, not perform the
+    // reveal flourish that belongs to a score just earned.
+    for (uint16_t bit = 0; bit < bits_to_show; bit++) {
+      if ((score & (1UL << bit)) != 0) drawScoreBit(bit, 1.0f);
+    }
+    return;
+  }
+
+  // Reveal one bit at a time, then hold. Reading as a deliberate flourish
+  // rather than a limitation is most of the point.
+  const uint32_t per_bit_ms =
+      bits_to_show > 0 ? kScoreRevealMs / bits_to_show : kScoreRevealMs;
+  const uint32_t revealed =
+      per_bit_ms > 0 ? (elapsed_ms / per_bit_ms) : bits_to_show;
 
   for (uint16_t bit = 0; bit < bits_to_show; bit++) {
     if (bit > revealed) break;

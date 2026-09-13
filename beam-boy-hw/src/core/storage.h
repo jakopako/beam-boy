@@ -37,6 +37,12 @@ class Storage {
   // see commit().
   bool submitScore(const char* game_id, uint32_t score);
 
+  // Forgets a game's highscore entirely, freeing its slot for reuse. Used when
+  // a cartridge is deleted -- otherwise a reinstalled or unrelated game later
+  // reusing the same id would inherit a "high score" it never earned. A miss
+  // (no entry for game_id) is not an error.
+  void eraseScore(const char* game_id);
+
   // --- Settings ------------------------------------------------------------
 
   uint8_t brightness() const { return data_.brightness; }

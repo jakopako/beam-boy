@@ -309,4 +309,11 @@ GameList& gameList() {
   return list;
 }
 
+int8_t GameList::indexOf(const Scene* scene) const {
+  for (uint8_t i = 0; i < count_; i++) {
+    if (entries_[i].scene == scene) return static_cast<int8_t>(i);
+  }
+  return -1;
+}
+
 }  // namespace beamboy

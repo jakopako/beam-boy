@@ -15,10 +15,12 @@
 // scrolls to keep the selection in view.
 //
 //   Nav (stick/wheel)  change selection
-//   Nav press or A     launch
-//   B (hold)           show the selected game's highscore in binary; on an
-//                       installed cartridge, continuing to hold turns the
-//                       readout into a red countdown that deletes it
+//   A                  launch (the only way to launch -- the nav button no
+//                      longer doubles as a second launch input)
+//   Nav press (hold)   show the selected game's highscore in binary,
+//                      instantly, for as long as it's held
+//   B (hold)           on an installed cartridge only: delete it, after
+//                      a red countdown so it's never a surprise
 
 #include "core/cartridge_store.h"
 #include "core/engine.h"
@@ -49,6 +51,12 @@ class LauncherScene : public Scene {
   // Set when a game is chosen; the launch waits for the flash animation.
   bool launching_ = false;
   float launch_timer_ = 0.0f;
+
+  // True while the nav button has been held past kHighscoreHoldMs, so
+  // render() knows to show the highscore instead of the normal list. The nav
+  // button no longer launches, so this is a pure display flag -- nothing
+  // reads it to gate a release-triggered launch.
+  bool nav_hold_exceeded_ = false;
 
   // Set once a hold-B on an installed cartridge crosses kDeleteHoldMs, so the
   // deletion itself only fires once per hold rather than every frame past the

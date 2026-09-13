@@ -540,6 +540,14 @@ bool StoreScene::installSelected(Engine& engine) {
   }
   computeStatuses();
 
+  // Installing a *new* id inserts an entry ahead of Store/Network (they
+  // always sit last), shifting their index. The engine tracks "which game is
+  // running" by that index, not by scene identity, so without this it would
+  // believe a real game -- not this utility scene -- is running and demand
+  // the games' pause-then-hold-B exit instead of a plain hold-B.
+  const int8_t new_index = gameList().indexOf(this);
+  if (new_index >= 0) engine.setCurrentGame(new_index);
+
   state_ = StoreState::kSuccess;
   settled_at_ms_ = millis();
   Serial.print(F("[store] installed "));
@@ -577,8 +585,7 @@ void StoreScene::update(Engine& engine, float dt) {
       }
     }
 
-    if (engine.input().pressed(Button::kA) ||
-        engine.input().pressed(Input::kNavButton)) {
+    if (engine.input().pressed(Button::kA)) {
       if (statuses_[selected_] == CartridgeStatus::kUpToDate) {
         // Already current: a quick flash of the game's own colour says so
         // without spending time and battery re-downloading and re-verifying
