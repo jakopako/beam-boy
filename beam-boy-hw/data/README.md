@@ -13,7 +13,7 @@ One folder per game, under `games/`. The folder name is the game's id:
 
 ```
 games/
-  reflexfs/
+  reflex/
     meta.json     metadata the launcher reads at boot
     game.be       the Berry source, loaded when the game is launched
 ```
@@ -53,10 +53,10 @@ consoles running older firmware.
   can install is bounded by flash rather than RAM.
 - Because the file is re-read on every launch, editing `game.be` and running
   `uploadfs` picks up the change without a firmware flash.
-- `games/reflexfs/game.be` is the Reflex cartridge, published from
-  [`docs/games/reflexfs/game.be`](../../docs/games/reflexfs/game.be) so the
-  fixture here and the real store copy stay in sync -- see
-  `tools/build_store_index.py`.
+- `games/fishing/` is a work-in-progress cartridge (a green bar drifts along
+  the tube; keep the blue dot inside it) that only exists here for now —
+  not yet published to `docs/games/` / the store index while the design is
+  still being iterated on. See the game-ideas list in `PLAN.md`.
 
 ## Store index
 
@@ -70,10 +70,10 @@ The first supported index format is deliberately strict and small:
 {
   "games": [
     {
-      "id": "reflexfs",
+      "id": "reflex",
       "title": "Reflex",
       "color": "ff00aa",
-      "url": "https://example.test/games/reflexfs/game.be",
+      "url": "https://example.test/games/reflex/game.be",
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "size": "1234"
     }

@@ -76,10 +76,10 @@ All values are strings by design, matching the strict `meta.json` approach:
 {
   "games": [
     {
-      "id": "reflexfs",
+      "id": "reflex",
       "title": "Reflex",
       "color": "ff00aa",
-      "url": "https://example.test/games/reflexfs/game.be",
+      "url": "https://example.test/games/reflex/game.be",
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "size": "1234"
     }

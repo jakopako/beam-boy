@@ -7,10 +7,10 @@
 //   {
 //     "games": [
 //       {
-//         "id": "reflexfs",
+//         "id": "reflex",
 //         "title": "Reflex",
 //         "color": "ff00aa",
-//         "url": "https://example/games/reflexfs/game.be",
+//         "url": "https://example/games/reflex/game.be",
 //         "sha256": "...64 lowercase/uppercase hex chars...",
 //         "size": "1234"
 //       }

@@ -1,10 +1,10 @@
 {
   "games": [
     {
-      "id": "reflexfs",
+      "id": "reflex",
       "title": "Reflex",
       "color": "ff00aa",
-      "url": "https://jakopako.github.io/beam-boy/games/reflexfs/game.be",
+      "url": "https://jakopako.github.io/beam-boy/games/reflex/game.be",
       "sha256": "df77c264132378f97baea25b4ae32567f39156914df9e43dd1eebb38d4b70c08",
       "size": "4382"
     }

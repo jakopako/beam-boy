@@ -508,7 +508,7 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md)._
    `src/core/cartridge_store.*` scans the filesystem at boot and merges what it
    finds with the built-in registry into one list, so the launcher, score filing
    and `beam.highscore()` are unchanged. Format is documented in
-   `beam-boy-hw/data/README.md`; `data/games/reflexfs/` is a working example.
+   `beam-boy-hw/data/README.md`; `data/games/reflex/` is a working example.
 4. ✅ **Sandboxing:** a per-call time budget (8 ms, half the 60 fps frame budget) and a VM memory
    ceiling (64 KB) so a buggy game can't hang the console or exhaust RAM — on overrun, the
    script call is aborted via a Berry exception and the console returns to the launcher.
@@ -540,7 +540,7 @@ it over the air is item 5.)_
 > [`docs/phase-7-store.md`](docs/phase-7-store.md).
 
 1. ✅ Publish a first `games/` index to GitHub Pages: `docs/games/index.json`
-   plus `docs/games/reflexfs/game.be`. GitHub Pages still has to be enabled for
+   plus `docs/games/reflex/game.be`. GitHub Pages still has to be enabled for
    the repo if `https://jakopako.github.io/beam-boy/` returns 404.
 2. ✅ Firmware "Store" scene: fetch index → show available games as blocks → **A** downloads →
    SHA-256 verify → install → appears in the launcher. First slice uses a static working

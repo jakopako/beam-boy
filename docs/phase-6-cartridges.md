@@ -30,7 +30,7 @@ in docs/phase-5-vm-bakeoff.md).
   none of them know which entries came from flash.
 - **`src/core/json_lite.h`/`.cpp`** -- a deliberately strict reader for
   `meta.json`. See "Parsing metadata" below for why it is hand-rolled.
-- **`data/games/reflexfs/`** -- the same Reflex script as an actual installed
+- **`data/games/reflex/`** -- the same Reflex script as an actual installed
   cartridge, to exercise the filesystem path alongside the baked-in one.
 
 ## Cartridges on the filesystem
