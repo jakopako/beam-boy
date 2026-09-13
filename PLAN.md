@@ -103,18 +103,15 @@ with a worst-case full-white frame at ~195 mA still only reaching ~4 hours. Rech
 This is comfortable enough that **brightness is a look-and-feel decision, not a power
 constraint** — the cap exists to bound the worst case, not to ration the battery.
 
-**Firmware side (add to Phase 1 / Phase 9):**
+**Firmware side (implemented in Phase 8):**
 
-- Read battery voltage on an **ADC1** pin via a 2:1 divider. The Feather has this pre-wired
-  (check its pinout for the battery-sense pin); otherwise add two 100 kΩ resistors.
+- Read battery voltage on **ADC1** (`PIN_BATTERY_SENSE` / `GPIO13` on the Feather S3) via the built-in 2:1 divider.
 - Convert voltage → rough percentage with a LiPo discharge curve, not a linear map — LiPo
   voltage sits near 3.7 V for most of its discharge and then falls off a cliff.
-- **Battery meter in the launcher:** hold **B** in the menu to render charge as a bar along
-  the tube, green → amber → red. Zero extra hardware, and it's a natural use of a 1D display.
-- **Low-battery warning:** below ~3.5 V, pulse the first pixel red once every few seconds
-  during play — visible but not disruptive.
-- **Critical cutoff:** below ~3.4 V, save state, show a red sweep, and deep-sleep before the
-  protection circuit cuts out mid-game.
+- **Battery meter on demand:** render charge level as a bar along the tube, green → amber → red.
+- **Low-battery warning:** below ~3.5 V, subtle, persistent/periodic red pixel indicator during play — visible but not disruptive.
+- **Critical cutoff:** below ~3.35–3.4 V, save state, show a red sweep, and deep-sleep before the
+  hardware protection circuit cuts out mid-game (protects game data & flash storage).
 - **Charging indicator:** while charging, animate a slow filling green sweep along the tube;
   solid green when full. The tube _is_ the status LED — no extra indicator needed, which
   suits the minimalist brief.
@@ -361,10 +358,9 @@ a script in Phase 6 is mechanical.
 3. ✅ Stick-press during a game → pause → hold **B** → back to launcher.
 4. ✅ Add a second, tiny native game (e.g. a reflex "stop the dot in the zone" game) so the
    launcher has something to choose _between_.
-5. ⏸ **Power management** (needs the ESP32; see §2.1): battery voltage sensing on ADC1 with a
-   LiPo discharge curve, a hold-**B** battery meter in the launcher, the low-battery pulse,
-   the critical-voltage safe shutdown, the charging sweep animation, and idle deep-sleep with
-   button wake. _Deferred until the Feather arrives._
+5. ⏸ **Power management** (needs the ESP32 Feather; moved to Phase 8): battery voltage sensing,
+   battery gauge indicator, low-battery warning on the tube, critical shutdown with data protection,
+   charging sweep animation, and idle deep-sleep. _See Phase 8._
 
 **Navigation via stick.** `Input` has `navDelta()`:
 discrete steps synthesized from horizontal joystick movement (threshold + hysteresis + auto-repeat).
@@ -557,7 +553,36 @@ it over the air is item 5.)_
   in `StoreScene::installSelected()`. Plain hold-B now exits the Store
   immediately after an install, matching its own documented behaviour.
 
-### Phase 8 — Enclosure _(2–4 days, iterative)_
+### Phase 8 — Power & Battery Management _(1–2 days)_
+
+> _Goal: untether from USB, run safely on battery power, and manage energy in the OS._
+
+1. **Hardware & Sensing Layer (`src/core/power.*`):**
+   - Sample battery voltage on the Feather ESP32-S3's dedicated ADC1 battery divider (pin `A13` / `GPIO13` / `PIN_BATTERY_SENSE`).
+   - Software filtering (rolling average / EWMA) to prevent ADC jitter and transients under dynamic LED load.
+   - Non-linear LiPo discharge curve map: translate measured millivolts (3.4 V – 4.2 V) into an accurate 0–100% capacity estimate.
+   - USB vs. Battery power detection (sensing VBUS presence / rising charge profile).
+
+2. **Battery Gauge & Status in Launcher:**
+   - Gesture to query battery percentage on demand (e.g. holding both A+B or accessible in launcher/settings).
+   - Visual battery gauge rendered across the 1D tube: a proportionally filled bar (green at high capacity, transitions through amber to red).
+
+3. **Persistent Low-Battery Warning Overlay:**
+   - When the battery drops below ~3.5 V (<10–15%), activate an always-present / non-disruptive warning indicator.
+   - Subtly pulse the first pixel or edge pixel red periodically during gameplay and menus so the player is never surprised.
+
+4. **Safe Shutdown & Data Protection:**
+   - Critical threshold detection (~3.35 V – 3.40 V), before the hardware battery protection circuit cuts power abruptly.
+   - Immediate safe-state flush: commit dirty storage, save any pending highscores / game states.
+   - Critical shutdown animation: a distinct red sweep across the tube, then enter ultra-low-power deep sleep (or standby cutoff) preventing flash corruption.
+
+5. **Charging Animation & Idle Sleep:**
+   - **Charging visualizer**: When plugged into USB, show a slow filling sweep/breathing green glow along the tube; solid green when fully charged.
+   - **Idle deep sleep**: After ~2 minutes of inactivity with no input, fade out the display and enter ESP32 deep sleep; wake cleanly on any button press.
+
+✅ _Visible result: fully cordless operation with clear charge feedback, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
+
+### Phase 9 — Enclosure _(2–4 days, iterative)_
 
 > _Goal: a real object._
 
@@ -575,7 +600,7 @@ it over the air is item 5.)_
 
 ✅ _Visible result: Beam Boy v1._
 
-### Phase 9 — Polish
+### Phase 10 — Polish
 
 A boot animation · a factory-reset gesture · brightness setting in the launcher (directly
 trades runtime for visibility) · charge-cycle-friendly "storage mode" if left unused · a
@@ -617,7 +642,8 @@ beam-boy/
 | 5 VM bake-off       | 1–2 d  | 11½ d      |
 | 6 Script games      | 2–3 d  | 14½ d      |
 | 7 Store             | 2 d    | 16½ d      |
-| 8 Enclosure         | 2–4 d  | 20½ d      |
+| 8 Power & Battery   | 1–2 d  | 18 d       |
+| 9 Enclosure         | 2–4 d  | 21 d       |
 
 **≈ 3 weeks of focused work**, with something playable from day 5.
 
