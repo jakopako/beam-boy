@@ -65,7 +65,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 | Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                              |
 | Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                               |
 | Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                  |
-| Power switch      | Slide switch in the battery line                                                           | Cuts battery to everything. Charging still works with it off.                                                                                                                                                                                       |
+| Power switch      | **SPST slide switch between Feather `EN` pin and `GND`**                                   | Pulling `EN` to GND disables the 3.3V LDO regulator (sub-microamp standby). **USB charging remains fully functional when switched off**, allowing true zero-power off while retaining single-port charging.                                        |
 | Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                |
 
 **Total: roughly €35–45** on top of what you own (Feather route), or €27–37 with the
@@ -117,6 +117,9 @@ constraint** — the cap exists to bound the worst case, not to ration the batte
   suits the minimalist brief.
 - **Idle sleep:** after ~2 minutes with no input, fade out and deep-sleep; wake on a button
   press. This is the single biggest real-world battery win.
+- **Power cutoff & charging design:** A physical SPST switch connects the Feather's `EN` pin to `GND`.
+  When switched OFF, the 3.3V LDO is disabled (sub-microamp standby), while the battery charger remains
+  directly connected to USB-C and the LiPo cell — allowing safe charging over USB while completely powered off.
 
 ### Interim: what you can build on the NodeMCU today
 
@@ -715,6 +718,7 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Encoder + analog stick + 2 buttons.** Both input types, deliberately.
 - **Binary score display** as a signature engine feature.
 - **USB-C rechargeable**, via a board with integrated LiPo charging. No consumable batteries.
+- **Power switch on Feather `EN` pin to `GND`.** Pulling `EN` low completely disables the 3.3V LDO regulator (<1 µA quiescent current) while the battery charger remains connected to USB-C and the LiPo cell for charging while powered off.
 - **Button convention: A = primary/instant, B = hold-to-charge.** Established in Wormfight
   (Phase 2) after a push-back ability on B failed to justify occupying the only spare button.
   A quick stab of B should always do _something_ useful, so B is never a dead button. Games
@@ -828,6 +832,38 @@ Since you want to accept community games eventually, two things move from "nice"
   `float`'s steps are coarser than a smooth animation needs, so `wrappedSin()` keeps the device
   alive but the motion stutters regardless. Scenes must wrap their own phase; the helper is a
   safety net, not a licence for an unbounded accumulator.
+- **A native-USB board is two different USB devices, and the tools cannot tell them apart for
+  you.** The Feather S3 enumerates as `239A:8113` (Adafruit TinyUSB CDC) while the firmware
+  runs and as `303A:1001` (Espressif USB-Serial-JTAG) in ROM download mode — different COM
+  numbers, only ever one present at a time. Two failures follow, and neither looks like what it
+  is. Auto-detection can attach the monitor to the _bootloader's_ port, which prints nothing at
+  all, forever; and esptool's closing `Hard resetting via RTS pin...` is a no-op, because the
+  USB-C socket goes straight to the S3's USB pins and no RTS line reaches `EN`. The board is
+  then left sitting in the ROM bootloader — the launcher is dead and the stick does nothing, so
+  it reads as a firmware hang when the firmware is simply not running. **Tap RESET after
+  flashing, and pin `monitor_port` by USB id, not by COM number.**
+- **Don't "fix" a flashing problem by silencing the lines the USB stack depends on.** Setting
+  `monitor_dtr = 0` looks like a way to stop the monitor holding the port; on native-USB CDC it
+  means `Serial` never goes true, so the firmware prints into a void. Adding
+  `--after=hard_reset` looks like insurance against a missed reset; on a board with no RTS
+  wired to `EN` it changes nothing except the log line that misleads you. Both were added here
+  against an intermittent upload failure whose real cause was Windows USB re-enumeration
+  timing, and both made the symptoms worse while appearing to address them.
+- **A board's stock partition table is part of its API, and a data partition's _subtype_ is
+  load-bearing.** The Feather's `partitions-8MB-tinyuf2.csv` declares its only data partition
+  as `ffat`/`fat`; Arduino's `LittleFS.begin()` defaults to `partitionLabel="spiffs"` and looks
+  up a DATA/SPIFFS partition, so the mount failed on every boot. Everything downstream of
+  storage then failed in a way that named something else entirely: `Storage: UNAVAILABLE` in
+  the banner, and the captive portal answering "Could not save -- check the name is 32
+  characters or fewer" for a perfectly valid SSID, because `saveCredentials()` cannot
+  distinguish a rejected name from `LittleFS.open()` returning false. Worse, `uploadfs`
+  reported success the whole time: PlatformIO's uploader targets the data partition by
+  _offset_ and does not care about its subtype, so it wrote a valid LittleFS image into a
+  partition the firmware could never open. The DevKitC never showed this only because its env
+  pins `default_16MB.csv`, which happens to have a real `spiffs` partition. Fixed with
+  `partitions-8MB-littlefs.csv`. **A successful `uploadfs` is not evidence the firmware can
+  mount what it wrote**, and the partition table itself is written by a _firmware_ upload, so
+  changing it requires flashing firmware before filesystem.
 
 ### Testing
 

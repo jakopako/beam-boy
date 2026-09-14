@@ -1,0 +1,34 @@
+# Beam Boy -- Adafruit Feather ESP32-S3 (8 MB), LittleFS variant.
+#
+# This is Adafruit's own partitions-8MB-tinyuf2.csv with exactly one change:
+# the data partition is declared as spiffs/spiffs instead of ffat/fat.
+#
+# Why it has to change: Arduino's LittleFS.begin() defaults to
+# partitionLabel="spiffs" and looks up a DATA/SPIFFS partition. The stock
+# Adafruit table's only data partition is `ffat` with subtype `fat`, so the
+# mount fails on every boot -- Storage reports UNAVAILABLE, and anything that
+# writes a file (highscores, WiFi credentials) fails with it. PlatformIO still
+# builds and flashes a LittleFS image happily, because its uploader targets the
+# data partition by offset regardless of subtype, so the upload "succeeds" into
+# a partition the firmware can never open. The DevKitC env never hit this: it
+# pins default_16MB.csv, which has a real spiffs partition.
+#
+# Offset and size are deliberately identical to Adafruit's (0x450000, 3776K =
+# 0x3B0000, ending exactly at the 8 MB boundary), and the uf2 partition is kept
+# so the TinyUF2 drag-and-drop bootloader still works as a recovery path.
+#
+# !! The partition table lives at 0x8000 and is written by a *firmware* upload,
+# not by uploadfs. After changing this file, flash firmware first, then the
+# filesystem -- uploadfs alone writes bytes against the old layout.
+#
+# Keep this file pure ASCII: PlatformIO's partition parser reads it with the
+# host's default codec (cp1252 on Windows), so a stray non-ASCII character in a
+# comment fails the build with a UnicodeDecodeError.
+#
+# Name,   Type, SubType,  Offset,   Size,   Flags
+nvs,      data, nvs,      0x9000,   20K,
+otadata,  data, ota,      0xe000,   8K,
+ota_0,    app,  ota_0,    0x10000,  2048K,
+ota_1,    app,  ota_1,    0x210000, 2048K,
+uf2,      app,  factory,  0x410000, 256K,
+spiffs,   data, spiffs,   0x450000, 3776K,

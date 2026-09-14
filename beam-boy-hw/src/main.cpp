@@ -48,7 +48,7 @@ void setup() {
     delay(10);
   }
   if (Serial) {
-    delay(400);
+    delay(1200);
   }
 
   // The radio powers up automatically at boot and draws tens of mA even when
