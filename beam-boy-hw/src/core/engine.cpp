@@ -1,5 +1,7 @@
 #include "engine.h"
 
+#include <driver/gpio.h>
+#include <driver/rtc_io.h>
 #include <esp_sleep.h>
 #include <math.h>
 
@@ -30,6 +32,25 @@ constexpr uint32_t kChargingSweepMs = 2600;
 }  // namespace
 
 void Engine::begin() {
+  // Release the LED data pin's pad hold before anything tries to drive it.
+  // enterDeepSleep() latches that pin low so the strip cannot pick up noise
+  // while asleep, and the latch *survives the wake reset* -- without this the
+  // strip would stay dark forever after the console's first sleep, since the
+  // pad ignores the RMT peripheral while held. Harmless on a cold boot, where
+  // there is no hold to release.
+  gpio_hold_dis(static_cast<gpio_num_t>(board::kPinLedData));
+  gpio_deep_sleep_hold_dis();
+
+  // Hand the wake pins back to the digital IO subsystem. enterDeepSleep()
+  // switches them to RTC function to hold their pullups through the sleep, and
+  // that pad-mux change also survives the wake reset -- leaving Input::begin()'s
+  // pinMode() below configuring a pad the RTC subsystem still owns.
+  const uint8_t wake_pins[] = {board::kPinButtonA, board::kPinButtonB,
+                               board::kPinStickSw};
+  for (uint8_t pin : wake_pins) {
+    rtc_gpio_deinit(static_cast<gpio_num_t>(pin));
+  }
+
   display_.begin();
   input_.begin();
   storage_.begin();
@@ -209,6 +230,17 @@ void Engine::enterDeepSleep() {
   display_.clear();
   display_.present();
 
+  // Pin the LED data line low for the duration of the sleep. Deep sleep powers
+  // down the digital IO subsystem, so this pin would otherwise float, and a
+  // floating data line next to a NeoPixel strip is an antenna: the strip
+  // latches whatever noise it decodes and sits there lit until something
+  // drives it again. That is the half-strip-of-bright-white seen on wake --
+  // the clear() above is genuinely presented, then undone by the float.
+  pinMode(board::kPinLedData, OUTPUT);
+  digitalWrite(board::kPinLedData, LOW);
+  gpio_hold_en(static_cast<gpio_num_t>(board::kPinLedData));
+  gpio_deep_sleep_hold_en();
+
   // Every wake button lands within GPIO 0-21 on the S3 on both boards this
   // firmware targets, which is exactly the range ext1 wakeup supports; no
   // board-specific guard is needed here the way board_config.h needs one for
@@ -216,8 +248,43 @@ void Engine::enterDeepSleep() {
   const uint64_t wake_mask = (1ULL << board::kPinButtonA) |
                              (1ULL << board::kPinButtonB) |
                              (1ULL << board::kPinStickSw);
-  // All three are wired INPUT_PULLUP (see Input::begin()), so a press pulls
-  // the pin low -- wake on any of them going low, not high.
+
+  // Re-establish the pullups through the RTC subsystem, which is the part that
+  // stays powered while asleep. Input::begin()'s INPUT_PULLUP configures the
+  // *digital* IO pullup, and that is lost the moment deep sleep powers that
+  // domain down -- leaving the wake pins floating, drifting low, and tripping
+  // ANY_LOW within moments of sleeping.
+  //
+  // The symptom was a console that looked like it woke itself every couple of
+  // minutes: sleep, spurious wake, full reset, ~1.3 s of boot, launcher. The
+  // pullups have to be asserted here, not in Input::begin(), because they only
+  // survive if they are set on the RTC side before the sleep begins.
+  //
+  // rtc_gpio_init() is what makes the rest of this take effect: until the pad
+  // is switched to the RTC mux it is still owned by the digital IO subsystem,
+  // and the RTC pullup setting below applies to a pad that is not listening.
+  // Setting the pullup without it is a silent no-op -- which is exactly how
+  // the first attempt at this fix still woke on GPIO10 (mask 0x400).
+  const uint8_t wake_pins[] = {board::kPinButtonA, board::kPinButtonB,
+                               board::kPinStickSw};
+  for (uint8_t pin : wake_pins) {
+    const gpio_num_t gpio = static_cast<gpio_num_t>(pin);
+    rtc_gpio_init(gpio);
+    rtc_gpio_set_direction(gpio, RTC_GPIO_MODE_INPUT_ONLY);
+    rtc_gpio_pulldown_dis(gpio);
+    rtc_gpio_pullup_en(gpio);
+  }
+
+  // And keep the domain that drives those pullups powered. Left on AUTO the
+  // chip is free to power RTC_PERIPH down, which switches the pullups off
+  // partway into the sleep and reintroduces the float this whole block exists
+  // to prevent -- intermittently, and only once already asleep, which is the
+  // worst way for it to fail. The domain costs a few microamps next to the
+  // milliamps the strip draws awake.
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+
+  // All three are pulled up (above), so a press pulls the pin low -- wake on
+  // any of them going low, not high.
   esp_sleep_enable_ext1_wakeup(wake_mask, ESP_EXT1_WAKEUP_ANY_LOW);
   esp_deep_sleep_start();
 }

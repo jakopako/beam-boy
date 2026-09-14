@@ -180,6 +180,48 @@ every call site had to check two things, and the one that forgot would be the
 one that sleeps a healthy device. `gaugePresent()` exists only to tell the two
 apart in diagnostics, and must not gate behaviour.
 
+## Surviving deep sleep
+
+Deep sleep powers down the digital IO subsystem, and two things that look like
+firmware state are actually properties of that subsystem:
+
+- **`INPUT_PULLUP` does not survive.** `Input::begin()` configures the digital
+  pullups on A, B and the stick press. Once asleep those pins float, drift low,
+  and trip `ESP_EXT1_WAKEUP_ANY_LOW` within moments. The console appeared to
+  wake itself every couple of minutes: sleep → spurious wake → full reset →
+  ~1.3 s of boot → launcher.
+
+  Restoring them takes three steps, and the first two are easy to miss because
+  omitting them fails *silently* rather than erroring:
+  1. `rtc_gpio_init()` + `rtc_gpio_set_direction()` to move the pad onto the
+     RTC mux. Until that happens the pad is still owned by the digital IO
+     subsystem and any RTC pullup setting applies to something that is not
+     listening — a no-op that looks exactly like a correct fix.
+  2. `esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON)` to keep
+     the domain that *drives* those pullups powered. On `AUTO` the chip may
+     power it down partway into the sleep, switching the pullups off and
+     reintroducing the float intermittently, once already asleep.
+  3. `rtc_gpio_pullup_en()` itself.
+
+  The first attempt did only step 3 and still woke on GPIO10 (`mask 0x400`).
+- **A floating data line lights the strip.** With `kPinLedData` floating next
+  to a NeoPixel strip, the strip decodes noise and latches it — the half-strip
+  of bright white seen during the spurious wake. The `display_.clear()` before
+  sleeping *is* presented; it is then undone by the float. The pin is now
+  driven low and pinned with `gpio_hold_en()` + `gpio_deep_sleep_hold_en()`.
+
+Both fixes have a matching release in `Engine::begin()`, and forgetting either
+is worse than the original bug, because both states survive the wake reset:
+
+- `gpio_hold_dis()` — or the strip stays dark forever after the first sleep,
+  since a held pad ignores the RMT peripheral.
+- `rtc_gpio_deinit()` — or `Input::begin()`'s `pinMode()` configures a pad the
+  RTC subsystem still owns, and the buttons stop responding.
+
+`setup()` logs the wake cause and ext1 pin mask. A wake that reports no button
+is the signature of this failure, which is otherwise invisible: a spurious wake
+and a deliberate one produce an identical boot.
+
 ## Constants
 
 | Constant | Value | Where |

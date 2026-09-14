@@ -7,6 +7,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_sleep.h>
 
 #include "core/cartridge_store.h"
 #include "core/engine.h"
@@ -58,6 +59,20 @@ void setup() {
   // every boot before the user ever visits that scene.
   WiFi.persistent(false);
   WiFi.mode(WIFI_OFF);
+
+  // Distinguishes "the user woke it" from "it woke itself", which is otherwise
+  // invisible: a spurious wake and a deliberate one produce an identical boot.
+  // A wake that reports no button is the signature of the pins floating during
+  // sleep -- see Engine::enterDeepSleep().
+  const esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
+  if (wake_cause == ESP_SLEEP_WAKEUP_EXT1) {
+    const uint64_t pins = esp_sleep_get_ext1_wakeup_status();
+    Serial.print("[power] woke from deep sleep, pin mask 0x");
+    Serial.println(static_cast<uint32_t>(pins), HEX);
+  } else if (wake_cause != ESP_SLEEP_WAKEUP_UNDEFINED) {
+    Serial.print("[power] woke from deep sleep, unexpected cause ");
+    Serial.println(static_cast<int>(wake_cause));
+  }
 
   // Calibrates the joystick centre, so leave the stick untouched at boot.
   engine.begin();
