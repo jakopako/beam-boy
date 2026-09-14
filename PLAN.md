@@ -30,7 +30,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 | **Power**              | **Measured** (10 px @ cap 25/255): 39 mA full white, 9.5 mA for a realistic game frame → ~3.9 mA/px. Projected to 50 px: **~195 mA full white, ~33 mA in normal play**.                                                                                                                                  | With the MCU at ~35 mA, normal play is **~70 mA** → **30+ hours** from a 2500 mAh cell. Power is a non-issue; the brightness cap was raised from 25 to **64** and can go higher.                                                                            |
 | **Charging**           | A bare TP4056 has no load sharing: playing while plugged in draws through the battery, confusing end-of-charge detection and wasting cycles. A DevKitC + TP4056 build also ends up with two USB ports.                                                                                                   | **Use a board with integrated LiPo charging** (Adafruit Feather ESP32-S3): one USB-C port for charge _and_ flash, correct load sharing, battery sense pre-wired. See §2.1.                                                                                  |
 | **LiPo direct drive**  | WS2812B tolerates ~3.5–5.3 V. Driving the strip straight off the LiPo (3.7–4.2 V) avoids both a boost converter _and_ the 3.3 V→5 V data level shifter, since VCC and logic level then nearly match.                                                                                                     | **Skip the boost converter and the level shifter.** The cell's protection cutoff (~3.4 V) keeps the strip in range; firmware shuts down cleanly before it trips. Verify on your specific tube in Phase 0.                                                   |
-| **Input**              | TWANG's spring-doorstop + MPU6050 controller is genre-defining but built for a floor-standing cabinet. Its feel depends on _analog_ input — an encoder cannot express "move slowly left".                                                                                                                | **Analog thumbstick (2-axis + push) + 2 buttons.** Stick gives absolute and velocity control for both X and Y axes; push button and buttons A/B provide rich interactions with minimalist hardware.                                                             |
+| **Input**              | TWANG's spring-doorstop + MPU6050 controller is genre-defining but built for a floor-standing cabinet. Its feel depends on _analog_ input — an encoder cannot express "move slowly left".                                                                                                                | **Analog thumbstick (2-axis + push) + 2 buttons.** Stick gives absolute and velocity control for both X and Y axes; push button and buttons A/B provide rich interactions with minimalist hardware.                                                         |
 | **Monetization**       | Paid cartridges need a backend, accounts, per-device keys and signed+encrypted code — and DRM on an openly self-flashable device is defeatable by rebuilding the firmware. Comparable projects (TWANG, ESPboy) monetize via hardware.                                                                    | **Keep games free and open; sell hardware kits.** The free library is what makes the hardware worth buying. Store design leaves the door open for paid games later.                                                                                         |
 
 ### Risks, honestly
@@ -57,16 +57,16 @@ the most deliberate design — which is exactly what this plan front-loads.
 
 ### Bill of materials
 
-| Part              | Choice                                                                                     | Notes                                                                                                                                                                                                                                               |
-| ----------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Part              | Choice                                                                                     | Notes                                                                                                                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                     | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and an on-board MAX17048 fuel gauge (I2C) for battery percentage — no ADC divider to wire or calibrate. Solves the charging design in one part. |
-| _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                             | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                 |
-| Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                     | Already owned.                                                                                                                                                                                                                                      |
-| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                              |
-| Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                               |
-| Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                  |
-| Power switch      | **SPST slide switch between Feather `EN` pin and `GND`**                                   | Pulling `EN` to GND disables the 3.3V LDO regulator (sub-microamp standby). **USB charging remains fully functional when switched off**, allowing true zero-power off while retaining single-port charging.                                        |
-| Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                |
+| _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                             | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                                                                            |
+| Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                     | Already owned.                                                                                                                                                                                                                                                                                                 |
+| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                                                                                        |
+| Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                                                                                          |
+| Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                                                                             |
+| Power switch      | **SPST slide switch between Feather `EN` pin and `GND`**                                   | Pulling `EN` to GND disables the 3.3V LDO regulator (sub-microamp standby). **USB charging remains fully functional when switched off**, allowing true zero-power off while retaining single-port charging.                                                                                                    |
+| Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                                                                           |
 
 **Total: roughly €35–45** on top of what you own (Feather route), or €27–37 with the
 DevKitC + separate charger.
@@ -152,14 +152,14 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 
 ### Pin map (ESP32-S3, starting point)
 
-| Signal        | GPIO      | Notes                                                            |
-| ------------- | --------- | ---------------------------------------------------------------- |
-| LED data      | 17        | RMT-capable WS2812B data line. Via 330 Ω.                        |
-| Button A      | 15        | `INPUT_PULLUP`                                                   |
-| Button B      | 16        | `INPUT_PULLUP`                                                   |
-| Stick push    | 18        | `INPUT_PULLUP`                                                   |
-| Stick X       | 4         | ADC1 channel (ADC1_CH3) — usable while WiFi is active.           |
-| Stick Y       | 5         | ADC1 channel (ADC1_CH4) — usable while WiFi is active.           |
+| Signal        | GPIO          | Notes                                                                                          |
+| ------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| LED data      | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                                      |
+| Button A      | 15            | `INPUT_PULLUP`                                                                                 |
+| Button B      | 16            | `INPUT_PULLUP`                                                                                 |
+| Stick push    | 18            | `INPUT_PULLUP`                                                                                 |
+| Stick X       | 4             | ADC1 channel (ADC1_CH3) — usable while WiFi is active.                                         |
+| Stick Y       | 5             | ADC1 channel (ADC1_CH4) — usable while WiFi is active.                                         |
 | Battery sense | I2C (SDA/SCL) | MAX17048 fuel gauge (Feather only) — no dedicated GPIO; shares the STEMMA QT bus. See Phase 8. |
 
 ⚠️ Keep every analog input on **ADC1**. ADC2 is shared with the WiFi radio and reads garbage
@@ -548,7 +548,7 @@ it over the air is item 5.)_
   required pressing the joystick/nav button first and _then_ holding B — the
   same two-step gesture games use (pause, then hold-B-while-paused). Root
   cause: `GameList::build()` re-numbers Store/Network whenever an install adds
-  a *new* id, since they always sit after every installed cartridge; the
+  a _new_ id, since they always sit after every installed cartridge; the
   engine tracked "what's currently running" by that numeric index, so after
   install it silently mistook the Store scene for the newly-inserted game and
   demanded the game exit gesture instead. Fixed by re-resolving the running
@@ -574,7 +574,7 @@ it over the air is item 5.)_
 1. **Hardware & Sensing Layer (`src/core/power.*`):**
    - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
    - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `charging()`, `level()`.
-   - All the actual *decisions* — is this worth warning about, is it worth shutting down for, is it worth staying awake for — live in `src/core/power_policy.h` as plain, host-testable functions over floats (`classifyPowerLevel`, `isChargingRate`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. 11 native tests cover the hysteresis and charging/idle-sleep decisions.
+   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it worth staying awake for — live in `src/core/power_policy.h` as plain, host-testable functions over floats (`classifyPowerLevel`, `isChargingRate`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. 11 native tests cover the hysteresis and charging/idle-sleep decisions.
    - Charging is detected via the gauge's own `chargeRate()` (%/hr), with a small positive threshold (not `> 0`) so resting jitter never reads as charging.
 
 2. **Battery Gauge & Status — launcher only:**
@@ -589,7 +589,7 @@ it over the air is item 5.)_
    - `kCritical` is not shown as an overlay at all; it immediately hands off to the shutdown sweep below instead.
 
 4. **Safe Shutdown & Data Protection:**
-   - The instant `updatePower()` classifies the level as `kCritical`, it pre-empts *everything* — mid-game, mid-pause, mid-menu — before the pause/exit-gesture logic even runs.
+   - The instant `updatePower()` classifies the level as `kCritical`, it pre-empts _everything_ — mid-game, mid-pause, mid-menu — before the pause/exit-gesture logic even runs.
    - `beginCriticalShutdown()` flushes storage (and the current game's score, if any) **before** a single frame of the shutdown animation plays, so the write is guaranteed to complete while power is still guaranteed, ahead of the hardware protection circuit's own abrupt cutoff.
    - A red sweep closing in from both ends plays for `kCriticalShutdownMs`, then the device configures `esp_sleep_enable_ext1_wakeup()` on the A/B/stick-press GPIOs (`ESP_EXT1_WAKEUP_ANY_LOW`, since they're `INPUT_PULLUP`) and calls `esp_deep_sleep_start()`.
 
@@ -713,6 +713,7 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Snake 1D** — the tail occupies pixels behind you; eat, grow, don't get boxed in by hazards.
 - **obstacles** - basically the dino jump game that you can play in Chrome when there is no internet connectivity, but viewed from above
 - **fishing** - a moving bar, player has to make sure a dot stays within the bar. If dot outside of the bar for too long -> loose
+- **rhythm** - light dots / lines move towards a target area of the player, which has to press everytime an item crosses their line. A bit like this light sabor game
 - **Tug of War** — _(later)_ 2-player via ESP-NOW between two Beam Boys, one tube each.
 - **Sonar** — a hidden target; the tube shows only "hotter/colder" as a glow intensity. A game
   the 1D format uniquely enables.
