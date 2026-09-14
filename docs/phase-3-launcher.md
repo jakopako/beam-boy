@@ -14,7 +14,8 @@ reflashing.
 
 Deferred: **power management** (§5 of the plan's Phase 3). Battery sensing, the
 low-battery pulse, the charging sweep and deep-sleep all need the ESP32 Feather's
-voltage divider and its LiPo charging circuit, so they wait for the hardware.
+fuel gauge and its LiPo charging circuit, so they wait for the hardware —
+implemented in Phase 8, see [`docs/phase-8-power.md`](phase-8-power.md).
 
 ## Menu navigation via `navDelta()`
 
@@ -53,6 +54,13 @@ created by the firmware rather than shipped with it.
 | A                    | Launch the selected game                  |
 | Stick press (hold)   | Show that game's highscore in binary      |
 | B (hold)             | *(superseded in Phase 7 — deletes an installed cartridge; see [`docs/phase-7-store.md`](phase-7-store.md))* |
+| A + B (hold)         | Show the battery gauge; see [`docs/phase-8-power.md`](phase-8-power.md) |
+
+Note that **A launches on release**, not on press, so that catching A a moment
+before B still reads as the A+B combo rather than launching a game out from
+under it. See [`docs/phase-8-power.md`](phase-8-power.md#gesture-ordering) for
+the three ordering bugs that gesture overlap produced and how they're now
+arbitrated and tested.
 
 **In a game**
 
@@ -280,15 +288,16 @@ blocks; on the 50 px tube they'll get the 6 px maximum.
 
 **Exit gesture** — `Engine::kExitHoldMs` (1200 ms).
 
-## Still to do in this phase
+## Power management, once the Feather arrives
 
-Power management, once the Feather arrives:
+Implemented in Phase 8 (see [`docs/phase-8-power.md`](phase-8-power.md) — the Feather turned
+out to have no battery-sense ADC pin at all, just an on-board MAX17048 fuel gauge over I2C):
 
-1. Battery voltage sensing on ADC1 with a LiPo discharge curve
-2. A battery meter gesture in the launcher — hold-B is no longer free (Phase 7
-   uses it to delete an installed cartridge), so this needs a different
-   trigger, e.g. holding both A+B, or folding it into the existing
-   nav-hold highscore view
-3. The low-battery pulse and critical-voltage safe shutdown
-4. The charging sweep animation
-5. Idle deep-sleep with button wake
+1. ~~Battery voltage sensing on ADC1 with a LiPo discharge curve~~ — done via the MAX17048
+   fuel gauge instead (`src/core/power.h`), which reports percentage directly.
+2. ~~A battery meter gesture in the launcher — hold-B is no longer free (Phase 7 uses it to
+   delete an installed cartridge), so this needs a different trigger~~ — done: holding
+   **A + B together** in the launcher shows the gauge (`LauncherScene`).
+3. ~~The low-battery pulse and critical-voltage safe shutdown~~ — done (`Engine::updatePower()`).
+4. ~~The charging sweep animation~~ — done (`Engine::renderChargingAnimation()`).
+5. ~~Idle deep-sleep with button wake~~ — done (`Engine::enterDeepSleep()`).

@@ -15,15 +15,20 @@
 // scrolls to keep the selection in view.
 //
 //   Nav (stick)        change selection
-//   A                  launch (the only way to launch -- the nav button no
-//                      longer doubles as a second launch input)
+//   A (release)        launch. On release rather than press, so that catching
+//                      A a moment before B still reads as the A+B combo below
+//                      instead of launching a game out from under it.
 //   Nav press (hold)   show the selected game's highscore in binary,
 //                      instantly, for as long as it's held
 //   B (hold)           on an installed cartridge only: delete it, after
 //                      a red countdown so it's never a surprise
+//   A + B (hold)       show the battery gauge as a proportional bar, for as
+//                      long as it's held -- launcher only, so a game never
+//                      has to reserve this combo for itself
 
 #include "core/cartridge_store.h"
 #include "core/engine.h"
+#include "scenes/launcher_gestures.h"
 
 namespace beamboy {
 
@@ -35,6 +40,7 @@ class LauncherScene : public Scene {
 
  private:
   void renderList(Engine& engine);
+  void renderBatteryGauge(Engine& engine);
 
   // How many pixels each game gets. Below three a game is hard to distinguish
   // from a stray lit pixel; the launcher shrinks blocks before it scrolls.
@@ -63,6 +69,21 @@ class LauncherScene : public Scene {
   // threshold, and so update() can hand off to render() which entry to wipe
   // the flash for after B is released.
   bool deleting_ = false;
+
+  // True once A and B have been held together past kBatteryHoldMs, as decided
+  // by gestures_.
+  bool showing_battery_ = false;
+
+  // Arbitrates the overlapping A / B / A+B gestures. Holds the latches that
+  // make the order of pressing and releasing irrelevant; see
+  // scenes/launcher_gestures.h.
+  LauncherGestures gestures_;
+
+  // This frame's arbitrated delete-hold duration, 0 when the gesture is
+  // suppressed. Stored so render() draws its countdown from exactly the value
+  // update() acts on, rather than re-deriving it from the raw button state and
+  // risking the two disagreeing about whether a hold counts.
+  uint32_t delete_hold_ms_ = 0;
 
   // Scratch store used only to rebuild gameList() after a delete --
   // CartridgeStore::scan() takes long enough that it must not run in the

@@ -69,11 +69,13 @@ constexpr uint8_t kPinStickSw = 18;
 constexpr uint8_t kPinStickX = 4;  // ADC1_CH3
 constexpr uint8_t kPinStickY = 5;  // ADC1_CH4
 
-// ⚠️ No battery on this board. The DevKitC has no LiPo charger and no
-// battery-sense divider, so it runs from USB only and there is deliberately no
-// kPinBatterySense here. Power management is Feather-only work; if a build
-// error ever points at a missing battery pin, the fix is to guard that feature,
-// not to invent a pin number for this board.
+// ⚠️ No battery on this board. The DevKitC has no LiPo charger and no fuel
+// gauge, so it runs from USB only and there is deliberately no battery-sense
+// wiring here. Power management (core/power.h) checks this flag and stays
+// inert rather than inventing a chip that isn't there; if a build error ever
+// points at a missing battery pin or peripheral, the fix is to guard that
+// feature, not to invent one for this board.
+constexpr bool kHasBatteryMonitor = false;
 
 #else
 
@@ -86,6 +88,20 @@ constexpr uint8_t kPinButtonB = 9;
 constexpr uint8_t kPinStickSw = 10;
 constexpr uint8_t kPinStickX = A2;  // ADC1 (GPIO1)
 constexpr uint8_t kPinStickY = A3;  // ADC1 (GPIO2)
+
+// The Feather has no battery-sense *pin* at all -- Adafruit's own docs are
+// explicit about this ("There is no pin on the Feather ESP32-S3 that returns
+// battery voltage"). Instead there is a MAX17048 fuel gauge chip on the same
+// I2C bus as the STEMMA QT connector (SDA/SCL, address 0x36), which reports
+// voltage and state-of-charge directly rather than requiring a divider and a
+// hand-rolled discharge-curve lookup. See core/power.h.
+//
+// No SDA/SCL constants are declared here: they are not needed. Wire.begin()
+// with no arguments already resolves to this board's SDA/SCL (GPIO3/GPIO4,
+// shared with A6/A7) via the Arduino core's own pins_arduino.h, and neither
+// pin is used by anything else in kPinLedData/kPinButtonA/kPinButtonB/
+// kPinStickSw/kPinStickX/kPinStickY above.
+constexpr bool kHasBatteryMonitor = true;
 
 #endif  // BEAMBOY_BOARD_S3_DEVKIT
 
@@ -107,6 +123,11 @@ constexpr uint8_t kPinButtonB = 2;
 constexpr uint8_t kPinStickSw = 3;
 constexpr uint8_t kPinStickX = 4;
 constexpr uint8_t kPinStickY = 5;
+
+// No fuel gauge to shim over I2C on the host; power.h/power.cpp are ESP32-only
+// and never compiled into a native test binary, so this exists only for
+// symmetry with the two ESP32 branches above.
+constexpr bool kHasBatteryMonitor = false;
 
 constexpr uint16_t kAdcMax = 1023;
 

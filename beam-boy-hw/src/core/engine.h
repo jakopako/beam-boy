@@ -14,6 +14,7 @@
 
 #include "display.h"
 #include "input.h"
+#include "power.h"
 #include "storage.h"
 
 namespace beamboy {
@@ -75,6 +76,7 @@ class Engine {
   Display& display() { return display_; }
   Input& input() { return input_; }
   Storage& storage() { return storage_; }
+  Power& power() { return power_; }
 
   // --- Launcher integration ------------------------------------------------
   //
@@ -143,9 +145,31 @@ class Engine {
   static constexpr uint32_t kFrameIntervalUs = 1000000UL / kTargetFps;
   static constexpr float kFixedDt = 1.0f / kTargetFps;
 
+  // How long fading to black takes once the idle timer has actually decided
+  // to sleep (core/power_policy.h's kIdleSleepMs), so the tube dims out
+  // rather than cutting to black instantly -- the same reasoning as the
+  // pause overlay: a sudden change reads as a crash, an animated one reads as
+  // a deliberate action.
+  static constexpr uint32_t kIdleFadeMs = 1000;
+
+  // How long the critical-battery shutdown sweep plays before the device
+  // actually sleeps. Long enough to be seen and understood, short enough that
+  // it does not delay saving the game state against a battery that is about
+  // to cut out.
+  static constexpr uint32_t kCriticalShutdownMs = 1500;
+
+  void updatePower(uint32_t now_ms);
+  bool isIdleActivity() const;
+  void renderChargingAnimation();
+  void renderLowBatteryOverlay();
+  void beginCriticalShutdown();
+  void renderCriticalShutdown(uint32_t elapsed_ms);
+  void enterDeepSleep();
+
   Display display_;
   Input input_;
   Storage storage_;
+  Power power_;
   Scene* scene_ = nullptr;
   Scene* pending_scene_ = nullptr;
   Scene* launcher_ = nullptr;
@@ -159,6 +183,19 @@ class Engine {
 
   uint32_t last_frame_us_ = 0;
   uint32_t scene_started_ms_ = 0;
+
+  // Idle/sleep tracking. last_activity_ms_ resets on any button or stick
+  // input; tick() derives everything else (whether to fade, whether to show
+  // the charging animation, whether to sleep) from how far now_ms has drifted
+  // from it, rather than latching a separate one-shot state -- so plugging in
+  // USB or touching a control mid-fade falls back out of the idle path on the
+  // very next frame with no extra bookkeeping.
+  uint32_t last_activity_ms_ = 0;
+  // Set once the critical-shutdown sweep begins, so it is entered exactly
+  // once rather than being retriggered every frame the battery stays
+  // critical.
+  bool shutting_down_ = false;
+  uint32_t shutdown_started_ms_ = 0;
 
   uint32_t worst_frame_us_ = 0;
   uint32_t frames_this_second_ = 0;

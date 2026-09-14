@@ -73,7 +73,7 @@ void setup() {
 
   Serial.println();
   Serial.println("==================================");
-  Serial.println("Beam Boy -- Phase 7: cartridge store");
+  Serial.println("Beam Boy -- Phase 8: power & battery");
   Serial.print("Pixels:     ");
   Serial.println(engine.display().pixelCount());
   Serial.print("Brightness: ");
@@ -81,6 +81,22 @@ void setup() {
   Serial.print("Storage:    ");
   Serial.println(engine.storage().mounted() ? "LittleFS mounted"
                                             : "UNAVAILABLE");
+  Serial.print("Battery:    ");
+  if (engine.power().available()) {
+    Serial.print(engine.power().percent(), 1);
+    Serial.print("%  ");
+    Serial.print(engine.power().voltage(), 2);
+    Serial.print("V  ");
+    Serial.print(beamboy::powerLevelName(engine.power().level()));
+    // The gauge's charge-rate register is a filtered trend, not a current
+    // measurement, so this reads "no" for the first minutes on a board that
+    // is plainly charging. Said out loud here rather than left to puzzle
+    // over against the board's own CHG LED -- see core/power_policy.h.
+    Serial.println(engine.power().charging() ? "  (charging)"
+                                             : "  (not charging yet)");
+  } else {
+    Serial.println("no fuel gauge on this board");
+  }
   Serial.print("Games:      ");
   Serial.print(beamboy::gameList().count());
   Serial.print(" (");
@@ -106,9 +122,10 @@ void setup() {
   }
   Serial.println("            (* = installed cartridge from /games)");
   Serial.println();
-  Serial.println("Launcher : stick selects, A launches");
+  Serial.println("Launcher : stick selects, A launches (on release)");
   Serial.println("           hold nav-press to see the highscore");
   Serial.println("           hold B on an installed game to delete it");
+  Serial.println("           hold A+B to see the battery gauge");
   Serial.println("In game  : nav-press pauses, then hold B to exit");
   Serial.println("==================================");
 }
@@ -128,7 +145,24 @@ void loop() {
     Serial.print(engine.input().stickX(), 2);
     Serial.print(" (raw ");
     Serial.print(engine.input().rawStickX(), 3);
-    Serial.println(")");
+    Serial.print(")");
+    // Folded into the existing periodic line rather than given one of its own:
+    // the battery moves over minutes, so a separate timer would either
+    // duplicate this cadence or add a second stream of noise to read alongside
+    // it. Transitions are logged separately as they happen, in core/power.cpp.
+    if (engine.power().available()) {
+      Serial.print("  batt=");
+      Serial.print(engine.power().percent(), 1);
+      Serial.print("% ");
+      Serial.print(engine.power().voltage(), 2);
+      Serial.print("V");
+      if (engine.power().charging()) Serial.print(" chg");
+      if (engine.power().level() != beamboy::PowerLevel::kNormal) {
+        Serial.print(" ");
+        Serial.print(beamboy::powerLevelName(engine.power().level()));
+      }
+    }
+    Serial.println();
 
     engine.resetDiagnostics();
   }

@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include <esp_sleep.h>
 #include <math.h>
 
 #include "cartridge_store.h"
@@ -21,12 +22,21 @@ const Color kNibbleColors[] = {
 constexpr uint8_t kNibbleColorCount =
     sizeof(kNibbleColors) / sizeof(kNibbleColors[0]);
 
+// A slow-filling green sweep, one full cycle every kChargingSweepMs -- distinct
+// from every other animation's pace so charging is never mistaken for a game
+// or a menu having been left running.
+constexpr uint32_t kChargingSweepMs = 2600;
+
 }  // namespace
 
 void Engine::begin() {
   display_.begin();
   input_.begin();
   storage_.begin();
+  // Absent on a board with no fuel gauge (board::kHasBatteryMonitor); see
+  // power.h. Nothing downstream needs to check this return value -- every
+  // Power getter already answers as if nothing changed when unavailable.
+  power_.begin();
 
   // A stored brightness of 0 means "never set", so fall back to the board cap.
   if (storage_.brightness() > 0) {
@@ -36,6 +46,7 @@ void Engine::begin() {
   last_frame_us_ = micros();
   scene_started_ms_ = millis();
   fps_window_start_ms_ = millis();
+  last_activity_ms_ = millis();
 }
 
 void Engine::exitToLauncher() {
@@ -82,6 +93,135 @@ void Engine::renderPauseOverlay() {
   display_.rawPixel(display_.pixelCount() - 1, colors::kAmber.scaled(level));
 }
 
+bool Engine::isIdleActivity() const {
+  // held(), not pressed(): a control being physically down counts as activity
+  // for as long as it stays down, not just on the edge -- otherwise a game
+  // left running with the stick pushed to one side would still idle out from
+  // under the player.
+  if (input_.held(Button::kA) || input_.held(Button::kB) ||
+      input_.held(Button::kStick)) {
+    return true;
+  }
+  // A small deadzone above whatever Input already applies: resting noise on a
+  // cheap stick must not look like the player is still playing.
+  constexpr float kIdleStickThreshold = 0.05f;
+  return fabsf(input_.stickX()) > kIdleStickThreshold ||
+         fabsf(input_.stickY()) > kIdleStickThreshold;
+}
+
+void Engine::updatePower(uint32_t now_ms) {
+  power_.update(now_ms);
+
+  if (isIdleActivity()) last_activity_ms_ = now_ms;
+
+  // A critical battery pre-empts everything else the instant it is seen,
+  // including a game mid-play and the pause/exit gesture below -- there is no
+  // gesture worth letting the user finish when the goal is to get dirty
+  // writes onto flash before the hardware protection circuit cuts power out
+  // from under them.
+  if (!shutting_down_ && power_.available() &&
+      power_.level() == PowerLevel::kCritical) {
+    beginCriticalShutdown();
+  }
+}
+
+// A slow filling green sweep along the tube, distinct in both colour and pace
+// from every other animation here, so charging never reads as a game or a
+// menu accidentally left on screen.
+void Engine::renderChargingAnimation() {
+  display_.clear();
+  const float phase =
+      fmodf(static_cast<float>(millis() % kChargingSweepMs) /
+                static_cast<float>(kChargingSweepMs),
+            1.0f);
+  const float fill = power_.percent() >= 99.0f ? 1.0f : phase;
+  display_.span(0.0f, fill, colors::kGreen, 0.5f);
+  // A bright leading edge marks the front of the sweep, so it reads as fill
+  // progress rather than a static bar -- silent unless still filling.
+  if (fill < 1.0f) display_.point(fill, colors::kGreen, 1.0f);
+}
+
+// Subtle and non-disruptive on purpose: a single pulsing pixel at one end,
+// layered over whatever the scene already drew, so a low battery is visible
+// during play without competing with it for attention. Only ever drawn for
+// kLow -- kCritical takes over the whole display via the shutdown sweep
+// instead, so this never has to fight that animation for the same pixels.
+void Engine::renderLowBatteryOverlay() {
+  if (!power_.available() || power_.level() != PowerLevel::kLow) return;
+  const float level = 0.3f + 0.3f * pulse(millis() / 1000.0f, 1.5f);
+  display_.rawPixel(display_.pixelCount() - 1, colors::kRed.scaled(level));
+}
+
+void Engine::beginCriticalShutdown() {
+  shutting_down_ = true;
+  shutdown_started_ms_ = millis();
+
+  Serial.print("[power] CRITICAL at ");
+  Serial.print(power_.percent(), 1);
+  Serial.print("%  ");
+  Serial.print(power_.voltage(), 2);
+  Serial.println("V -- flushing and shutting down");
+
+  // Flush now, before a single frame of the shutdown animation plays. This is
+  // the entire point of detecting "critical" ahead of the hardware protection
+  // circuit's own cutoff: get the write onto flash while there is still
+  // guaranteed power to finish it.
+  if (scene_ != nullptr && current_game_ >= 0 &&
+      current_game_ < static_cast<int8_t>(gameList().count())) {
+    storage_.submitScore(gameList().at(current_game_).id, scene_->score());
+    storage_.setLastGame(static_cast<uint8_t>(current_game_));
+  }
+  storage_.commit();
+}
+
+// A red sweep closing in from both ends, unmistakably different from a pause
+// or an exit gesture, so a battery-triggered shutdown never reads as the
+// console having crashed or the player having done something wrong.
+void Engine::renderCriticalShutdown(uint32_t elapsed_ms) {
+  const float progress =
+      elapsed_ms >= kCriticalShutdownMs
+          ? 1.0f
+          : static_cast<float>(elapsed_ms) /
+                static_cast<float>(kCriticalShutdownMs);
+  display_.clear();
+  display_.span(0.0f, progress * 0.5f, colors::kRed, 1.0f);
+  display_.span(1.0f - progress * 0.5f, 1.0f, colors::kRed, 1.0f);
+}
+
+void Engine::enterDeepSleep() {
+  // Announced before the port goes away with the device. A console that sleeps
+  // silently is indistinguishable from one that has crashed or browned out --
+  // which, given this path is also reached by a critical battery, is exactly
+  // the wrong thing to leave ambiguous in a log.
+  Serial.print("[power] entering deep sleep");
+  if (power_.available()) {
+    Serial.print(" at ");
+    Serial.print(power_.percent(), 1);
+    Serial.print("%");
+  }
+  Serial.println(" -- press A, B or the stick to wake");
+  Serial.flush();
+
+  // Idempotent with beginCriticalShutdown()'s flush: entering deep sleep from
+  // the idle path (as opposed to a critical battery) never called it, and a
+  // second commit() when nothing is dirty is a no-op -- see Storage::commit().
+  storage_.commit();
+  display_.clear();
+  display_.present();
+
+  // Every wake button lands within GPIO 0-21 on the S3 on both boards this
+  // firmware targets, which is exactly the range ext1 wakeup supports; no
+  // board-specific guard is needed here the way board_config.h needs one for
+  // kHasBatteryMonitor.
+  const uint64_t wake_mask = (1ULL << board::kPinButtonA) |
+                             (1ULL << board::kPinButtonB) |
+                             (1ULL << board::kPinStickSw);
+  // All three are wired INPUT_PULLUP (see Input::begin()), so a press pulls
+  // the pin low -- wake on any of them going low, not high.
+  esp_sleep_enable_ext1_wakeup(wake_mask, ESP_EXT1_WAKEUP_ANY_LOW);
+  esp_deep_sleep_start();
+}
+
 void Engine::resetDiagnostics() {
   worst_frame_us_ = 0;
   frames_this_second_ = 0;
@@ -123,6 +263,60 @@ void Engine::tick() {
   const uint32_t now_ms = millis();
 
   input_.update(now_ms);
+  updatePower(now_ms);
+
+  // A critical battery pre-empts absolutely everything below -- no pause
+  // gesture, no scene update, nothing -- until the shutdown sweep finishes and
+  // the device sleeps. See beginCriticalShutdown()'s comment for why the
+  // flush already happened before this frame ever runs.
+  if (shutting_down_) {
+    const uint32_t elapsed = now_ms - shutdown_started_ms_;
+    if (elapsed >= kCriticalShutdownMs) {
+      enterDeepSleep();  // noreturn: the chip resets on wake
+    }
+    renderCriticalShutdown(elapsed);
+    display_.present();
+    return;
+  }
+
+  // Idle handling comes before the pause/exit gesture too, so a console left
+  // untouched in a paused game still sleeps rather than sitting frozen and
+  // lit forever. Nothing here touches scene_ or its state: falling out of
+  // this branch (any button or stick activity resets last_activity_ms_ at the
+  // top of updatePower(), which runs before this check every frame) resumes
+  // exactly where the scene left off, since it was never ticked while idle.
+  {
+    const uint32_t idle_ms = now_ms - last_activity_ms_;
+    const bool charging = power_.available() && power_.charging();
+
+    // Idle *and* charging: stay awake and show the sweep rather than going
+    // dark, since sleeping saves nothing while USB is doing the powering
+    // anyway (see power_policy.h).
+    //
+    // This has to be its own check rather than a branch inside the one below:
+    // shouldEnterIdleSleep() deliberately returns false whenever charging, so
+    // testing `charging` *after* it passed would be unreachable by
+    // construction -- which is exactly the bug that kept this animation from
+    // ever appearing.
+    if (charging && idle_ms >= kIdleSleepMs) {
+      renderChargingAnimation();
+      display_.present();
+      return;
+    }
+
+    if (shouldEnterIdleSleep(idle_ms, charging)) {
+      const uint32_t fade_elapsed = idle_ms - kIdleSleepMs;
+      if (fade_elapsed >= kIdleFadeMs) {
+        enterDeepSleep();  // noreturn: the chip resets on wake
+      }
+      // Whatever was last drawn stays in the framebuffer and simply dims in
+      // place -- see Display::fade()'s header comment for why repeated calls
+      // reach true black rather than asymptoting just above it.
+      display_.fade(0.08f);
+      display_.present();
+      return;
+    }
+  }
 
   // Pause and exit are handled by the engine, before the scene runs, so every
   // game behaves identically and none can swallow the gesture.
@@ -195,6 +389,7 @@ void Engine::tick() {
       // returning to, but do not advance it.
       scene_->render(*this);
       renderPauseOverlay();
+      renderLowBatteryOverlay();
       display_.present();
       return;
     }
@@ -213,6 +408,7 @@ void Engine::tick() {
     display_.span(0.0f, exit_gesture_progress_, colors::kAmber, 0.8f);
   }
 
+  renderLowBatteryOverlay();
   display_.present();
 
   const uint32_t frame_us = micros() - frame_start_us;

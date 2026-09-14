@@ -17,8 +17,8 @@ constexpr float kLaunchFlashTime = 0.35f;
 // that peeking at a score doesn't feel like a separate mode.
 constexpr uint32_t kHighscoreHoldMs = 350;
 
-// How long B must be held on an installed cartridge before it is deleted.
-constexpr uint32_t kDeleteHoldMs = 2500;
+// kDeleteHoldMs and kBatteryHoldMs live in scenes/launcher_gestures.h,
+// alongside the arbitration that enforces them.
 
 // A game needs at least this many pixels to read as a block rather than a dot.
 constexpr uint8_t kMinBlockPixels = 2;
@@ -40,6 +40,9 @@ void LauncherScene::enter(Engine& engine) {
   launch_timer_ = 0.0f;
   nav_hold_exceeded_ = false;
   deleting_ = false;
+  showing_battery_ = false;
+  delete_hold_ms_ = 0;
+  gestures_.reset();
 
   engine.setCurrentGame(-1);
   engine.display().clear();
@@ -109,7 +112,25 @@ void LauncherScene::update(Engine& engine, float dt) {
   highlight_ +=
       (static_cast<float>(selected_) - highlight_) * kHighlightEase * dt;
 
-  if (input.pressed(Button::kA)) {
+  // A, B and A+B overlap on just two buttons, so which gesture this frame's
+  // input belongs to is arbitrated in one place -- see
+  // scenes/launcher_gestures.h for the ordering traps that logic exists to
+  // close, and test_launcher_gestures for the cases that pin it down.
+  ButtonSnapshot buttons;
+  buttons.a_down = input.held(Button::kA);
+  buttons.b_down = input.held(Button::kB);
+  buttons.a_released = input.released(Button::kA);
+  buttons.a_hold_ms = input.holdDuration(Button::kA);
+  buttons.b_hold_ms = input.holdDuration(Button::kB);
+
+  const GestureResult gesture = gestures_.update(buttons);
+  showing_battery_ = gesture.show_battery;
+  // Stashed for render(), so the delete countdown it draws and the deletion
+  // fired below are driven by the same arbitrated number rather than each
+  // re-deriving it and risking disagreement.
+  delete_hold_ms_ = gesture.delete_hold_ms;
+
+  if (gesture.launch) {
     launching_ = true;
     launch_timer_ = kLaunchFlashTime;
   }
@@ -123,7 +144,7 @@ void LauncherScene::update(Engine& engine, float dt) {
   // Deleting only applies to installed cartridges -- a built-in or a utility
   // scene (Store, Network) must never disappear from the launcher this way.
   if (!deleting_ && gameList().at(selected_).is_installed &&
-      input.heldFor(Button::kB, kDeleteHoldMs)) {
+      delete_hold_ms_ >= kDeleteHoldMs) {
     deleting_ = true;
     const char* deleted_id = gameList().at(selected_).id;
     CartridgeStore::remove(deleted_id);
@@ -188,9 +209,47 @@ void LauncherScene::renderList(Engine& engine) {
   }
 }
 
+void LauncherScene::renderBatteryGauge(Engine& engine) {
+  Display& display = engine.display();
+  Power& power = engine.power();
+
+  if (!power.available()) {
+    // No fuel gauge on this board (the DevKitC has none) -- a dim, steady
+    // white pixel says "nothing to show" rather than looking like a bug or,
+    // worse, an empty (0%) battery.
+    display.point(0.5f, Color(40, 40, 40), 1.0f);
+    return;
+  }
+
+  const float fraction = power.percent() / 100.0f;
+  const Color color = fraction > 0.5f
+                           ? colors::kGreen
+                           : (fraction > 0.2f ? colors::kAmber : colors::kRed);
+
+  // A proportional bar rather than another binary readout: this is meant as
+  // an instant, low-fidelity glance, and a bar reads faster than counting
+  // bits for a number nobody needs to be precise about.
+  float level = 1.0f;
+  if (power.charging()) {
+    // Breathing signals "still filling up" -- there is no cable icon to draw
+    // on a one-dimensional display, so the bar itself pulses instead.
+    level = 0.55f + 0.45f * pulse(millis() / 1000.0f, 2.0f);
+  }
+  display.span(0.0f, fraction, color, level);
+}
+
 void LauncherScene::render(Engine& engine) {
   Display& display = engine.display();
   display.clear();
+
+  // Checked before anything else: the gauge doesn't depend on there being
+  // any games installed, and takes priority over every other gesture since
+  // releasing either button ends it immediately (see showing_battery_'s
+  // derivation in update()).
+  if (showing_battery_) {
+    renderBatteryGauge(engine);
+    return;
+  }
 
   if (gameList().count() == 0) {
     // Nothing installed: a slow red pulse rather than a dark, dead-looking
@@ -211,11 +270,13 @@ void LauncherScene::render(Engine& engine) {
   // bleeds toward red as the hold approaches the threshold, so it is never a
   // surprise. B does nothing on a built-in or a utility scene -- neither can
   // be deleted this way.
-  if (gameList().at(selected_).is_installed &&
-      engine.input().held(Button::kB)) {
-    const float warn =
-        static_cast<float>(engine.input().holdDuration(Button::kB)) /
-        static_cast<float>(kDeleteHoldMs);
+  //
+  // Driven by the same arbitrated delete_hold_ms_ that update() acts on, so a
+  // suppressed hold (the A+B combo, or one carried in from the game exit
+  // gesture) draws no warning for a deletion that is never going to happen.
+  if (delete_hold_ms_ > 0 && gameList().at(selected_).is_installed) {
+    const float warn = static_cast<float>(delete_hold_ms_) /
+                       static_cast<float>(kDeleteHoldMs);
     if (warn > 0.5f) {
       const float mix = (warn - 0.5f) / 0.5f;
       display.span(0.0f, 1.0f, colors::kRed, mix > 1.0f ? 1.0f : mix);

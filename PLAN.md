@@ -59,7 +59,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 
 | Part              | Choice                                                                                     | Notes                                                                                                                                                                                                                                               |
 | ----------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                     | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and a battery voltage divider already wired. Solves the charging design in one part. |
+| MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                     | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and an on-board MAX17048 fuel gauge (I2C) for battery percentage — no ADC divider to wire or calibrate. Solves the charging design in one part. |
 | _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                             | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                 |
 | Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                     | Already owned.                                                                                                                                                                                                                                      |
 | Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                              |
@@ -105,10 +105,10 @@ constraint** — the cap exists to bound the worst case, not to ration the batte
 
 **Firmware side (implemented in Phase 8):**
 
-- Read battery voltage on **ADC1** (`PIN_BATTERY_SENSE` / `GPIO13` on the Feather S3) via the built-in 2:1 divider.
-- Convert voltage → rough percentage with a LiPo discharge curve, not a linear map — LiPo
-  voltage sits near 3.7 V for most of its discharge and then falls off a cliff.
-- **Battery meter on demand:** render charge level as a bar along the tube, green → amber → red.
+- Read battery state from the Feather's on-board **MAX17048 fuel gauge** over I2C (not an ADC pin
+  — the Feather ESP32-S3 has none for battery sense; see Phase 8 below), which already linearises
+  the LiPo discharge curve and reports 0–100% directly.
+- **Battery meter on demand:** in the launcher, hold A+B to render charge level as a bar along the tube, green → amber → red.
 - **Low-battery warning:** below ~3.5 V, subtle, persistent/periodic red pixel indicator during play — visible but not disruptive.
 - **Critical cutoff:** below ~3.35–3.4 V, save state, show a red sweep, and deep-sleep before the
   hardware protection circuit cuts out mid-game (protects game data & flash storage).
@@ -160,7 +160,7 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 | Stick push    | 18        | `INPUT_PULLUP`                                                   |
 | Stick X       | 4         | ADC1 channel (ADC1_CH3) — usable while WiFi is active.           |
 | Stick Y       | 5         | ADC1 channel (ADC1_CH4) — usable while WiFi is active.           |
-| Battery sense | ADC1 pin  | Via 2:1 divider (Feather) — shows battery warning _on the tube_. |
+| Battery sense | I2C (SDA/SCL) | MAX17048 fuel gauge (Feather only) — no dedicated GPIO; shares the STEMMA QT bus. See Phase 8. |
 
 ⚠️ Keep every analog input on **ADC1**. ADC2 is shared with the WiFi radio and reads garbage
 whenever WiFi is on — a classic ESP32 trap that would silently break analog inputs in Phase 4.
@@ -560,30 +560,44 @@ it over the air is item 5.)_
 
 > _Goal: untether from USB, run safely on battery power, and manage energy in the OS._
 
-1. **Hardware & Sensing Layer (`src/core/power.*`):**
-   - Sample battery voltage on the Feather ESP32-S3's dedicated ADC1 battery divider (pin `A13` / `GPIO13` / `PIN_BATTERY_SENSE`).
-   - Software filtering (rolling average / EWMA) to prevent ADC jitter and transients under dynamic LED load.
-   - Non-linear LiPo discharge curve map: translate measured millivolts (3.4 V – 4.2 V) into an accurate 0–100% capacity estimate.
-   - USB vs. Battery power detection (sensing VBUS presence / rising charge profile).
+> **Hardware-reality correction (post-planning):** the Adafruit Feather ESP32-S3
+> No PSRAM has **no battery-sense ADC pin at all** — Adafruit's own docs are
+> explicit that "there is no pin on the Feather ESP32-S3 that returns battery
+> voltage." Instead it has an on-board **MAX17048 fuel gauge** on I2C (address
+> `0x36`, shared with the STEMMA QT bus; SDA/SCL don't conflict with any
+> existing button/stick/LED pin). This is a better situation than the
+> originally planned ADC divider: the chip already linearises the LiPo
+> discharge curve and reports voltage and state-of-charge percentage directly,
+> so there's no divider ratio to calibrate and no discharge-curve lookup table
+> to tune. The sections below describe what was actually built.
 
-2. **Battery Gauge & Status in Launcher:**
-   - Gesture to query battery percentage on demand (e.g. holding both A+B or accessible in launcher/settings).
-   - Visual battery gauge rendered across the 1D tube: a proportionally filled bar (green at high capacity, transitions through amber to red).
+1. **Hardware & Sensing Layer (`src/core/power.*`):**
+   - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
+   - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `charging()`, `level()`.
+   - All the actual *decisions* — is this worth warning about, is it worth shutting down for, is it worth staying awake for — live in `src/core/power_policy.h` as plain, host-testable functions over floats (`classifyPowerLevel`, `isChargingRate`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. 11 native tests cover the hysteresis and charging/idle-sleep decisions.
+   - Charging is detected via the gauge's own `chargeRate()` (%/hr), with a small positive threshold (not `> 0`) so resting jitter never reads as charging.
+
+2. **Battery Gauge & Status — launcher only:**
+   - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar (green → amber → red), for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
+   - On a board with no fuel gauge (the DevKitC), the same gesture shows a dim, steady white pixel instead of a fake reading.
+   - While charging, the bar breathes rather than holding steady (no icon to draw on a 1D display).
+   - Adding a third gesture to two buttons that already had two turned the launcher's input handling into a small state machine, which is now arbitrated in one place (`src/scenes/launcher_gestures.h`) and covered by 17 native tests. It closes three ordering bugs, two of which destroyed user data: A pressed slightly before B launching a game instead of showing the gauge; releasing A first after the gauge deleting the selected cartridge; and holding B to exit a game (1.2 s) rolling straight on past the delete threshold (2.5 s). See [`docs/phase-8-power.md`](docs/phase-8-power.md#gesture-ordering).
 
 3. **Persistent Low-Battery Warning Overlay:**
-   - When the battery drops below ~3.5 V (<10–15%), activate an always-present / non-disruptive warning indicator.
-   - Subtly pulse the first pixel or edge pixel red periodically during gameplay and menus so the player is never surprised.
+   - Two-sided hysteresis, not a single threshold: `kLowBatteryPercent = 15` / recovers at `20`, `kCriticalBatteryPercent = 5` / recovers at `10` — so a percentage dithering right at a boundary can't flicker the indicator on and off.
+   - While `kLow`, a single pulsing red pixel at the last index is drawn every frame, in every scene (game, pause, launcher) — visible but not disruptive.
+   - `kCritical` is not shown as an overlay at all; it immediately hands off to the shutdown sweep below instead.
 
 4. **Safe Shutdown & Data Protection:**
-   - Critical threshold detection (~3.35 V – 3.40 V), before the hardware battery protection circuit cuts power abruptly.
-   - Immediate safe-state flush: commit dirty storage, save any pending highscores / game states.
-   - Critical shutdown animation: a distinct red sweep across the tube, then enter ultra-low-power deep sleep (or standby cutoff) preventing flash corruption.
+   - The instant `updatePower()` classifies the level as `kCritical`, it pre-empts *everything* — mid-game, mid-pause, mid-menu — before the pause/exit-gesture logic even runs.
+   - `beginCriticalShutdown()` flushes storage (and the current game's score, if any) **before** a single frame of the shutdown animation plays, so the write is guaranteed to complete while power is still guaranteed, ahead of the hardware protection circuit's own abrupt cutoff.
+   - A red sweep closing in from both ends plays for `kCriticalShutdownMs`, then the device configures `esp_sleep_enable_ext1_wakeup()` on the A/B/stick-press GPIOs (`ESP_EXT1_WAKEUP_ANY_LOW`, since they're `INPUT_PULLUP`) and calls `esp_deep_sleep_start()`.
 
 5. **Charging Animation & Idle Sleep:**
-   - **Charging visualizer**: When plugged into USB, show a slow filling sweep/breathing green glow along the tube; solid green when fully charged.
-   - **Idle deep sleep**: After ~2 minutes of inactivity with no input, fade out the display and enter ESP32 deep sleep; wake cleanly on any button press.
+   - **Charging visualizer**: while plugged in, a green sweep animates along the tube (`kChargingSweepMs` period) instead of the idle-sleep countdown — sleeping while charging would save nothing (USB is powering the device regardless) and only costs the feedback. Note that charging detection lags the board's own CHG LED by minutes: the MAX17048's charge-rate register is a filtered state-of-charge trend, not a current measurement. See [`docs/phase-8-power.md`](docs/phase-8-power.md) for why lowering the threshold to chase it is the wrong trade.
+   - **Idle sleep**: after `kIdleSleepMs` (2 minutes) with no button held and no stick deflection past a small deadzone, the framebuffer fades out over `kIdleFadeMs` and the device enters the same deep sleep as a critical shutdown, waking on any button press. This check is re-derived every frame from the time since the last activity rather than latched, so any input — or plugging in USB mid-fade — falls out of the idle path on the very next frame with no extra state to unwind.
 
-✅ _Visible result: fully cordless operation with clear charge feedback, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
+✅ _Visible result: fully cordless operation with clear charge feedback, an on-demand battery gauge in the launcher, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
 
 ### Phase 9 — Enclosure _(2–4 days, iterative)_
 
