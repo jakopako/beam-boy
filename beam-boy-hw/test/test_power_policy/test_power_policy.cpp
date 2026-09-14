@@ -117,6 +117,51 @@ void test_idle_sleep_never_fires_while_charging() {
   TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs * 10, true));
 }
 
+// --- isPlausibleReading --------------------------------------------------
+
+// The bug this function exists for, reproduced exactly. Adafruit's begin()
+// resets the MAX17048, and for ~250 ms afterwards it reports zeros. Before
+// this gate existed those zeros classified as kCritical and put a console on
+// a full battery straight into deep sleep, one second into boot.
+void test_the_gauges_cold_reading_is_rejected() {
+  TEST_ASSERT_FALSE(isPlausibleReading(0.0f, 0.00f));
+}
+
+void test_a_normal_reading_is_accepted() {
+  TEST_ASSERT_TRUE(isPlausibleReading(88.5f, 4.09f));
+  TEST_ASSERT_TRUE(isPlausibleReading(50.0f, 3.70f));
+}
+
+// A genuinely flat battery must still be believed -- this gate is about the
+// chip not being ready, and it must never swallow the one reading the
+// critical-shutdown path exists to act on.
+void test_a_genuinely_empty_battery_is_still_believed() {
+  TEST_ASSERT_TRUE(isPlausibleReading(2.0f, 3.20f));
+  TEST_ASSERT_TRUE(isPlausibleReading(0.0f, 3.00f));
+}
+
+// A freshly-charged cell reads slightly over 100%; that is the gauge being
+// normal, not the gauge being broken.
+void test_slightly_over_full_is_accepted() {
+  TEST_ASSERT_TRUE(isPlausibleReading(102.0f, 4.20f));
+}
+
+void test_readings_outside_the_physical_range_are_rejected() {
+  TEST_ASSERT_FALSE(isPlausibleReading(50.0f, 1.5f));   // below protection cut
+  TEST_ASSERT_FALSE(isPlausibleReading(50.0f, 6.0f));   // above any LiPo
+  TEST_ASSERT_FALSE(isPlausibleReading(-1.0f, 3.7f));   // nonsense percent
+  TEST_ASSERT_FALSE(isPlausibleReading(500.0f, 3.7f));  // nonsense percent
+}
+
+// Belt and braces on the failure mode itself: whatever else changes, a
+// rejected reading must never be the one that reaches classifyPowerLevel().
+void test_the_cold_reading_would_have_been_critical_if_let_through() {
+  TEST_ASSERT_EQUAL(static_cast<int>(PowerLevel::kCritical),
+                    static_cast<int>(classifyPowerLevel(0.0f,
+                                                        PowerLevel::kNormal)));
+  TEST_ASSERT_FALSE(isPlausibleReading(0.0f, 0.0f));
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -132,5 +177,11 @@ int main(int, char**) {
   RUN_TEST(test_a_real_charge_current_reads_as_charging);
   RUN_TEST(test_idle_sleep_fires_after_the_timeout_when_not_charging);
   RUN_TEST(test_idle_sleep_never_fires_while_charging);
+  RUN_TEST(test_the_gauges_cold_reading_is_rejected);
+  RUN_TEST(test_a_normal_reading_is_accepted);
+  RUN_TEST(test_a_genuinely_empty_battery_is_still_believed);
+  RUN_TEST(test_slightly_over_full_is_accepted);
+  RUN_TEST(test_readings_outside_the_physical_range_are_rejected);
+  RUN_TEST(test_the_cold_reading_would_have_been_critical_if_let_through);
   return UNITY_END();
 }

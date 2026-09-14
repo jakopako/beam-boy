@@ -270,13 +270,27 @@ void Engine::tick() {
   // the device sleeps. See beginCriticalShutdown()'s comment for why the
   // flush already happened before this frame ever runs.
   if (shutting_down_) {
-    const uint32_t elapsed = now_ms - shutdown_started_ms_;
-    if (elapsed >= kCriticalShutdownMs) {
-      enterDeepSleep();  // noreturn: the chip resets on wake
+    // The battery climbing back out of critical mid-sweep means the reading
+    // that started this was not to be trusted -- a real battery does not
+    // recover on its own in two seconds. Sleeping anyway would mean acting on
+    // information the console has already superseded, which is exactly what
+    // put a fully-charged device to sleep one second into a boot. The flush
+    // that already happened is harmless to keep.
+    if (power_.available() && power_.level() != PowerLevel::kCritical) {
+      Serial.print("[power] battery back to ");
+      Serial.print(power_.percent(), 1);
+      Serial.println("% -- shutdown aborted, resuming");
+      shutting_down_ = false;
+      last_activity_ms_ = now_ms;
+    } else {
+      const uint32_t elapsed = now_ms - shutdown_started_ms_;
+      if (elapsed >= kCriticalShutdownMs) {
+        enterDeepSleep();  // noreturn: the chip resets on wake
+      }
+      renderCriticalShutdown(elapsed);
+      display_.present();
+      return;
     }
-    renderCriticalShutdown(elapsed);
-    display_.present();
-    return;
   }
 
   // Idle handling comes before the pause/exit gesture too, so a console left

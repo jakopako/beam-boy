@@ -94,6 +94,8 @@ void setup() {
     // over against the board's own CHG LED -- see core/power_policy.h.
     Serial.println(engine.power().charging() ? "  (charging)"
                                              : "  (not charging yet)");
+  } else if (engine.power().gaugePresent()) {
+    Serial.println("gauge not responding -- battery management disabled");
   } else {
     Serial.println("no fuel gauge on this board");
   }

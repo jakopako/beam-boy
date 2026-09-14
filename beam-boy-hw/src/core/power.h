@@ -37,10 +37,22 @@ class Power {
   // traffic, so this is not "try and fail", it is "do not try".
   bool begin();
 
-  // True once a fuel gauge has been found and read at least once. Every
-  // reading below is meaningless while this is false, and callers must treat
-  // it that way rather than acting on a stale default.
-  bool available() const { return available_; }
+  // True once a fuel gauge has been found *and* has returned a reading that
+  // can be believed -- see isPlausibleReading(). Every reading below is
+  // meaningless while this is false, and callers must treat it that way rather
+  // than acting on a stale default.
+  //
+  // Deliberately conflates "no gauge" with "gauge not ready yet": for every
+  // consumer the correct response to both is identical -- show nothing, decide
+  // nothing, and above all do not shut the console down. Keeping them apart
+  // here would mean every call site had to remember to check two things, and
+  // the one that forgot would be the one that sleeps a healthy device.
+  bool available() const { return gauge_present_ && ready_; }
+
+  // Whether the hardware is there at all, regardless of whether it has warmed
+  // up. Only for telling "this board has no fuel gauge" apart from "it has one
+  // that is not talking" in diagnostics -- never for gating behaviour.
+  bool gaugePresent() const { return gauge_present_; }
 
   // Polls the gauge at most once every kPollIntervalMs, so callers can invoke
   // this every frame without hammering the I2C bus for a value that changes
@@ -61,10 +73,26 @@ class Power {
  private:
   static constexpr uint32_t kPollIntervalMs = 1000;
 
+  // Bounded warm-up in begin(). The gauge needs ~250 ms from reset before its
+  // registers are valid; this gives it a little over that, in small steps, so
+  // a gauge that is ready early costs almost nothing and one that never comes
+  // up cannot stall the boot indefinitely.
+  static constexpr uint8_t kWarmupAttempts = 8;
+  static constexpr uint32_t kWarmupDelayMs = 50;
+
+  // Reads all three registers and commits them to the members only if the
+  // result is plausible. Returns false on a reading that must be discarded,
+  // leaving the last known good values untouched.
+  bool readGauge();
+
   Adafruit_MAX17048 gauge_;
-  bool available_ = false;
+  bool gauge_present_ = false;
+  bool ready_ = false;
+  bool last_read_rejected_ = false;
   uint32_t last_poll_ms_ = 0;
 
+  // 100% until proven otherwise: if anything goes wrong, the safe default is
+  // the one that never triggers a warning or a shutdown.
   float percent_ = 100.0f;
   float voltage_ = 0.0f;
   bool charging_ = false;

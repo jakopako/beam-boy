@@ -95,6 +95,30 @@ constexpr bool isChargingRate(float charge_rate_percent_per_hour) {
   return charge_rate_percent_per_hour >= kChargingRateThreshold;
 }
 
+// Whether a reading from the gauge can be believed at all.
+//
+// The MAX17048 needs roughly 250 ms after power-up before its VCELL and SOC
+// registers mean anything, and Adafruit's begin() resets the chip -- so the
+// very first read after begin() returns 0.00 V / 0.0 %. Fed straight to
+// classifyPowerLevel() that is indistinguishable from a battery about to die,
+// and the console shuts itself down one second into a boot on a full charge.
+//
+// Voltage is the discriminator, not percent: 0 % is a legitimate thing for a
+// flat battery to report, but 0.00 V is not something a board can read while
+// it is executing this code -- below ~2.5 V the LiPo's own protection circuit
+// has long since cut power. Anything outside the range is the chip not being
+// ready (or not being there), never a battery state worth acting on.
+constexpr float kMinPlausibleVoltage = 2.5f;
+constexpr float kMaxPlausibleVoltage = 5.0f;
+// The gauge reports slightly over 100% on a freshly-charged cell; that is
+// normal and must not be mistaken for a bad reading.
+constexpr float kMaxPlausiblePercent = 110.0f;
+
+constexpr bool isPlausibleReading(float percent, float voltage) {
+  return voltage >= kMinPlausibleVoltage && voltage <= kMaxPlausibleVoltage &&
+         percent >= 0.0f && percent <= kMaxPlausiblePercent;
+}
+
 // How long the console sits idle before it sleeps.
 constexpr uint32_t kIdleSleepMs = 120000;  // 2 minutes
 

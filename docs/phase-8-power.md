@@ -138,6 +138,48 @@ Two details in that logic are load-bearing and easy to undo by accident:
   fires from disagreeing: a suppressed hold renders no warning *and* performs
   no delete, with no second condition to keep in sync.
 
+## Trusting the gauge
+
+The MAX17048 needs roughly 250 ms from reset before `VCELL` and `SOC` mean
+anything, and Adafruit's `begin()` *resets the chip*. The original code read it
+immediately afterwards and got `0.0% / 0.00V`.
+
+Nothing downstream had any way to tell that apart from a battery about to die,
+so on a full charge the console classified `kCritical`, ran the shutdown sweep
+and went into deep sleep about a second into boot:
+
+```
+[power] MAX17048 found: 0.0%  0.00V  CRITICAL
+[power] CRITICAL at 0.0%  0.00V -- flushing and shutting down
+[power] level CRITICAL -> normal  (88.5%  4.09V)     <-- knew better, slept anyway
+[power] entering deep sleep at 88.5%
+```
+
+Two independent faults, fixed separately:
+
+- **A bad reading reached the policy layer at all.** `isPlausibleReading()`
+  now gates every read, and `Power::readGauge()` commits percent, voltage and
+  charge rate to the members *together or not at all* — a rejected sample
+  leaves the last known good values untouched. Voltage is the discriminator,
+  not percent: `0%` is a legitimate thing for a flat battery to report, but
+  `0.00 V` is not something a board can read while executing this code, since
+  the cell's protection circuit cuts long before that. `begin()` additionally
+  gives the chip a bounded warm-up (8 × 50 ms) so the boot banner is
+  meaningful; `update()` applies the same gate regardless, so a gauge slower
+  than that budget still recovers on its own.
+- **The shutdown was unconditional once started.** It now aborts if the
+  battery climbs back out of critical mid-sweep. A real battery does not
+  recover in two seconds, so this only ever fires on a reading that should not
+  have been believed — but the console had already superseded that information
+  and slept on it anyway, which is precisely the failure above.
+
+`available()` deliberately conflates "no gauge" with "gauge not ready yet":
+for every consumer the right response to both is identical — show nothing,
+decide nothing, and above all do not shut down. Keeping them apart would mean
+every call site had to check two things, and the one that forgot would be the
+one that sleeps a healthy device. `gaugePresent()` exists only to tell the two
+apart in diagnostics, and must not gate behaviour.
+
 ## Constants
 
 | Constant | Value | Where |
@@ -150,6 +192,8 @@ Two details in that logic are load-bearing and easy to undo by accident:
 | `kChargingSweepMs` | 2600 | `engine.cpp` |
 | `kBatteryHoldMs` (A+B gauge) | 500 | `launcher_gestures.h` |
 | `kDeleteHoldMs` | 2500 | `launcher_gestures.h` |
+| `kMinPlausibleVoltage` / max | 2.5 / 5.0 V | `power_policy.h` |
+| `kWarmupAttempts` × `kWarmupDelayMs` | 8 × 50 ms | `power.h` |
 
 ## Controls and tube vocabulary
 
