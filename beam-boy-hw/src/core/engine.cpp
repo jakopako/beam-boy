@@ -24,6 +24,14 @@ const Color kNibbleColors[] = {
 constexpr uint8_t kNibbleColorCount =
     sizeof(kNibbleColors) / sizeof(kNibbleColors[0]);
 
+// Brightness for a zero bit that sits below the score's highest set bit.
+// A run of unset bits is otherwise indistinguishable from a run of unlit
+// pixels the display simply never reached -- in a dark room there is no way
+// to tell "this bit is 0" from "the readout stops here". Lighting them at a
+// barely-visible level fixes that without competing with the set bits for
+// attention: it is a position marker, not part of the value being read.
+constexpr float kZeroBitIntensity = 0.02f;
+
 // A slow-filling green sweep, one full cycle every kChargingSweepMs -- distinct
 // from every other animation's pace so charging is never mistaken for a game
 // or a menu having been left running.
@@ -541,19 +549,18 @@ void Engine::renderScore(uint32_t score, uint32_t elapsed_ms, bool instant) {
   const uint16_t bits_to_show =
       significant_bits > pixels ? pixels : significant_bits;
 
-  // A score of zero has no bits to light, so mark it with a single dim pixel at
-  // the origin -- otherwise the readout is indistinguishable from a crash.
-  if (score == 0) {
-    display_.rawPixel(0, Color(40, 40, 40));
-    return;
-  }
+  // A score of zero has no set bits at all, so bits_to_show above collapses to
+  // 1 (significant_bits' default) -- the loops below draw that single bit at
+  // kZeroBitIntensity, same as any other zero bit, rather than needing a
+  // special case here.
 
   if (instant) {
     // A glance at a score that already happened -- e.g. the launcher peeking
     // at a highscore -- should read the whole value at once, not perform the
     // reveal flourish that belongs to a score just earned.
     for (uint16_t bit = 0; bit < bits_to_show; bit++) {
-      if ((score & (1UL << bit)) != 0) drawScoreBit(bit, 1.0f);
+      const bool set = (score & (1UL << bit)) != 0;
+      drawScoreBit(bit, set ? 1.0f : kZeroBitIntensity);
     }
     return;
   }
@@ -569,9 +576,12 @@ void Engine::renderScore(uint32_t score, uint32_t elapsed_ms, bool instant) {
     if (bit > revealed) break;
 
     const bool set = (score & (1UL << bit)) != 0;
-    if (!set) continue;
-
-    drawScoreBit(bit, bitIntensity(bit, revealed, elapsed_ms, per_bit_ms));
+    // Zero bits are position markers, not part of the reveal -- they sit at a
+    // constant, barely-visible level rather than fading up the way a landing
+    // 1 bit does, so the flourish stays about the value, not the scaffolding
+    // around it.
+    drawScoreBit(bit, set ? bitIntensity(bit, revealed, elapsed_ms, per_bit_ms)
+                          : kZeroBitIntensity);
   }
 }
 
