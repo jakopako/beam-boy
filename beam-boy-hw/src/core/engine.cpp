@@ -30,7 +30,7 @@ constexpr uint8_t kNibbleColorCount =
 // to tell "this bit is 0" from "the readout stops here". Lighting them at a
 // barely-visible level fixes that without competing with the set bits for
 // attention: it is a position marker, not part of the value being read.
-constexpr float kZeroBitIntensity = 0.02f;
+constexpr float kZeroBitIntensity = 0.015f;
 
 // A slow-filling green sweep, one full cycle every kChargingSweepMs -- distinct
 // from every other animation's pace so charging is never mistaken for a game

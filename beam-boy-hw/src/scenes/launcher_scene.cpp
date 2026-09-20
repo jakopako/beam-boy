@@ -185,11 +185,23 @@ void LauncherScene::renderList(Engine& engine) {
     const float distance = fabsf(highlight_ - static_cast<float>(index));
     float intensity;
     if (distance < 1.0f) {
-      // Selected: breathing, so it is unmistakable even among similar colours.
-      const float level = 0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
-      intensity = (0.22f + 0.78f * (1.0f - distance)) * level;
+      intensity = 0.22f + 0.78f * (1.0f - distance);
     } else {
       intensity = 0.22f;
+    }
+
+    // Breathing is keyed off selected_, not off proximity to the eased
+    // highlight_. highlight_ decays exponentially toward selected_ and, in
+    // floating point, never quite reaches it -- so the previously-selected
+    // neighbour sits at a distance just under 1.0f indefinitely, which used
+    // to be enough to fall into the branch above and pick up the same
+    // breathing level, leaving it pulsing right along with the real
+    // selection. Restricting this to an exact index match keeps the glow
+    // (still driven by distance, for the moving-highlight animation) but
+    // limits breathing to the one slot that is actually selected.
+    if (index == selected_) {
+      const float level = 0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
+      intensity *= level;
     }
 
     const uint16_t start = slot * stride;
