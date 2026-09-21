@@ -37,11 +37,11 @@
 
 namespace beamboy {
 
-// Upper bound on installed cartridges. Highscores are the real constraint:
-// Storage's score table is shared between built-ins and cartridges, so it is
-// sized to hold kGameCount + kMaxCartridges distinct ids. Without that, the
-// first record set by the last-installed game would be silently dropped.
-constexpr uint8_t kMaxCartridges = 12;
+// Physical storage for cartridge metadata. The effective scan/install limit is
+// lower whenever built-in games occupy some of the launcher's kMaxGames slots.
+// Keeping the array at kMaxGames avoids coupling its compile-time size to
+// kGameCount, which is defined in another translation unit.
+constexpr uint8_t kMaxCartridges = kMaxGames;
 
 // Longest cartridge id, including the NUL. Must not exceed Storage's
 // kGameIdLength, or a cartridge's highscore would be rejected at save time --
@@ -111,12 +111,21 @@ class CartridgeStore {
 class GameList {
  public:
   // Builds the merged list. Built-ins come first so their launcher positions
-  // (and the stored "last played" index) don't shift when a game is installed
-  // or deleted.
+  // stay fixed; persisted selection resolves by stable id, so installing or
+  // deleting a cartridge cannot redirect it to an unrelated entry.
   void build(CartridgeStore& store);
 
   uint8_t count() const { return count_; }
+  uint8_t gameCount() const { return game_count_; }
   const GameEntry& at(uint8_t index) const { return entries_[index]; }
+  const GameEntry& settings() const {
+    return entries_[game_count_ + games::kSettingsUtilityIndex];
+  }
+  uint8_t settingsIndex() const {
+    return game_count_ + games::kSettingsUtilityIndex;
+  }
+
+  int8_t indexOfId(const char* id) const;
 
   // Finds a scene's current position by identity rather than by a
   // previously-remembered index. Needed because build() can shift the
@@ -126,7 +135,7 @@ class GameList {
   int8_t indexOf(const Scene* scene) const;
 
  private:
-  static constexpr uint8_t kMaxEntries = 16 + kMaxCartridges;
+  static constexpr uint8_t kMaxEntries = kMaxGames + games::kUtilityCount;
 
   GameEntry entries_[kMaxEntries];
   // GameEntry stores id/title as const char*, so filesystem entries must point
@@ -139,6 +148,7 @@ class GameList {
   // entered, so this array is cheap despite being sized for the maximum.
   ScriptScene scenes_[kMaxCartridges];
   uint8_t count_ = 0;
+  uint8_t game_count_ = 0;
 };
 
 // The single instance the launcher and engine read from.

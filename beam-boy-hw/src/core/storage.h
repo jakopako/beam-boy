@@ -49,9 +49,12 @@ class Storage {
   void setBrightness(uint8_t value);
 
   // Index of the game shown when the launcher opens, so the console returns to
-  // whatever was played last.
+  // whatever was played last. Kept as a migration fallback for saves written
+  // before stable-id selection was introduced.
   uint8_t lastGame() const { return data_.last_game; }
   void setLastGame(uint8_t index);
+  const char* lastGameId() const { return data_.last_game_id; }
+  void setLastGameId(const char* id);
 
   // --- Persistence ---------------------------------------------------------
 
@@ -66,12 +69,10 @@ class Storage {
   void reset();
 
  private:
-  static constexpr uint8_t kVersion = 2;
-  // Distinct games that can hold a highscore. Must cover the built-in registry
-  // *plus* every installable cartridge (kMaxCartridges), since both compete for
-  // this one table -- once it is full, a new game's first record is silently
-  // dropped. Sized with headroom rather than exactly, because growing it later
-  // invalidates every existing save (see kVersion).
+  static constexpr uint8_t kVersion = 3;
+  // Distinct games that can hold a highscore. The launcher currently caps this
+  // at nine, but the table keeps headroom for save compatibility and future
+  // expansion; once it is full, a new game's first record is rejected.
   static constexpr uint8_t kMaxScores = 24;
   // Storage key size, including the terminating NUL. An id must therefore be at
   // most kGameIdLength - 1 characters; submitScore() rejects longer ones rather
@@ -89,6 +90,9 @@ class Storage {
     uint8_t last_game = 0;
     uint8_t score_count = 0;
     ScoreEntry scores[kMaxScores];
+    // Stable across cartridge installs/deletes, unlike last_game's numeric
+    // registry position. Empty in migrated v2 saves until a game next exits.
+    char last_game_id[kGameIdLength] = {0};
   };
 
   static uint32_t checksum(const SaveData& data);

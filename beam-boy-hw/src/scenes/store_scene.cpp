@@ -200,7 +200,7 @@ bool shaTextEqual(const char* a, const char* b) {
 }
 
 bool installedGameVisible(const char* id) {
-  for (uint8_t i = games::kGameCount; i < gameList().count(); i++) {
+  for (uint8_t i = games::kGameCount; i < gameList().gameCount(); i++) {
     if (strcmp(gameList().at(i).id, id) == 0) return true;
   }
   return false;
@@ -384,6 +384,15 @@ void StoreScene::fail(const char* reason) {
   Serial.println(reason);
 }
 
+void StoreScene::failFull() {
+  error_ = "game library full";
+  state_ = StoreState::kFull;
+  settled_at_ms_ = millis();
+  Serial.println(
+      F("[store] nine-game library full; delete a cartridge before installing "
+        "a new game"));
+}
+
 bool StoreScene::fetchIndex() {
   state_ = StoreState::kFetching;
   Serial.print(F("[store] fetching "));
@@ -460,6 +469,13 @@ bool StoreScene::installSelected(Engine& engine) {
 
   state_ = StoreState::kInstalling;
   const StoreIndex::Entry& entry = index_.at(selected_);
+
+  const bool already_installed =
+      statuses_[selected_] != CartridgeStatus::kNotInstalled;
+  if (!canInstallGame(gameList().gameCount(), already_installed)) {
+    failFull();
+    return false;
+  }
 
   Serial.print(F("[store] installing "));
   Serial.println(entry.id);
@@ -540,11 +556,8 @@ bool StoreScene::installSelected(Engine& engine) {
   }
   computeStatuses();
 
-  // Installing a *new* id inserts an entry ahead of Store/Network (they
-  // always sit last), shifting their index. The engine tracks "which game is
-  // running" by that index, not by scene identity, so without this it would
-  // believe a real game -- not this utility scene -- is running and demand
-  // the games' pause-then-hold-B exit instead of a plain hold-B.
+  // Installing a *new* id shifts every utility index. The engine tracks the
+  // current scene by registry index, so resolve Store again by identity.
   const int8_t new_index = gameList().indexOf(this);
   if (new_index >= 0) engine.setCurrentGame(new_index);
 
@@ -560,6 +573,11 @@ void StoreScene::update(Engine& engine, float dt) {
   if (phase_ > 3600.0f) phase_ -= 3600.0f;
 
   net_.tick();
+
+  if (state_ == StoreState::kFull &&
+      millis() - settled_at_ms_ >= kResultFlashMs) {
+    state_ = StoreState::kReady;
+  }
 
   if (state_ == StoreState::kConnecting) {
     if (net_.state() == NetState::kConnected) {
@@ -628,6 +646,17 @@ void StoreScene::render(Engine& engine) {
                           ? 1.0f
                           : static_cast<float>(since) / kResultFlashMs;
       display.span(0.5f - t * 0.5f, 0.5f + t * 0.5f, kOkColor, 0.9f);
+      break;
+    }
+    case StoreState::kFull: {
+      // Nine amber markers make capacity visually distinct from an ordinary
+      // red error: every available game slot is occupied.
+      const float level = 0.25f + 0.2f * wrappedSin(phase_ * 6.0f);
+      for (uint8_t slot = 0; slot < kMaxGames; slot++) {
+        const float position =
+            (static_cast<float>(slot) + 0.5f) / kLauncherSlotCount;
+        display.point(position, colors::kAmber, level);
+      }
       break;
     }
     case StoreState::kFailed:

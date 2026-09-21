@@ -5,9 +5,10 @@ appear in the launcher without a firmware flash.
 
 ## First slice implemented
 
-- **Store scene:** `../beam-boy-hw/src/scenes/store_scene.h`/`.cpp`, registered
-  in the launcher as **Store**. It is a utility scene, not a game: entering it
-  is the deliberate user action that turns WiFi on.
+- **Store scene:** `../beam-boy-hw/src/scenes/store_scene.h`/`.cpp`, reached
+  through **Settings** rather than occupying a game slot in the launcher. It
+  is a utility scene, not a game: entering it is the deliberate user action
+  that turns WiFi on.
 - **Credentials:** Store reuses the existing `Network` state machine. It does
   not open the captive portal itself; if there are no stored credentials it fails
   and the user should visit **Network** first.
@@ -42,6 +43,12 @@ appear in the launcher without a firmware flash.
 - **Immediate availability:** after a successful install, `CartridgeStore` is
   rescanned and `gameList()` is rebuilt, so the new cartridge is available in
   the launcher without rebooting.
+- **Nine-game capacity:** built-in and installed games share nine physical
+  launcher slots. A new install is rejected before any download/write when
+  all nine are occupied, with nine amber capacity markers and a precise serial
+  message; after the short indication the Store returns to browsing, so
+  updates remain installable at capacity. Updating an existing id never
+  consumes another slot. Valid sideloaded overflow is logged and ignored.
 - **Update indicator:** each installed cartridge's `meta.json` now also records
   the `sha256` verified at install time. After every index fetch and every
   install, the Store recomputes, per index entry, whether it is not installed,
@@ -62,8 +69,8 @@ appear in the launcher without a firmware flash.
   the next `commit()` — otherwise a later cartridge that happens to reuse the
   same id would inherit a "high score" it never earned. The tube bleeds from
   its normal colour to solid red as the hold approaches the threshold, so the
-  deletion is never a surprise. Built-in games and the Store/Network utility
-  entries are not deletable this way — the gesture only fires for entries
+  deletion is never a surprise. Built-in games and Settings are not deletable
+  this way — the gesture only fires for entries
   `GameList::build()` populated from `CartridgeStore`. (Showing a highscore
   moved off hold-B onto a hold of the nav button/stick, so the two gestures no
   longer conflict — see `docs/phase-3-launcher.md`.)
@@ -130,7 +137,7 @@ or commit, regardless of a contributor's `core.autocrlf` setting.
 
 ## Controls and tube vocabulary
 
-- Enter **Store** from the launcher.
+- Enter **Settings** from the launcher, then choose **Store**.
 - Blue sweep: connecting to stored WiFi.
 - Amber sweep: fetching the index.
 - Store entries: coloured blocks from the index; selected block breathes.
@@ -140,9 +147,12 @@ or commit, regardless of a contributor's `core.autocrlf` setting.
   no-op if it is already up to date.
 - White bar: install in progress.
 - Green centre-out flash: install succeeded.
+- Nine amber markers: the game library is full; delete an installed cartridge
+  before adding a new game. The Store resumes browsing after the indication.
 - Red pulse: failure; read the serial log for the precise reason.
-- Hold **B**: return to the launcher, using the existing utility-scene exit
-  gesture — works immediately after an install too. (Previously installing a
+- Hold **B**: return to Settings, using the nested utility-scene exit path —
+  works immediately after an install too. Holding B again in Settings returns
+  to the launcher. (Previously installing a
   *new* cartridge id could shift the Store's numeric position in the merged
   game list past where the engine still expected it, making the engine treat
   the Store as the just-installed game and require the game exit gesture

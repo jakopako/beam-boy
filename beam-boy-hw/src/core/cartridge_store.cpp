@@ -225,6 +225,7 @@ bool CartridgeStore::loadMeta(const char* dir_name, Cartridge& out) {
 
 void CartridgeStore::scan() {
   count_ = 0;
+  const uint8_t installed_limit = maxInstalledGames(games::kGameCount);
 
   File dir = LittleFS.open(kGamesDir, "r");
   if (!dir || !dir.isDirectory()) {
@@ -236,12 +237,6 @@ void CartridgeStore::scan() {
   File entry = dir.openNextFile();
   while (entry) {
     if (entry.isDirectory()) {
-      if (count_ >= kMaxCartridges) {
-        Serial.println("[games] cartridge limit reached, ignoring the rest");
-        entry.close();
-        break;
-      }
-
       // name() may return either a bare name or a full path depending on core
       // version; take whatever follows the last '/' so both behave the same.
       const char* raw = entry.name();
@@ -250,7 +245,16 @@ void CartridgeStore::scan() {
 
       Cartridge cartridge;
       if (loadMeta(dir_name, cartridge)) {
-        cartridges_[count_++] = cartridge;
+        if (count_ >= installed_limit) {
+          // Validate first, then report only cartridges that really would have
+          // occupied a launcher slot. Invalid directories already emit their
+          // precise reason from loadMeta() and are not capacity overflow.
+          Serial.print(
+              "[games] nine-game launcher full, ignoring cartridge: ");
+          Serial.println(dir_name);
+        } else {
+          cartridges_[count_++] = cartridge;
+        }
       }
     }
     entry.close();
@@ -261,15 +265,22 @@ void CartridgeStore::scan() {
 
 void GameList::build(CartridgeStore& store) {
   count_ = 0;
+  game_count_ = 0;
 
-  // Built-ins first, in their existing order, so installing a cartridge never
-  // renumbers them -- Storage keeps the last-played *index*, and a shifting
-  // list would make the console reopen on a different game after an install.
-  for (uint8_t i = 0; i < games::kGameCount && count_ < kMaxEntries; i++) {
+  // Built-ins first, in their existing order, so their physical launcher
+  // positions never move. Storage now resolves the last played game by id;
+  // the legacy index exists only as a migration fallback.
+  for (uint8_t i = 0;
+       i < games::kGameCount && game_count_ < kMaxGames &&
+       count_ < kMaxEntries;
+       i++) {
     entries_[count_++] = games::kGames[i];
+    game_count_++;
   }
 
-  for (uint8_t i = 0; i < store.count() && count_ < kMaxEntries; i++) {
+  for (uint8_t i = 0;
+       i < store.count() && game_count_ < kMaxGames && count_ < kMaxEntries;
+       i++) {
     const Cartridge& cartridge = store.at(i);
 
     strncpy(cartridge_ids_[i], cartridge.id, sizeof(cartridge_ids_[i]) - 1);
@@ -293,6 +304,7 @@ void GameList::build(CartridgeStore& store) {
     entry.is_installed = true;
 
     entries_[count_++] = entry;
+    game_count_++;
   }
 
   // Store and Network always come last, in that order, after every built-in
@@ -312,6 +324,14 @@ GameList& gameList() {
 int8_t GameList::indexOf(const Scene* scene) const {
   for (uint8_t i = 0; i < count_; i++) {
     if (entries_[i].scene == scene) return static_cast<int8_t>(i);
+  }
+  return -1;
+}
+
+int8_t GameList::indexOfId(const char* id) const {
+  if (id == nullptr || id[0] == '\0') return -1;
+  for (uint8_t i = 0; i < game_count_; i++) {
+    if (strcmp(entries_[i].id, id) == 0) return static_cast<int8_t>(i);
   }
   return -1;
 }

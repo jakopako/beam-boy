@@ -8,6 +8,36 @@ namespace {
 
 constexpr const char* kSavePath = "/beamboy.sav";
 
+// Save format immediately before stable launcher ids were added. Reading it
+// explicitly preserves brightness and highscores across the v2 -> v3 upgrade
+// rather than treating a routine firmware update as a factory reset.
+constexpr uint8_t kLegacyVersion = 2;
+constexpr uint8_t kLegacyMaxScores = 24;
+constexpr uint8_t kLegacyGameIdLength = 12;
+
+struct LegacyScoreEntry {
+  char game_id[kLegacyGameIdLength] = {0};
+  uint32_t score = 0;
+};
+
+struct LegacySaveData {
+  uint8_t version = kLegacyVersion;
+  uint8_t brightness = 0;
+  uint8_t last_game = 0;
+  uint8_t score_count = 0;
+  LegacyScoreEntry scores[kLegacyMaxScores];
+};
+
+uint32_t checksumBytes(const void* data, size_t size) {
+  const uint8_t* bytes = static_cast<const uint8_t*>(data);
+  uint32_t hash = 2166136261UL;
+  for (size_t i = 0; i < size; i++) {
+    hash ^= bytes[i];
+    hash *= 16777619UL;
+  }
+  return hash;
+}
+
 }  // namespace
 
 bool Storage::begin() {
@@ -35,13 +65,7 @@ bool Storage::begin() {
 // Deliberately simple: this guards against a truncated or half-written file,
 // not against tampering. FNV-1a over every byte but the checksum itself.
 uint32_t Storage::checksum(const SaveData& data) {
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&data);
-  uint32_t hash = 2166136261UL;
-  for (size_t i = 0; i < sizeof(SaveData); i++) {
-    hash ^= bytes[i];
-    hash *= 16777619UL;
-  }
-  return hash;
+  return checksumBytes(&data, sizeof(data));
 }
 
 bool Storage::load() {
@@ -50,30 +74,69 @@ bool Storage::load() {
   File file = LittleFS.open(kSavePath, "r");
   if (!file) return false;
 
-  SaveData loaded;
-  uint32_t stored_checksum = 0;
+  const size_t file_size = file.size();
 
-  const size_t want = sizeof(SaveData);
-  const bool sized_right = file.size() == want + sizeof(stored_checksum);
-
-  if (!sized_right) {
+  if (file_size == sizeof(SaveData) + sizeof(uint32_t)) {
+    SaveData loaded;
+    uint32_t stored_checksum = 0;
+    const size_t read =
+        file.read(reinterpret_cast<uint8_t*>(&loaded), sizeof(loaded));
+    const size_t read_sum = file.read(
+        reinterpret_cast<uint8_t*>(&stored_checksum), sizeof(stored_checksum));
     file.close();
-    return false;
+
+    if (read != sizeof(loaded) || read_sum != sizeof(stored_checksum)) {
+      return false;
+    }
+    if (loaded.version != kVersion) return false;
+    if (checksum(loaded) != stored_checksum) return false;
+    if (loaded.score_count > kMaxScores) return false;
+
+    data_ = loaded;
+    data_.last_game_id[kGameIdLength - 1] = '\0';
+    dirty_ = false;
+    return true;
   }
 
-  const size_t read = file.read(reinterpret_cast<uint8_t*>(&loaded), want);
-  const size_t read_sum = file.read(
-      reinterpret_cast<uint8_t*>(&stored_checksum), sizeof(stored_checksum));
+  if (file_size == sizeof(LegacySaveData) + sizeof(uint32_t)) {
+    static_assert(kLegacyGameIdLength <= kGameIdLength,
+                  "legacy ids must fit the current save format");
+
+    LegacySaveData legacy;
+    uint32_t stored_checksum = 0;
+    const size_t read =
+        file.read(reinterpret_cast<uint8_t*>(&legacy), sizeof(legacy));
+    const size_t read_sum = file.read(
+        reinterpret_cast<uint8_t*>(&stored_checksum), sizeof(stored_checksum));
+    file.close();
+
+    if (read != sizeof(legacy) || read_sum != sizeof(stored_checksum)) {
+      return false;
+    }
+    if (legacy.version != kLegacyVersion ||
+        legacy.score_count > kLegacyMaxScores ||
+        checksumBytes(&legacy, sizeof(legacy)) != stored_checksum) {
+      return false;
+    }
+
+    data_ = SaveData();
+    data_.brightness = legacy.brightness;
+    data_.last_game = legacy.last_game;
+    data_.score_count = legacy.score_count;
+    for (uint8_t i = 0; i < legacy.score_count; i++) {
+      memcpy(data_.scores[i].game_id, legacy.scores[i].game_id,
+             kLegacyGameIdLength);
+      data_.scores[i].game_id[kLegacyGameIdLength - 1] = '\0';
+      data_.scores[i].score = legacy.scores[i].score;
+    }
+    // Rewritten as v3 on the next normal commit. last_game remains available
+    // as the launcher's fallback until the next played game records its id.
+    dirty_ = true;
+    return true;
+  }
+
   file.close();
-
-  if (read != want || read_sum != sizeof(stored_checksum)) return false;
-  if (loaded.version != kVersion) return false;
-  if (checksum(loaded) != stored_checksum) return false;
-  if (loaded.score_count > kMaxScores) return false;
-
-  data_ = loaded;
-  dirty_ = false;
-  return true;
+  return false;
 }
 
 bool Storage::save() {
@@ -96,6 +159,7 @@ bool Storage::save() {
     return false;
   }
 
+  data_.last_game_id[kGameIdLength - 1] = '\0';
   dirty_ = false;
   return true;
 }
@@ -177,6 +241,13 @@ void Storage::setBrightness(uint8_t value) {
 void Storage::setLastGame(uint8_t index) {
   if (data_.last_game == index) return;
   data_.last_game = index;
+  dirty_ = true;
+}
+
+void Storage::setLastGameId(const char* id) {
+  if (id == nullptr || strlen(id) >= kGameIdLength) return;
+  if (strcmp(data_.last_game_id, id) == 0) return;
+  strcpy(data_.last_game_id, id);
   dirty_ = true;
 }
 

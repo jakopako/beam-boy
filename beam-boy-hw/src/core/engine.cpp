@@ -84,9 +84,12 @@ void Engine::exitToLauncher() {
   // File the score before leaving. Doing it here rather than in each game means
   // no cartridge can forget to, or cheat by reporting a score it never scored.
   if (scene_ != nullptr && current_game_ >= 0 &&
-      current_game_ < static_cast<int8_t>(gameList().count())) {
-    storage_.submitScore(gameList().at(current_game_).id, scene_->score());
+      current_game_ < static_cast<int8_t>(gameList().count()) &&
+      gameList().at(current_game_).is_game) {
+    const GameEntry& game = gameList().at(current_game_);
+    storage_.submitScore(game.id, scene_->score());
     storage_.setLastGame(static_cast<uint8_t>(current_game_));
+    storage_.setLastGameId(game.id);
   }
 
   // Returning to the launcher is exactly the moment a flash write is invisible:
@@ -196,9 +199,12 @@ void Engine::beginCriticalShutdown() {
   // circuit's own cutoff: get the write onto flash while there is still
   // guaranteed power to finish it.
   if (scene_ != nullptr && current_game_ >= 0 &&
-      current_game_ < static_cast<int8_t>(gameList().count())) {
-    storage_.submitScore(gameList().at(current_game_).id, scene_->score());
+      current_game_ < static_cast<int8_t>(gameList().count()) &&
+      gameList().at(current_game_).is_game) {
+    const GameEntry& game = gameList().at(current_game_);
+    storage_.submitScore(game.id, scene_->score());
     storage_.setLastGame(static_cast<uint8_t>(current_game_));
+    storage_.setLastGameId(game.id);
   }
   storage_.commit();
 }
@@ -434,7 +440,18 @@ void Engine::tick() {
               : (held >= kExitHoldMs ? 1.0f
                                      : static_cast<float>(held) / kExitHoldMs);
       if (held >= kExitHoldMs) {
-        exitToLauncher();
+        if (utility_return_ != nullptr && scene_ != utility_return_) {
+          Scene* parent = utility_return_;
+          utility_return_ = nullptr;
+          const int8_t parent_index = gameList().indexOf(parent);
+          current_game_ = parent_index;
+          exit_gesture_progress_ = 0.0f;
+          exit_armed_ = false;
+          setScene(parent);
+        } else {
+          utility_return_ = nullptr;
+          exitToLauncher();
+        }
         return;
       }
     }

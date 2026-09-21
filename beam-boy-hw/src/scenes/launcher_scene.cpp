@@ -4,6 +4,7 @@
 
 #include "core/cartridge_store.h"
 #include "core/game_registry.h"
+#include "core/launcher_policy.h"
 
 namespace beamboy {
 namespace {
@@ -20,22 +21,36 @@ constexpr uint32_t kHighscoreHoldMs = 350;
 // kDeleteHoldMs and kBatteryHoldMs live in scenes/launcher_gestures.h,
 // alongside the arbitration that enforces them.
 
-// A game needs at least this many pixels to read as a block rather than a dot.
-constexpr uint8_t kMinBlockPixels = 2;
-constexpr uint8_t kMaxBlockPixels = 6;
-
-// Gap between blocks, so adjacent games of similar colour stay distinct.
-constexpr uint8_t kGapPixels = 1;
-
 }  // namespace
 
 void LauncherScene::enter(Engine& engine) {
-  // Resume on whatever was played last: the console picks up where it was.
-  selected_ = engine.storage().lastGame();
-  if (selected_ >= gameList().count()) selected_ = 0;
+  if (!selection_initialized_) {
+    // Prefer the stable id so installing/deleting another cartridge cannot
+    // move the selection onto an unrelated game. Saves from before the id
+    // existed fall back to the legacy index and are upgraded next time a game
+    // exits.
+    const int8_t saved_by_id =
+        gameList().indexOfId(engine.storage().lastGameId());
+    if (saved_by_id >= 0) {
+      selected_ = static_cast<uint8_t>(saved_by_id);
+    } else {
+      selected_ = engine.storage().lastGame();
+      if (selected_ >= gameList().gameCount()) selected_ = 0;
+    }
+    settings_selected_ = gameList().gameCount() == 0;
+    selection_initialized_ = true;
+  } else if (settings_selected_) {
+    // A Store install can increase gameCount() while Settings is open. Its
+    // dense selection index therefore moves, even though its physical slot
+    // does not.
+    selected_ = reconcileLauncherSelection(selected_, true,
+                                           gameList().gameCount());
+  } else {
+    selected_ = reconcileLauncherSelection(selected_, false,
+                                           gameList().gameCount());
+  }
 
-  highlight_ = static_cast<float>(selected_);
-  scroll_ = 0;
+  highlight_ = static_cast<float>(selectedPhysicalSlot());
   launching_ = false;
   launch_timer_ = 0.0f;
   nav_hold_exceeded_ = false;
@@ -48,37 +63,30 @@ void LauncherScene::enter(Engine& engine) {
   engine.display().clear();
 }
 
-uint8_t LauncherScene::blockPixels(const Display& display) const {
-  if (gameList().count() == 0) return kMinBlockPixels;
-
-  // Fit every game if we can; only shrink blocks down to the readable minimum.
-  const uint16_t available = display.pixelCount();
-  const uint16_t per_game = available / gameList().count();
-
-  if (per_game <= kMinBlockPixels + kGapPixels) return kMinBlockPixels;
-
-  uint8_t block = static_cast<uint8_t>(per_game - kGapPixels);
-  if (block > kMaxBlockPixels) block = kMaxBlockPixels;
-  return block;
+uint8_t LauncherScene::selectedRegistryIndex() const {
+  return selected_ < gameList().gameCount() ? selected_
+                                            : gameList().settingsIndex();
 }
 
-uint8_t LauncherScene::visibleSlots(const Display& display) const {
-  const uint8_t stride = blockPixels(display) + kGapPixels;
-  if (stride == 0) return 1;
-  const uint8_t slots = static_cast<uint8_t>(display.pixelCount() / stride);
-  return slots < 1 ? 1 : slots;
+const GameEntry& LauncherScene::selectedEntry() const {
+  return gameList().at(selectedRegistryIndex());
+}
+
+uint8_t LauncherScene::selectedPhysicalSlot() const {
+  return launcherSlotForSelection(selected_, gameList().gameCount());
 }
 
 void LauncherScene::update(Engine& engine, float dt) {
   Input& input = engine.input();
-  Display& display = engine.display();
 
   if (launching_) {
     launch_timer_ -= dt;
     if (launch_timer_ <= 0.0f) {
-      Scene* scene = gameList().at(selected_).scene;
+      const uint8_t registry_index = selectedRegistryIndex();
+      Scene* scene = gameList().at(registry_index).scene;
       if (scene != nullptr) {
-        engine.setCurrentGame(static_cast<int8_t>(selected_));
+        engine.setUtilityReturn(nullptr);
+        engine.setCurrentGame(static_cast<int8_t>(registry_index));
         engine.setScene(scene);
       } else {
         launching_ = false;
@@ -87,30 +95,23 @@ void LauncherScene::update(Engine& engine, float dt) {
     return;
   }
 
-  if (gameList().count() == 0) return;
-
   // Navigation comes through navDelta(), which turns horizontal stick
-  // deflection into discrete steps.
+  // deflection into discrete steps. The navigation list is dense even though
+  // its physical layout has a dark gap: the step after the last game lands
+  // directly on Settings at slot 9.
   const int8_t step = input.navDelta();
   if (step != 0) {
-    const int16_t next = static_cast<int16_t>(selected_) + step;
+    const uint8_t settings_selection = gameList().gameCount();
     // Clamp rather than wrap: on a physical line, running off the end and
     // reappearing at the other is disorienting.
-    if (next >= 0 && next < static_cast<int16_t>(gameList().count())) {
-      selected_ = static_cast<uint8_t>(next);
-    }
-  }
-
-  // Keep the selection on screen, scrolling only when it would fall off.
-  const uint8_t slots = visibleSlots(display);
-  if (selected_ < scroll_) {
-    scroll_ = selected_;
-  } else if (selected_ >= scroll_ + slots) {
-    scroll_ = selected_ - slots + 1;
+    selected_ =
+        moveLauncherSelection(selected_, settings_selection, step);
+    settings_selected_ = selected_ == settings_selection;
   }
 
   highlight_ +=
-      (static_cast<float>(selected_) - highlight_) * kHighlightEase * dt;
+      (static_cast<float>(selectedPhysicalSlot()) - highlight_) *
+      kHighlightEase * dt;
 
   // A, B and A+B overlap on just two buttons, so which gesture this frame's
   // input belongs to is arbitrated in one place -- see
@@ -143,25 +144,34 @@ void LauncherScene::update(Engine& engine, float dt) {
 
   // Deleting only applies to installed cartridges -- a built-in or a utility
   // scene (Store, Network) must never disappear from the launcher this way.
-  if (!deleting_ && gameList().at(selected_).is_installed &&
+  if (!deleting_ && selected_ < gameList().gameCount() &&
+      selectedEntry().is_installed &&
       delete_hold_ms_ >= kDeleteHoldMs) {
     deleting_ = true;
-    const char* deleted_id = gameList().at(selected_).id;
+    const char* deleted_id = selectedEntry().id;
     CartridgeStore::remove(deleted_id);
     // The cartridge is gone; its highscore must go with it, or a later game
     // that happens to reuse the same id would inherit a score it never
     // earned. Flush immediately -- deletion is deliberate and rare enough
     // that a flash write here is not worth deferring to the next commit().
     engine.storage().eraseScore(deleted_id);
-    engine.storage().commit();
     rescan_store_.scan();
     gameList().build(rescan_store_);
-    // The list just shrank; clamp rather than let selected_ point past the
-    // end or land on a different game than the player expects to see next.
-    if (selected_ >= gameList().count()) {
-      selected_ = gameList().count() == 0 ? 0 : gameList().count() - 1;
+    // The list just shrank. Stay on the game that moved into this slot, or the
+    // preceding game when the deleted one was last. Settings is still one
+    // navigation step beyond the remaining games.
+    selected_ = reconcileLauncherSelection(selected_, false,
+                                           gameList().gameCount());
+    settings_selected_ = gameList().gameCount() == 0;
+    if (gameList().gameCount() > 0) {
+      engine.storage().setLastGame(selected_);
+      engine.storage().setLastGameId(selectedEntry().id);
+    } else {
+      engine.storage().setLastGame(0);
+      engine.storage().setLastGameId("");
     }
-    highlight_ = static_cast<float>(selected_);
+    engine.storage().commit();
+    highlight_ = static_cast<float>(selectedPhysicalSlot());
   } else if (!input.held(Button::kB)) {
     deleting_ = false;
   }
@@ -170,14 +180,7 @@ void LauncherScene::update(Engine& engine, float dt) {
 void LauncherScene::renderList(Engine& engine) {
   Display& display = engine.display();
 
-  const uint8_t block = blockPixels(display);
-  const uint8_t stride = block + kGapPixels;
-  const uint8_t slots = visibleSlots(display);
-
-  for (uint8_t slot = 0; slot < slots; slot++) {
-    const uint16_t index = scroll_ + slot;
-    if (index >= gameList().count()) break;
-
+  for (uint8_t index = 0; index < gameList().gameCount(); index++) {
     const GameEntry& game = gameList().at(index);
 
     // Distance from the (eased) highlight drives brightness, so the selection
@@ -204,20 +207,41 @@ void LauncherScene::renderList(Engine& engine) {
       intensity *= level;
     }
 
-    const uint16_t start = slot * stride;
-    for (uint8_t p = 0; p < block; p++) {
-      const uint16_t pixel = start + p;
-      if (pixel >= display.pixelCount()) break;
-      display.rawPixel(pixel, game.accent.scaled(intensity));
-    }
+    drawLauncherSlot(display, index, game.accent, intensity);
   }
 
-  // Scroll hints: a dim white pixel at either end when the list continues.
-  if (scroll_ > 0) {
-    display.rawPixel(0, Color(60, 60, 60));
+  const uint8_t settings_selection = gameList().gameCount();
+  const float distance = fabsf(highlight_ - static_cast<float>(kSettingsSlot));
+  float intensity =
+      distance < 1.0f ? 0.22f + 0.78f * (1.0f - distance) : 0.22f;
+  if (selected_ == settings_selection) {
+    intensity *=
+        0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
   }
-  if (scroll_ + slots < gameList().count()) {
-    display.rawPixel(display.pixelCount() - 1, Color(60, 60, 60));
+  drawLauncherSlot(display, kSettingsSlot, gameList().settings().accent,
+                   intensity);
+}
+
+void LauncherScene::drawLauncherSlot(Display& display, uint8_t slot,
+                                     const Color& color,
+                                     float intensity) const {
+  uint16_t start = launcherSlotStart(slot, display.pixelCount());
+  uint16_t end = launcherSlotEnd(slot, display.pixelCount());
+  if (end <= start) return;
+
+  // On a multi-pixel slot, leave one dark pixel between adjacent games. For
+  // Settings the gap goes before the block so its final lit pixel remains at
+  // the physical end of the tube. A ten-pixel prototype has one pixel per slot
+  // and therefore no room for an additional separator.
+  if (end - start > 1) {
+    if (slot == kSettingsSlot) {
+      start++;
+    } else {
+      end--;
+    }
+  }
+  for (uint16_t pixel = start; pixel < end; pixel++) {
+    display.rawPixel(pixel, color.scaled(intensity));
   }
 }
 
@@ -263,14 +287,6 @@ void LauncherScene::render(Engine& engine) {
     return;
   }
 
-  if (gameList().count() == 0) {
-    // Nothing installed: a slow red pulse rather than a dark, dead-looking
-    // tube.
-    const float level = 0.3f + 0.3f * pulse(millis() / 1000.0f, 2.0f);
-    display.point(0.5f, colors::kRed, level);
-    return;
-  }
-
   // Once the delete hold has crossed the threshold (see update()), the game
   // is already gone -- show a solid red confirmation flash.
   if (deleting_) {
@@ -286,7 +302,8 @@ void LauncherScene::render(Engine& engine) {
   // Driven by the same arbitrated delete_hold_ms_ that update() acts on, so a
   // suppressed hold (the A+B combo, or one carried in from the game exit
   // gesture) draws no warning for a deletion that is never going to happen.
-  if (delete_hold_ms_ > 0 && gameList().at(selected_).is_installed) {
+  if (delete_hold_ms_ > 0 && selected_ < gameList().gameCount() &&
+      selectedEntry().is_installed) {
     const float warn = static_cast<float>(delete_hold_ms_) /
                        static_cast<float>(kDeleteHoldMs);
     if (warn > 0.5f) {
@@ -299,8 +316,8 @@ void LauncherScene::render(Engine& engine) {
   // Holding the nav button past kHighscoreHoldMs shows the selected game's
   // highscore, instantly rather than bit-by-bit, so a quick peek doesn't have
   // to wait out a reveal animation meant for a score just earned.
-  if (nav_hold_exceeded_) {
-    engine.renderScore(engine.storage().highscore(gameList().at(selected_).id),
+  if (nav_hold_exceeded_ && selected_ < gameList().gameCount()) {
+    engine.renderScore(engine.storage().highscore(selectedEntry().id),
                        engine.input().holdDuration(Input::kNavButton),
                        /*instant=*/true);
     return;
@@ -310,7 +327,7 @@ void LauncherScene::render(Engine& engine) {
     // The chosen game's colour floods the whole tube, then hands over. It makes
     // the launch feel like a commitment rather than an instant cut.
     const float progress = 1.0f - (launch_timer_ / kLaunchFlashTime);
-    display.span(0.0f, progress, gameList().at(selected_).accent, 1.0f);
+    display.span(0.0f, progress, selectedEntry().accent, 1.0f);
     return;
   }
 

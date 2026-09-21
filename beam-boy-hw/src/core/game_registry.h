@@ -17,6 +17,7 @@
 #include <Arduino.h>
 
 #include "display.h"
+#include "launcher_policy.h"
 
 namespace beamboy {
 
@@ -59,11 +60,15 @@ namespace games {
 extern const GameEntry kGames[];
 extern const uint8_t kGameCount;
 
-// Fixed utility entries that always sit at the very end of the launcher,
-// after every built-in and installed game -- Store, then Network. See
-// cartridge_store.h for how GameList stitches these three groups together.
+// Utilities are kept in the registry so the engine can apply its common
+// hold-B return gesture, but only Settings is exposed by the launcher. Store
+// and Network are reached through Settings during the transition to the final
+// four-item Phase 10 settings flow.
 extern const GameEntry kUtilities[];
-extern const uint8_t kUtilityCount;
+constexpr uint8_t kStoreUtilityIndex = 0;
+constexpr uint8_t kNetworkUtilityIndex = 1;
+constexpr uint8_t kSettingsUtilityIndex = 2;
+constexpr uint8_t kUtilityCount = 3;
 
 }  // namespace games
 }  // namespace beamboy

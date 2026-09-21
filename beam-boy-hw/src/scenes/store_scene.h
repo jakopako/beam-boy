@@ -20,6 +20,7 @@ enum class StoreState : uint8_t {
   kReady,
   kInstalling,
   kSuccess,
+  kFull,
   kFailed,
 };
 
@@ -49,6 +50,7 @@ class StoreScene : public Scene {
   bool installSelected(Engine& engine);
   void computeStatuses();
   void fail(const char* reason);
+  void failFull();
   void drawBusy(Engine& engine, const Color& color);
   void drawReady(Engine& engine);
 

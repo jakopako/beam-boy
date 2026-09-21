@@ -88,7 +88,7 @@ void setup() {
 
   Serial.println();
   Serial.println("==================================");
-  Serial.println("Beam Boy -- Phase 8: power & battery");
+  Serial.println("Beam Boy -- Phase 10: fixed launcher");
   Serial.print("Pixels:     ");
   Serial.println(engine.display().pixelCount());
   Serial.print("Brightness: ");
@@ -115,19 +115,18 @@ void setup() {
     Serial.println("no fuel gauge on this board");
   }
   Serial.print("Games:      ");
-  Serial.print(beamboy::gameList().count());
+  Serial.print(beamboy::gameList().gameCount());
   Serial.print(" (");
   Serial.print(beamboy::games::kGameCount);
   Serial.print(" built in, ");
   Serial.print(cartridge_store.count());
   Serial.println(" installed)");
-  for (uint8_t i = 0; i < beamboy::gameList().count(); i++) {
+  for (uint8_t i = 0; i < beamboy::gameList().gameCount(); i++) {
     const beamboy::GameEntry& game = beamboy::gameList().at(i);
     // Mark which entries came off the filesystem, so a cartridge that failed
     // to load is obvious here rather than only in the [games] lines above.
-    // Installed cartridges sit strictly between the built-ins and the fixed
-    // trailing utility entries (Store, Network) -- see
-    // GameList::build() in core/cartridge_store.cpp.
+    // Installed cartridges sit after the built-ins; utilities are hidden
+    // behind the fixed Settings endpoint.
     const bool installed = i >= beamboy::games::kGameCount &&
                             i < beamboy::games::kGameCount +
                                     cartridge_store.count();
@@ -138,6 +137,7 @@ void setup() {
     Serial.println(")");
   }
   Serial.println("            (* = installed cartridge from /games)");
+  Serial.println("  - Settings (fixed at the end of the tube)");
   Serial.println();
   Serial.println("Launcher : stick selects, A launches (on release)");
   Serial.println("           hold nav-press to see the highscore");

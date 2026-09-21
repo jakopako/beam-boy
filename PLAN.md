@@ -628,24 +628,25 @@ it over the air is item 5.)_
 > setup and maintenance live in one predictable place, and the remaining rough edges become
 > deliberate product behaviour._
 
-#### 1. Fixed launcher layout — nine games plus Settings
+#### 1. Fixed launcher layout — nine games plus Settings ✅
 
-1. Replace the launcher's scrolling list with **ten fixed logical slots** across the tube:
+1. ✅ Replace the launcher's scrolling list with **ten fixed logical slots** across the tube:
    - slots **0–8** are games, left-aligned in registry order;
    - slot **9** is always **Settings**, anchored at the physical end of the tube;
    - unused slots between the last game and Settings remain completely dark.
-2. The nine-game limit counts **all playable games together**: built-in games plus installed
+2. ✅ The nine-game limit counts **all playable games together**: built-in games plus installed
    cartridges. With one built-in game, for example, at most eight additional cartridges fit.
    Store, WiFi and firmware update are utilities and do not consume game slots.
-3. Remove Store and Network from the game registry/launcher list. Settings becomes the only
-   launcher utility entry and owns access to all non-game flows. Game-only behaviour — score
-   peek, delete hold, pause/exit handling and highscore persistence — must never apply to the
-   Settings slot.
-4. Navigation visits only real entries: the installed games and Settings. It jumps across any
+3. ✅ Remove Store and Network from the launcher-facing list. Settings becomes the only
+   launcher utility entry and owns access to all non-game flows. Store and Network remain hidden
+   engine registry entries so the shared utility exit path can identify them, but they are never
+   drawn or navigated in the launcher. Game-only behaviour — score peek, delete hold, pause/exit
+   handling and highscore persistence — never applies to the Settings slot.
+4. ✅ Navigation visits only real entries: the installed games and Settings. It jumps across any
    dark gap rather than making the player step through empty slots. Only the currently selected
    entry breathes; the eased moving highlight may illuminate the path briefly but must not leave
    a previous entry pulsing.
-5. Make capacity a shared invariant, not merely a visual limit:
+5. ✅ Make capacity a shared invariant, not merely a visual limit:
    - expose one `kMaxGames = 9` constant used by `GameList`, `CartridgeStore` and `StoreScene`;
    - reject a **new** install before downloading or writing when all nine slots are occupied,
      with a distinct full-library failure animation and an explicit serial message telling the
@@ -654,9 +655,15 @@ it over the air is item 5.)_
    - handle manually uploaded overflow deterministically at boot: load only the allowed number,
      log every ignored cartridge, and never overrun the launcher or registry arrays;
    - deleting an installed cartridge immediately frees a slot.
-6. Revisit launcher persistence when the list shape changes. Persisting a numeric index is
-   fragile when cartridges are installed/deleted and Settings is pinned separately; prefer the
-   selected game's stable id, or explicitly resolve/clamp the stored selection during rebuild.
+6. ✅ Revisit launcher persistence when the list shape changes. Saves now carry the selected
+   game's stable id (with a tested v2→v3 migration preserving brightness and highscores), while
+   the legacy numeric index remains only as a fallback for old saves. Rebuilds resolve by id and
+   clamp safely after deletion; Settings remains selected across a Store-driven list rebuild.
+
+> **Implemented compatibility bridge:** point 1 needs Settings to be useful before point 2 splits
+> the final four flows. The current Settings scene therefore contains Network (including its
+> existing OTA action) and Store as two temporary items. Both are absent from the launcher, and
+> hold-B returns from either child to Settings. Point 2 will split WiFi/OTA and add Brightness.
 
 ✅ _Visible result: the launcher is always readable as one fixed 1D layout — up to nine games
 at the start, one Settings item at the far end, and honest darkness between them._

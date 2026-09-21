@@ -4,15 +4,10 @@
 //
 // The problem: present a list on a display with no text, one pixel tall.
 //
-// The answer is that each game *is* a colour. A game occupies a block of pixels
-// in its own accent colour; the selected one is bright and breathing while the
-// others sit dim. Scrolling moves the selection, not the list, so a game always
-// lives at the same place on the tube and you learn its position physically —
-// "Wormfight is the red one, second from the left" — the same way you learn
-// where a menu item sits without reading it.
-//
-// If there are more games than the tube can show at a readable size, the list
-// scrolls to keep the selection in view.
+// The answer is that each game *is* a colour. The tube has ten fixed logical
+// slots: up to nine games occupy slots 0-8 from the left, and Settings always
+// occupies slot 9 at the far end. Any slots between the last game and Settings
+// stay dark, so positions never shift and the launcher never scrolls.
 //
 //   Nav (stick)        change selection
 //   A (release)        launch. On release rather than press, so that catching
@@ -41,17 +36,20 @@ class LauncherScene : public Scene {
  private:
   void renderList(Engine& engine);
   void renderBatteryGauge(Engine& engine);
+  const GameEntry& selectedEntry() const;
+  uint8_t selectedRegistryIndex() const;
+  uint8_t selectedPhysicalSlot() const;
+  void drawLauncherSlot(Display& display, uint8_t slot,
+                        const Color& color, float intensity) const;
 
-  // How many pixels each game gets. Below three a game is hard to distinguish
-  // from a stray lit pixel; the launcher shrinks blocks before it scrolls.
-  uint8_t blockPixels(const Display& display) const;
-  uint8_t visibleSlots(const Display& display) const;
-
+  // Dense navigation index: 0..gameCount()-1 are games; gameCount() is
+  // Settings. Its physical slot is nevertheless always kSettingsSlot.
   uint8_t selected_ = 0;
-  uint8_t scroll_ = 0;
+  bool selection_initialized_ = false;
+  bool settings_selected_ = false;
 
-  // Eases toward `selected_` so the highlight slides rather than jumps, which
-  // makes the direction of movement obvious on a display this small.
+  // Eases between physical slots, so jumping over a dark gap toward Settings
+  // still reads as movement in the correct direction.
   float highlight_ = 0.0f;
 
   // Set when a game is chosen; the launch waits for the flash animation.

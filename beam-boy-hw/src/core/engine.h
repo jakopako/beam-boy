@@ -87,6 +87,11 @@ class Engine {
 
   void setLauncher(Scene* launcher) { launcher_ = launcher; }
 
+  // Utility scenes normally return to the launcher on hold-B. A nested menu
+  // such as Settings can override that for one level so Store/Network return
+  // to their parent instead of skipping out of the hierarchy.
+  void setUtilityReturn(Scene* scene) { utility_return_ = scene; }
+
   // Which registry entry is currently running, so scores are filed against the
   // right game id. Negative means "not a game" (the launcher itself).
   void setCurrentGame(int8_t index) { current_game_ = index; }
@@ -173,6 +178,7 @@ class Engine {
   Scene* scene_ = nullptr;
   Scene* pending_scene_ = nullptr;
   Scene* launcher_ = nullptr;
+  Scene* utility_return_ = nullptr;
   int8_t current_game_ = -1;
   bool paused_ = false;
   // See setIdleServiced(). When true, tick() calls the scene's idle() on

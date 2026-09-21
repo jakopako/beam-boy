@@ -1,6 +1,7 @@
 #include "core/game_registry.h"
 
 #include "scenes/network_scene.h"
+#include "scenes/settings_scene.h"
 #include "scenes/store_scene.h"
 #include "scenes/wormfight_scene.h"
 
@@ -12,6 +13,7 @@ namespace {
 WormfightScene wormfight;
 NetworkScene network;
 StoreScene store;
+SettingsScene settings;
 
 }  // namespace
 
@@ -27,21 +29,23 @@ const GameEntry kGames[] = {
 };
 
 const uint8_t kGameCount = sizeof(kGames) / sizeof(kGames[0]);
+static_assert(kGameCount <= kMaxGames,
+              "built-in games exceed the nine-game launcher capacity");
 
-// Always the last two launcher entries, in this order, after every built-in
-// and installed game -- see GameList::build() in cartridge_store.cpp. Not
-// games: is_game=false, so the engine leaves the nav button to the scene, and
-// the radio stays off unless the user walks all the way here and asks for
-// it -- opt-in is enforced by the fact that only Network/Store scenes can
-// switch it on.
+// Utilities remain addressable by GameList so the engine can provide its
+// common hold-B return gesture. Only Settings is rendered by the launcher;
+// Store and Network are reached from there.
 const GameEntry kUtilities[] = {
     {"store", "Store", Color(255, 80, 180), &store, false,
      false},  // pink
     {"network", "Network", Color(0, 255, 90), &network, false,
      false},  // green
+    {"settings", "Settings", Color(150, 110, 255), &settings, false,
+     false},  // violet
 };
 
-const uint8_t kUtilityCount = sizeof(kUtilities) / sizeof(kUtilities[0]);
+static_assert(sizeof(kUtilities) / sizeof(kUtilities[0]) == kUtilityCount,
+              "utility index constants must match kUtilities");
 
 }  // namespace games
 }  // namespace beamboy

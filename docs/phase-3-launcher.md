@@ -6,7 +6,8 @@ reflashing.
 
 ## What's new
 
-- **A launcher** — each game is a coloured block on the tube; scroll and launch.
+- **A launcher** — each game is a coloured block in one of nine fixed slots;
+  Settings is always the tenth slot at the far end.
 - **Persistence** — settings and per-game highscores in LittleFS.
 - **A second game** — *Reflex*, so the launcher has something to choose between.
 - **Pause & exit** — nav-press pauses, then hold **B** to return to the launcher.
@@ -51,7 +52,7 @@ created by the firmware rather than shipped with it.
 | Control              | Action                                    |
 |----------------------|-------------------------------------------|
 | Stick left/right     | Change selection (one step per push)      |
-| A                    | Launch the selected game                  |
+| A                    | Launch the selected game or open Settings |
 | Stick press (hold)   | Show that game's highscore in binary      |
 | B (hold)             | *(superseded in Phase 7 — deletes an installed cartridge; see [`docs/phase-7-store.md`](phase-7-store.md))* |
 | A + B (hold)         | Show the battery gauge; see [`docs/phase-8-power.md`](phase-8-power.md) |
@@ -90,14 +91,30 @@ game must not be *able* to trap you inside it.
 Each game occupies a block of pixels in its accent colour. The selected block is
 bright and breathing; the others sit dim at 22%.
 
-The selection moves, **not the list** — so a game keeps the same physical
-position on the tube and you learn it bodily ("Wormfight is the red one on the
-left") rather than by reading. If there are more games than fit, the list scrolls
-only when the selection would otherwise fall off the end, and a dim white pixel
-appears at whichever end continues.
+The launcher has ten fixed physical slots and never scrolls. Up to nine games
+occupy slots 0–8 from the left; Settings is permanently anchored in slot 9 at
+the far end. If fewer than nine games exist, every unused slot between the last
+game and Settings stays completely dark. Navigation is nevertheless dense:
+one step after the last game jumps directly to Settings rather than stopping on
+each dark slot.
+
+The nine-game cap includes built-in and installed games together. `kMaxGames`
+is shared by the registry, filesystem scanner and Store: a new install is
+rejected before download when full, while updating an installed cartridge is
+still allowed. Sideloaded overflow is validated and logged but omitted from the
+launcher, so arrays and physical slots can never overflow.
+
+Only the actual selected entry breathes. The eased highlight still makes a
+selection change read as motion, but cannot leave the previously selected
+neighbor pulsing.
 
 Launching floods the tube with the game's colour before handing over, which makes
 the launch feel like a commitment rather than an instant cut.
+
+Launcher persistence now uses the selected game's stable id, not only its
+numeric list position. Installing or deleting another cartridge therefore
+cannot make the console resume on an unrelated game. The save format migrates
+v2 records to v3 without losing brightness or highscores.
 
 | Game      | Accent | Id (storage key) |
 |-----------|--------|------------------|
