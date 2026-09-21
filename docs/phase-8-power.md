@@ -252,7 +252,7 @@ and a deliberate one produce an identical boot.
   display fades out and the device deep-sleeps; any of A, B or the stick
   press wakes it.
 
-## Current limitations / not yet validated from this environment
+## Current limitations / follow-up tuning
 
 - **Charging is detected with a lag of minutes, not seconds.** The MAX17048
   reports charging via its `CRATE` (charge rate, %/hr) register, which is
@@ -266,9 +266,9 @@ and a deliberate one produce an identical boot.
   positives from resting jitter, which is the failure mode the threshold
   exists to prevent. A genuine fix would need a real VBUS-present signal,
   which this board doesn't expose.
-- The MAX17048 detection, its actual percentage/voltage readings, and the
-  ext1 deep-sleep wake path can only be verified on real hardware — this
-  environment has no physical Feather attached. Both firmware builds compile
-  cleanly and the full native suite passes, but on-device behaviour (does the
-  gauge get found on the STEMMA QT bus, do the thresholds feel right in
-  practice, does the board actually wake on a button press) is still open.
+- **Hardware validation is complete.** The Feather finds the MAX17048 and
+  reports plausible percentage/voltage values; idle deep sleep remains asleep
+  until an actual button press, and the ext1 wake mask identifies the pressed
+  button correctly. The only remaining follow-up is subjective threshold
+  tuning after a full discharge cycle: the current 15% warning and 5% critical
+  shutdown values are safe defaults, not unfinished functionality.

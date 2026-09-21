@@ -556,9 +556,14 @@ it over the air is item 5.)_
   in `StoreScene::installSelected()`. Plain hold-B now exits the Store
   immediately after an install, matching its own documented behaviour.
 
-### Phase 8 — Power & Battery Management _(1–2 days)_
+### Phase 8 — Power & Battery Management _(1–2 days)_ ✅
 
 > _Goal: untether from USB, run safely on battery power, and manage energy in the OS._
+
+> **Status: complete.** Implemented, build- and host-test-validated, and exercised on the
+> Feather hardware: fuel-gauge readings, charge feedback, idle deep sleep, and
+> button wake all work as intended. The warning/shutdown percentages remain easy-to-tune
+> policy values rather than unfinished functionality.
 
 > **Hardware-reality correction (post-planning):** the Adafruit Feather ESP32-S3
 > No PSRAM has **no battery-sense ADC pin at all** — Adafruit's own docs are
@@ -571,29 +576,29 @@ it over the air is item 5.)_
 > so there's no divider ratio to calibrate and no discharge-curve lookup table
 > to tune. The sections below describe what was actually built.
 
-1. **Hardware & Sensing Layer (`src/core/power.*`):**
+1. ✅ **Hardware & Sensing Layer (`src/core/power.*`):**
    - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
    - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `charging()`, `level()`.
-   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it worth staying awake for — live in `src/core/power_policy.h` as plain, host-testable functions over floats (`classifyPowerLevel`, `isChargingRate`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. 11 native tests cover the hysteresis and charging/idle-sleep decisions.
+   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it worth staying awake for — live in `src/core/power_policy.h` as plain, host-testable functions over floats (`classifyPowerLevel`, `isChargingRate`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. 17 native tests cover gauge-reading plausibility, hysteresis, charging, and idle-sleep decisions.
    - Charging is detected via the gauge's own `chargeRate()` (%/hr), with a small positive threshold (not `> 0`) so resting jitter never reads as charging.
 
-2. **Battery Gauge & Status — launcher only:**
+2. ✅ **Battery Gauge & Status — launcher only:**
    - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar (green → amber → red), for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
    - On a board with no fuel gauge (the DevKitC), the same gesture shows a dim, steady white pixel instead of a fake reading.
    - While charging, the bar breathes rather than holding steady (no icon to draw on a 1D display).
    - Adding a third gesture to two buttons that already had two turned the launcher's input handling into a small state machine, which is now arbitrated in one place (`src/scenes/launcher_gestures.h`) and covered by 17 native tests. It closes three ordering bugs, two of which destroyed user data: A pressed slightly before B launching a game instead of showing the gauge; releasing A first after the gauge deleting the selected cartridge; and holding B to exit a game (1.2 s) rolling straight on past the delete threshold (2.5 s). See [`docs/phase-8-power.md`](docs/phase-8-power.md#gesture-ordering).
 
-3. **Persistent Low-Battery Warning Overlay:**
+3. ✅ **Persistent Low-Battery Warning Overlay:**
    - Two-sided hysteresis, not a single threshold: `kLowBatteryPercent = 15` / recovers at `20`, `kCriticalBatteryPercent = 5` / recovers at `10` — so a percentage dithering right at a boundary can't flicker the indicator on and off.
    - While `kLow`, a single pulsing red pixel at the last index is drawn every frame, in every scene (game, pause, launcher) — visible but not disruptive.
    - `kCritical` is not shown as an overlay at all; it immediately hands off to the shutdown sweep below instead.
 
-4. **Safe Shutdown & Data Protection:**
+4. ✅ **Safe Shutdown & Data Protection:**
    - The instant `updatePower()` classifies the level as `kCritical`, it pre-empts _everything_ — mid-game, mid-pause, mid-menu — before the pause/exit-gesture logic even runs.
    - `beginCriticalShutdown()` flushes storage (and the current game's score, if any) **before** a single frame of the shutdown animation plays, so the write is guaranteed to complete while power is still guaranteed, ahead of the hardware protection circuit's own abrupt cutoff.
    - A red sweep closing in from both ends plays for `kCriticalShutdownMs`, then the device configures `esp_sleep_enable_ext1_wakeup()` on the A/B/stick-press GPIOs (`ESP_EXT1_WAKEUP_ANY_LOW`, since they're `INPUT_PULLUP`) and calls `esp_deep_sleep_start()`.
 
-5. **Charging Animation & Idle Sleep:**
+5. ✅ **Charging Animation & Idle Sleep:**
    - **Charging visualizer**: while plugged in, a green sweep animates along the tube (`kChargingSweepMs` period) instead of the idle-sleep countdown — sleeping while charging would save nothing (USB is powering the device regardless) and only costs the feedback. Note that charging detection lags the board's own CHG LED by minutes: the MAX17048's charge-rate register is a filtered state-of-charge trend, not a current measurement. See [`docs/phase-8-power.md`](docs/phase-8-power.md) for why lowering the threshold to chase it is the wrong trade.
    - **Idle sleep**: after `kIdleSleepMs` (2 minutes) with no button held and no stick deflection past a small deadzone, the framebuffer fades out over `kIdleFadeMs` and the device enters the same deep sleep as a critical shutdown, waking on any button press. This check is re-derived every frame from the time since the last activity rather than latched, so any input — or plugging in USB mid-fade — falls out of the idle path on the very next frame with no extra state to unwind.
 
@@ -617,12 +622,110 @@ it over the air is item 5.)_
 
 ✅ _Visible result: Beam Boy v1._
 
-### Phase 10 — Polish
+### Phase 10 — Polish & Settings UX
 
-A boot animation · a factory-reset gesture · brightness setting in the launcher (directly
-trades runtime for visibility) · charge-cycle-friendly "storage mode" if left unused · a
-`docs/making-games.md` so others can write cartridges · optional haptic motor (a click on hit
-adds a lot for very little).
+> _Goal: turn the working prototype into a coherent appliance: games stay one action away,
+> setup and maintenance live in one predictable place, and the remaining rough edges become
+> deliberate product behaviour._
+
+#### 1. Fixed launcher layout — nine games plus Settings
+
+1. Replace the launcher's scrolling list with **ten fixed logical slots** across the tube:
+   - slots **0–8** are games, left-aligned in registry order;
+   - slot **9** is always **Settings**, anchored at the physical end of the tube;
+   - unused slots between the last game and Settings remain completely dark.
+2. The nine-game limit counts **all playable games together**: built-in games plus installed
+   cartridges. With one built-in game, for example, at most eight additional cartridges fit.
+   Store, WiFi and firmware update are utilities and do not consume game slots.
+3. Remove Store and Network from the game registry/launcher list. Settings becomes the only
+   launcher utility entry and owns access to all non-game flows. Game-only behaviour — score
+   peek, delete hold, pause/exit handling and highscore persistence — must never apply to the
+   Settings slot.
+4. Navigation visits only real entries: the installed games and Settings. It jumps across any
+   dark gap rather than making the player step through empty slots. Only the currently selected
+   entry breathes; the eased moving highlight may illuminate the path briefly but must not leave
+   a previous entry pulsing.
+5. Make capacity a shared invariant, not merely a visual limit:
+   - expose one `kMaxGames = 9` constant used by `GameList`, `CartridgeStore` and `StoreScene`;
+   - reject a **new** install before downloading or writing when all nine slots are occupied,
+     with a distinct full-library failure animation and an explicit serial message telling the
+     player to delete a cartridge first;
+   - allow updating an already-installed cartridge while full, since it does not consume a slot;
+   - handle manually uploaded overflow deterministically at boot: load only the allowed number,
+     log every ignored cartridge, and never overrun the launcher or registry arrays;
+   - deleting an installed cartridge immediately frees a slot.
+6. Revisit launcher persistence when the list shape changes. Persisting a numeric index is
+   fragile when cartridges are installed/deleted and Settings is pinned separately; prefer the
+   selected game's stable id, or explicitly resolve/clamp the stored selection during rebuild.
+
+✅ _Visible result: the launcher is always readable as one fixed 1D layout — up to nine games
+at the start, one Settings item at the far end, and honest darkness between them._
+
+#### 2. Settings scene — four entries
+
+Entering Settings opens a second fixed menu with exactly four items for now. Use the same visual
+language and controls as the launcher (stick selects, A opens, hold B returns), but keep it a
+separate scene/menu model so settings utilities never masquerade as games.
+
+1. **WiFi**
+   - Move the existing credential flow here: connect with stored credentials, open the captive
+     portal for a new network, and forget credentials with the existing confirmation.
+   - Keep WiFi opt-in: merely opening Settings must not power the radio; entering WiFi does.
+2. **Update firmware**
+   - Split OTA out of the current combined Network scene into its own explicit item and scene.
+   - Reuse the existing `Network` and `Ota` components rather than duplicating connection logic.
+   - If no credentials exist, show a clear failure/direction back to WiFi instead of silently
+     opening provisioning or coupling the two menu items again.
+   - Preserve the deliberate confirmation before flashing, progress feedback, error state and
+     reboot-on-success behaviour.
+3. **Store**
+   - Move the existing cartridge store here unchanged in capability: connect, fetch the index,
+     show install/update status, verify SHA-256, install, rebuild the game list without rebooting.
+   - Apply the nine-game capacity rule before a new download; updates remain available at cap.
+   - Returning from Store lands in Settings, not directly in the game launcher.
+4. **Brightness**
+   - Add an interactive live preview: stick left/right lowers/raises brightness in bounded steps,
+     so the tube itself is the meter and the player can judge it under actual room lighting.
+   - Respect the board's safe brightness cap; the setting must never bypass the existing display
+     power limit.
+   - Persist through the existing `Storage::setBrightness()` record and commit on confirmation or
+     Settings exit, not on every adjustment (avoids unnecessary flash writes).
+   - Define a usable minimum rather than allowing an accidental fully-dark console. Provide a
+     recognizable default position and a way to restore it without factory-resetting everything.
+
+✅ _Visible result: the main launcher contains only games and one stable Settings endpoint;
+network setup, maintenance, downloads and display configuration are grouped behind it._
+
+#### 3. Remaining product polish
+
+1. **Factory reset gesture:** add a hard-to-trigger, confirmed gesture from the Settings root
+   (not a fifth visible item). It should erase saved settings, highscores and WiFi credentials;
+   decide explicitly whether installed cartridges survive. Show an unmistakable destructive
+   countdown and commit/erase before rebooting.
+2. **Charge-cycle-friendly storage mode:** after a much longer period than ordinary idle sleep,
+   enter the lowest practical power state and document the expected standby current. Keep normal
+   two-minute deep sleep and button wake fast; storage mode is for days/weeks unused, not a second
+   idle animation.
+3. **Game-author documentation:** write `docs/making-games.md` covering cartridge layout,
+   `meta.json`, the Berry API, input conventions, frame/update rules, score reporting, sandbox
+   limits, local `uploadfs` iteration and store publication/hash generation. A new contributor
+   should be able to build a minimal game without reading firmware internals.
+4. **Boot feedback (optional, low priority):** application code cannot draw during the ESP32 ROM
+   and second-stage bootloader interval, which measurements show dominates startup. Any firmware
+   boot animation can therefore cover only the short tail after `setup()` begins; implement one
+   only if the final tube makes that tail visibly worthwhile. Do not add constructor/RMT hacks
+   that duplicate the display driver for negligible perceived improvement.
+5. **Optional haptics:** evaluate a tiny vibration motor or linear resonant actuator only after
+   the enclosure is stable. Drive it through a transistor/driver rather than a GPIO, budget its
+   peak current, and expose a minimal engine API (short click on hit/selection) that games can use
+   without controlling hardware timing directly.
+6. **Final consistency pass:** verify every utility has a reliable B-return path, every destructive
+   action requires a hold/confirmation, radio-off-by-default still holds, brightness and launcher
+   selection survive reboot, and all visual states remain distinguishable on the final LED tube.
+
+✅ _Visible result: Beam Boy feels intentional rather than assembled — a fixed launcher, one
+settings home, persistent display preferences, safe maintenance flows, and documentation others
+can build games from._
 
 ---
 
