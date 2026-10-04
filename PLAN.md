@@ -662,8 +662,8 @@ it over the air is item 5.)_
 
 > **Implemented compatibility bridge:** point 1 needs Settings to be useful before point 2 splits
 > the final four flows. The current Settings scene therefore contains Network (including its
-> existing OTA action) and Store as two temporary items. Both are absent from the launcher, and
-> hold-B returns from either child to Settings. Point 2 will split WiFi/OTA and add Brightness.
+> existing OTA action), Store and Brightness as three items. All are absent from the launcher,
+> and hold-B returns from each child to Settings. Point 2 still needs to split WiFi/OTA.
 
 ✅ _Visible result: the launcher is always readable as one fixed 1D layout — up to nine games
 at the start, one Settings item at the far end, and honest darkness between them._
@@ -690,8 +690,8 @@ separate scene/menu model so settings utilities never masquerade as games.
      show install/update status, verify SHA-256, install, rebuild the game list without rebooting.
    - Apply the nine-game capacity rule before a new download; updates remain available at cap.
    - Returning from Store lands in Settings, not directly in the game launcher.
-4. **Brightness**
-   - Add an interactive live preview: stick left/right lowers/raises brightness in bounded steps,
+4. ✅ **Brightness**
+   - Interactive live preview: stick left/right lowers/raises brightness in bounded steps,
      so the tube itself is the meter and the player can judge it under actual room lighting.
    - Respect the board's safe brightness cap; the setting must never bypass the existing display
      power limit.
@@ -699,6 +699,16 @@ separate scene/menu model so settings utilities never masquerade as games.
      Settings exit, not on every adjustment (avoids unnecessary flash writes).
    - Define a usable minimum rather than allowing an accidental fully-dark console. Provide a
      recognizable default position and a way to restore it without factory-resetting everything.
+
+   **Implemented controls:** left/right uses the menu's detent and auto-repeat to adjust by
+   4/255 per step, from a visible minimum of 8/255 to the board cap/default of 64/255.
+   These values scale with the board cap. The white fill previews the level; the blue endpoint
+   marks the default and becomes brighter when selected. Clicking the stick restores that
+   default. A saves in place (brief green feedback); hold B saves and returns to Settings.
+   Changes are staged in RAM, not written on each step; the engine's existing sleep/shutdown
+   flush also preserves a pending adjustment. A failed save logs an error and shows red feedback,
+   leaving the preference dirty for retry. Startup handles the legacy zero/default sentinel and
+   clamps old preferences to the usable range; Display independently enforces the safe maximum.
 
 ✅ _Visible result: the main launcher contains only games and one stable Settings endpoint;
 network setup, maintenance, downloads and display configuration are grouped behind it._
