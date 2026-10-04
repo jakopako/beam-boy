@@ -5,6 +5,7 @@
 #include <esp_sleep.h>
 #include <math.h>
 
+#include "brightness_policy.h"
 #include "cartridge_store.h"
 #include "game_registry.h"
 
@@ -67,10 +68,7 @@ void Engine::begin() {
   // Power getter already answers as if nothing changed when unavailable.
   power_.begin();
 
-  // A stored brightness of 0 means "never set", so fall back to the board cap.
-  if (storage_.brightness() > 0) {
-    display_.setBrightness(storage_.brightness());
-  }
+  display_.setBrightness(brightness::fromStored(storage_.brightness()));
 
   last_frame_us_ = micros();
   scene_started_ms_ = millis();

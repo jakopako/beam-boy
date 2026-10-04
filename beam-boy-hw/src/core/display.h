@@ -151,7 +151,10 @@ class Display {
 
   // --- Brightness ----------------------------------------------------------
 
-  void setBrightness(uint8_t brightness) { brightness_ = brightness; }
+  void setBrightness(uint8_t brightness) {
+    brightness_ = brightness > board::kBrightnessCap ? board::kBrightnessCap
+                                                    : brightness;
+  }
   uint8_t brightness() const { return brightness_; }
 
   // Physical orientation. If the tube is mounted with pixel 0 at the far end,
@@ -163,6 +166,9 @@ class Display {
   // present() skips a frame rather than driving the strip when CanShow() is
   // false, without modelling real DMA timing.
   uint32_t shownCount() const { return strip_.shownCount(); }
+  const RgbColor& shownPixel(uint16_t index) const {
+    return strip_.shown().at(index);
+  }
 #endif
 
  private:

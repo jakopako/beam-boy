@@ -1,11 +1,7 @@
 #pragma once
 
-// Transitional Settings root for Phase 10 point 1.
-//
-// Store and Network used to sit directly in the launcher. Moving them behind
-// this scene preserves both utilities while the launcher becomes games-only.
-// Phase 10 point 2 will expand this menu to WiFi, Update firmware, Store and
-// Brightness; until then Network still contains its existing OTA flow.
+// Transitional Settings root: Network, Store and Brightness. Network still
+// contains OTA until Phase 10 splits WiFi and Update firmware.
 
 #include "core/engine.h"
 

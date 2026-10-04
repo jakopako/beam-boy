@@ -55,8 +55,7 @@ void SettingsScene::render(Engine& engine) {
   Display& display = engine.display();
   display.clear();
 
-  // Two evenly-spaced items for the compatibility bridge. Point 2 will replace
-  // these with the final four-item settings layout.
+  // The final four-item layout awaits the WiFi/OTA split.
   for (uint8_t i = 0; i < kItemCount; i++) {
     const float position = (static_cast<float>(i) + 1.0f) /
                            (static_cast<float>(kItemCount) + 1.0f);

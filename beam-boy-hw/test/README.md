@@ -53,6 +53,7 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 |---|---|
 | `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, and the refresh divider that keeps LED DMA off the radio's back during provisioning |
 | `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat |
+| `test_brightness` | Actual brightness scene controls and repeat timing, visible minimum, display power cap, default reset, deferred writes, confirmation/exit persistence, and failed-save feedback |
 | `test_soak` | Long-run invariants: phase growth over 6 simulated hours, the `millis()` rollover, fade termination |
 | `test_net_policy` | The credential-retention truth table: which connection failures discard stored WiFi credentials |
 
@@ -63,9 +64,10 @@ Make a directory `test/test_<name>/` with a single `.cpp` containing `main()`,
 in the `[env:native]` section of `platformio.ini` — only listed files are
 compiled into the test binary.
 
-Code that touches WiFi, OTA or the LED driver is not currently in that filter,
-because pulling it in would mean shimming the whole networking stack for very
-little return.
+Code that touches WiFi, OTA or the battery driver is not currently in that
+filter, because pulling it in would mean shimming hardware for very little
+return. The brightness scene uses Engine's inline display/input/storage accessors;
+an empty fuel-gauge type lets it compile without emulating I2C or power management.
 
 **But that is a reason to move the decision, not to skip the test.** `Network`
 is untestable here; the rule deciding whether a failed connection keeps its
