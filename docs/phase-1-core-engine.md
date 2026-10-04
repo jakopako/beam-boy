@@ -86,13 +86,18 @@ The dot bounces gently off each end, so it can't be lost off the edge.
 
 ### Binary score
 Press **A** a few times, then hold **B**. The score appears in binary, **anchored at pixel 0**
-(bit 0 is always the first pixel), one bit revealed at a time. Bits are coloured by nibble
-(blue = bits 0–3, green = 4–7) so place values can be read without counting.
+(bit 0 is always the first pixel), one bit revealed at a time on LEDs 0, 2, 4, and so on.
+Spacer LEDs stay off. One bits are coloured by nibble (blue = bits 0–3, green = 4–7);
+zero bits are white at 25% intensity. White is never used for one bits.
 
-Press A five times → hold B → pixels 0 and 2 light (binary 101 = 5).
+Press A five times → hold B → LEDs 0 and 4 are blue, LED 2 is white
+(binary 101 = 5), with LEDs 1 and 3 dark.
 
 The readout always starts at the same end, so a given bit is always in the same place —
 values can be read by position rather than counted.
+Only positions through the highest set bit are shown; zero is a single white dot.
+The 50-LED tube fits 25 bits (maximum 33,554,431). Overflow alternates amber and
+white dots every 300 ms, keeping spacers dark, and logs the full score to serial.
 
 ### Frame timing
 Every 5 s the serial monitor prints:

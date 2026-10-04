@@ -69,6 +69,7 @@ def next_round()
 end
 
 def init()
+  beam.reset_score()
   lives = kStartingLives
   round = 0
   speed = kStartSpeed

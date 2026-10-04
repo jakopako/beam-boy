@@ -243,6 +243,7 @@ def start_life()
 end
 
 def init()
+  beam.reset_score()
   lives = kStartingLives
   score_accum = 0.0
   survival_started_ms = beam.time()

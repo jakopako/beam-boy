@@ -2,9 +2,9 @@
 
 // Beam Boy — network scene.
 //
-// The only place in the firmware that switches the radio on, so the "offline by
-// default" promise is enforced by structure rather than by discipline: if you
-// never open this scene, the radio never comes up.
+// WiFi credentials and connectivity only. Opening Settings never starts the
+// radio; this scene starts it on an explicit Connect or Setup action. Store
+// separately opts in to connectivity when opened.
 //
 // Everything the user learns about the network, they learn from a one-
 // dimensional line of light. There is no text, so each state gets a distinct
@@ -14,7 +14,6 @@
 
 #include "../core/engine.h"
 #include "../core/network.h"
-#include "../core/ota.h"
 
 namespace beamboy {
 
@@ -38,10 +37,8 @@ class NetworkScene : public Scene {
   void applyMenu(Engine& engine);
   void drawMenu(Engine& engine);
   void drawStatus(Engine& engine);
-  void drawOta(Engine& engine);
 
   Network net_;
-  Ota ota_;
   Menu menu_ = Menu::kConnect;
   float phase_ = 0.0f;
 
@@ -58,11 +55,6 @@ class NetworkScene : public Scene {
   // nothing -- the menu simply has one fewer entry afterwards.
   uint32_t forgot_at_ms_ = 0;
   static constexpr uint32_t kForgotFlashMs = 1200;
-
-  // Once connected, B offers the firmware update rather than disconnecting.
-  // Kept separate from the menu because it is only reachable from a connected
-  // state, and because an accidental firmware install is worth one extra step.
-  bool ota_active_ = false;
 
   // Latches the moment a terminal state was reached, so success and failure can
   // flash briefly and then settle rather than strobing forever.

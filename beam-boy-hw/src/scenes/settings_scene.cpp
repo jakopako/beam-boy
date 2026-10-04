@@ -3,11 +3,11 @@
 #include <math.h>
 
 #include "core/cartridge_store.h"
+#include "scenes/settings_menu.h"
 
 namespace beamboy {
 namespace {
 
-constexpr uint8_t kItemCount = 3;
 constexpr float kHighlightEase = 12.0f;
 
 }  // namespace
@@ -18,18 +18,14 @@ void SettingsScene::enter(Engine& engine) {
 }
 
 Scene* SettingsScene::selectedScene() const {
-  const uint8_t utility_index =
-      selected_ == 0 ? games::kNetworkUtilityIndex
-                     : (selected_ == 1 ? games::kStoreUtilityIndex
-                                       : games::kBrightnessUtilityIndex);
-  return games::kUtilities[utility_index].scene;
+  return games::kUtilities[settings::kItems[selected_]].scene;
 }
 
 void SettingsScene::update(Engine& engine, float dt) {
   const int8_t step = engine.input().navDelta();
   if (step != 0) {
     const int16_t next = static_cast<int16_t>(selected_) + step;
-    if (next >= 0 && next < kItemCount) {
+    if (next >= 0 && next < settings::kItemCount) {
       selected_ = static_cast<uint8_t>(next);
     }
   }
@@ -55,14 +51,10 @@ void SettingsScene::render(Engine& engine) {
   Display& display = engine.display();
   display.clear();
 
-  // The final four-item layout awaits the WiFi/OTA split.
-  for (uint8_t i = 0; i < kItemCount; i++) {
+  for (uint8_t i = 0; i < settings::kItemCount; i++) {
     const float position = (static_cast<float>(i) + 1.0f) /
-                           (static_cast<float>(kItemCount) + 1.0f);
-    const uint8_t utility_index =
-        i == 0 ? games::kNetworkUtilityIndex
-               : (i == 1 ? games::kStoreUtilityIndex
-                         : games::kBrightnessUtilityIndex);
+                           (static_cast<float>(settings::kItemCount) + 1.0f);
+    const uint8_t utility_index = settings::kItems[i];
     const float distance = fabsf(highlight_ - static_cast<float>(i));
     float intensity = distance < 1.0f ? 0.2f + 0.8f * (1.0f - distance) : 0.2f;
     if (i == selected_) {

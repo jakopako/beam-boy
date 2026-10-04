@@ -181,7 +181,8 @@ Adding a native game is three steps: write the scene, include it in
 - [ ] The selection breathes; the unselected game stays dim
 - [ ] Selection clamps at both ends rather than wrapping
 - [ ] A (or stick press) floods the tube with the game's colour, then launches
-- [ ] Hold B shows the highscore in binary (dim single pixel if it's zero)
+- [ ] Hold the stick button to show the spaced binary highscore (one white dot if zero;
+      coloured ones and white zeros on every second LED, dark spacers)
 
 **Pause & exit**
 - [ ] Stick press during a game freezes it and dims the display

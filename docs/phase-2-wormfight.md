@@ -76,7 +76,8 @@ target needs before you commit to it.
 - A worm reaching you costs a life. The line clears and the current wave resumes
   from where it was, rather than restarting your progress.
 - Clearing a wave advances to the next: more worms, faster, and slowly longer.
-- At zero lives, the score is displayed in binary. Press A to restart.
+- At zero lives, the score is displayed in spaced binary: coloured ones and 25%-intensity
+  white zeros on every second LED, with dark spacers. Press A to restart.
 
 ## What to look for
 
@@ -144,13 +145,14 @@ which makes fast movement far more readable at this resolution.
 
 ## Toolchain note
 
-`Engine::renderScore()` contains two `noinline` helpers
-(`bitIntensity()`, `drawScoreBit()`). These are **not** stylistic: with the code
+`Engine::renderScore()` now lives in `src/core/engine_score.cpp` so the actual
+renderer can be host-tested without the hardware frame loop. Its `bitIntensity()`
+helper remains `noinline`. This is **not** stylistic: with the code
 inlined, the Xtensa GCC shipped with the ESP32 platform hits an internal compiler
 error (`insn does not satisfy its constraints` during the postreload pass) trying
 to load a float literal directly into an FP register. Splitting the float maths
 out sidesteps it. Do not "simplify" them back inline without rebuilding the
-ESP32-S3 environment.
+ESP32-S3 environments.
 
 **Charging is level-driven, not edge-driven.** `updateCharge()` reads
 `input.held(Button::kB)` rather than press/release edges. An edge-driven charge

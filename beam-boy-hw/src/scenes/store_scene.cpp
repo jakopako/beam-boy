@@ -358,7 +358,7 @@ void StoreScene::enter(Engine& engine) {
 
   if (!net_.hasCredentials()) {
     fail("no credentials");
-    Serial.println(F("[store] no stored WiFi credentials; use Network first"));
+    Serial.println(F("[store] no stored WiFi credentials; use Settings > WiFi first"));
     return;
   }
 

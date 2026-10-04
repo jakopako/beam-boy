@@ -62,14 +62,14 @@ extern const uint8_t kGameCount;
 
 // Utilities are kept in the registry so the engine can apply its common
 // hold-B return gesture, but only Settings is exposed by the launcher. Store
-// and Network are reached through Settings during the transition to the final
-// four-item Phase 10 settings flow.
+// and WiFi, Brightness and Update firmware are reached through Settings.
 extern const GameEntry kUtilities[];
 constexpr uint8_t kStoreUtilityIndex = 0;
 constexpr uint8_t kNetworkUtilityIndex = 1;
 constexpr uint8_t kBrightnessUtilityIndex = 2;
 constexpr uint8_t kSettingsUtilityIndex = 3;
-constexpr uint8_t kUtilityCount = 4;
+constexpr uint8_t kUpdateFirmwareUtilityIndex = 4;
+constexpr uint8_t kUtilityCount = 5;
 
 }  // namespace games
 }  // namespace beamboy

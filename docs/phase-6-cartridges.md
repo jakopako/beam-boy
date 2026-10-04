@@ -103,6 +103,7 @@ beam.time()                               -- ms since the scene was entered
 beam.random(n) / beam.random(lo, hi)
 
 beam.score(add)                           -- accumulate; engine files it on exit
+beam.reset_score()                        -- preserve highscore in RAM, reset run to zero
 beam.highscore()                          -- NEW: read this cartridge's own highscore
 beam.show_score(elapsed_ms)               -- the engine-drawn binary reveal
 beam.raw_pixel(index, color, intensity)   -- NEW: bypass normalised coords, for UI chrome (life dots)
@@ -110,6 +111,14 @@ beam.exit()                               -- return to launcher
 
 beam.log(msg)                             -- Serial, for cartridge development
 ```
+
+Call `beam.reset_score()` in the game's `init()` (and any separate restart path).
+It starts a fresh zero-score run while retaining the previous run's highscore
+in RAM. The normal exit/sleep commit persists that record without a flash write
+on every retry. It never erases highscores. If the record cannot be retained,
+the reset raises a script error rather than discarding the score.
+This API requires the updated firmware; update the engine before installing
+the revised Reflex cartridge. Fishing uses the same reset in its local cartridge.
 
 **Colours cross the boundary as one packed `0xRRGGBB` int**, not three
 separate r/g/b arguments. This matches how a script author would actually

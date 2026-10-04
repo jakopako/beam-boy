@@ -33,7 +33,6 @@ void NetworkScene::enter(Engine& engine) {
   menu_ = net_.hasCredentials() ? Menu::kConnect : Menu::kSetup;
   phase_ = 0.0f;
   settled_at_ms_ = 0;
-  ota_active_ = false;
   last_state_ = NetState::kOff;
   forget_armed_ = false;
   forgot_at_ms_ = 0;
@@ -84,9 +83,6 @@ void NetworkScene::update(Engine& engine, float dt) {
     } else if (state == NetState::kConnected) {
       Serial.print(F("[net] connected, ip "));
       Serial.print(net_.address());
-      // TLS needs ~16-22 KB for a handshake. If this number is close to that,
-      // OTA will fail at the handshake rather than the download, which looks
-      // identical from the tube -- so it is worth logging.
       Serial.print(F("  free heap "));
       Serial.println(ESP.getFreeHeap());
     } else if (state == NetState::kFailed && !net_.hasCredentials()) {
@@ -96,49 +92,13 @@ void NetworkScene::update(Engine& engine, float dt) {
       menu_ = Menu::kSetup;
       forget_armed_ = false;
     }
-
-    // Any state change invalidates an OTA result being displayed.
-    if (state != NetState::kConnected) ota_active_ = false;
   }
 
   // While the radio is busy, B cancels and returns to the menu. A is ignored so
   // a stray press cannot restart an operation that is already running.
   if (state != NetState::kOff) {
-    // Once connected, A starts a firmware update. This is the only route to
-    // OTA, so it cannot be reached without deliberately connecting first.
-    if (state == NetState::kConnected && !ota_active_ &&
-        input.pressed(Button::kA)) {
-      ota_active_ = true;
-      phase_ =
-          0.0f;  // The OTA animations are timed from here, not scene entry.
-
-      // Paint the "working" frame before starting, because the download blocks:
-      // flash writes disable interrupts in bursts and would corrupt the WS2812
-      // signal anyway, so the tube must be left showing something sensible.
-      Display& display = engine.display();
-      display.clear();
-      display.span(0.0f, 1.0f, Color(255, 150, 20), 0.3f);
-      display.present();
-
-      if (ota_.checkForUpdate()) ota_.install();
-      return;
-    }
-
     if (input.pressed(Button::kB)) {
-      if (ota_active_) {
-        // A staged update does nothing until the device restarts. Rather than
-        // rebooting out from under the player, the success state waits here and
-        // B performs the restart -- so the reboot is always a deliberate act.
-        if (ota_.state() == OtaState::kSuccess) {
-          Serial.println(F("[net] rebooting into new firmware"));
-          Serial.flush();
-          ESP.restart();
-        }
-        // Any other OTA result is just acknowledged.
-        ota_active_ = false;
-      } else {
-        net_.disconnect();
-      }
+      net_.disconnect();
     }
     return;
   }
@@ -213,51 +173,10 @@ void NetworkScene::render(Engine& engine) {
 
   if (net_.state() == NetState::kOff) {
     drawMenu(engine);
-  } else if (ota_active_) {
-    drawOta(engine);
   } else {
     drawStatus(engine);
   }
   (void)display;
-}
-
-void NetworkScene::drawOta(Engine& engine) {
-  Display& display = engine.display();
-
-  switch (ota_.state()) {
-    case OtaState::kSuccess: {
-      // Green fills from both ends and meets in the middle, then pulses and
-      // holds. The pulse is deliberate: the update is staged but NOT running
-      // until the device restarts, so this must not look like a finished,
-      // dismissable state. B reboots.
-      const float t = fminf(phase_ * 0.5f, 1.0f);
-      display.span(0.0f, t * 0.5f, kOkColor, 0.9f);
-      display.span(1.0f - t * 0.5f, 1.0f, kOkColor, 0.9f);
-      if (t >= 1.0f) {
-        const float pulse = 0.5f + 0.5f * wrappedSin(phase_ * 5.0f);
-        display.span(0.45f, 0.55f, colors::kWhite, pulse);
-      }
-      break;
-    }
-
-    case OtaState::kUpToDate: {
-      // Calm steady blue -- nothing happened, nothing is wrong.
-      display.span(0.0f, 1.0f, kConnectColor, 0.2f);
-      break;
-    }
-
-    case OtaState::kFailed: {
-      display.span(0.0f, 1.0f, kFailColor, 0.35f);
-      break;
-    }
-
-    default: {
-      // Downloading. This frame is only ever seen as the static image painted
-      // before install() blocks, so it must read as "busy" without animation.
-      display.span(0.0f, ota_.progress(), kPortalColor, 0.5f);
-      break;
-    }
-  }
 }
 
 void NetworkScene::drawMenu(Engine& engine) {

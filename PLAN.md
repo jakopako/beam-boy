@@ -215,6 +215,7 @@ beam.held("a"|"b"|"stick")               -- level
 beam.time()                              -- ms since game start
 beam.random(n) / beam.random(lo, hi)
 beam.score(add) / beam.highscore()       -- highscores, persisted per game
+beam.reset_score()                      -- keep previous highscore, start a zero-score run
 beam.show_score(elapsed_ms)              -- engine-drawn binary score animation
 beam.raw_pixel(idx, color, intensity)    -- direct index for UI chrome
 beam.exit()                              -- return to launcher
@@ -226,15 +227,18 @@ frame pacing, the brightness cap and the pause overlay — the game never does.
 ### Showing numbers: binary score readout
 
 There is no way to render digits on a 1D display, so **lean into it**: scores are shown in
-**binary**, LSB at the near end, one pixel per bit.
+**binary**, LSB at the near end, one bit on every second LED (0, 2, 4, ...).
 
-- Lit pixel = 1, dark = 0. A score of 37 lights pixels 0, 2 and 5.
+- Bright coloured dot = 1, white dot at 25% intensity = 0; intervening LEDs stay dark.
+  A score of 37 has coloured dots at LEDs 0, 4 and 10, and white dots at 2, 6 and 8.
 - Colour the bits by nibble (e.g. alternating warm/cool every 4 bits) so you can read the
   place values at a glance without counting.
 - Animate it: on game over, sweep the bits in one at a time with a rising pitch of brightness,
   then hold. It reads as a deliberate "score reveal" rather than a limitation.
-- 50 px is far more than the ~17 bits any sane score needs, so render it in the middle third
-  of the tube and keep the rest dark.
+- Anchor at LED 0 and stop at the highest set bit; zero is one white dot. The 50-LED tube
+  fits 25 bits (up to 33,554,431). Larger values alternate amber/white dots across the bit
+  slots and log the full score once per changed overflowing value, rather than truncating.
+- White is reserved for zero; the formerly white one-bit group is now turquoise.
 
 Put this in the **engine** as `beam.show_score()`, not in each game — it becomes a
 recognisable piece of Beam Boy's identity, consistent across every cartridge.
@@ -277,7 +281,8 @@ GitHub Pages** (or any static host).
 
 The device fetches the index, shows the list on the tube, downloads the chosen script,
 verifies the hash, writes it to LittleFS. **No server to run, no backend to maintain**, and
-publishing a new game is a `git push`. Firmware updates use ordinary HTTPS OTA on top of this.
+publishing a new game is a `git push`. Firmware updates have their own
+[Phase 11](#phase-11--firmware-updates) release and verification process.
 
 ---
 
@@ -379,25 +384,6 @@ the scene updates, so no game — including a future community cartridge — can
 
 > _Goal: online, but only when you say so._
 
-**Two independent update paths — don't confuse them:**
-
-|              | Games (Phases 6–7)           | **Firmware OTA** (step 4 below)                         |
-| ------------ | ---------------------------- | ------------------------------------------------------- |
-| Updates      | Cartridge scripts + metadata | The C++ engine: renderer, input, launcher, network code |
-| Written to   | LittleFS data partition      | The **app partition** (executable)                      |
-| Reboot       | No                           | Yes                                                     |
-| Failure risk | One broken game              | **A bricked console**                                   |
-
-Firmware OTA is what lets you fix an engine bug, extend the script API, or patch a
-security hole on a device already in a user's hands, without asking them for a USB
-cable. It works by splitting flash into **two app slots**: the device runs from A,
-downloads into B, verifies, then flips a pointer and reboots into B. An interrupted
-or corrupt download leaves A untouched and the console boots normally. This is why
-the BOM specifies 8 MB flash — two complete copies must fit.
-
-Both current environments already have OTA-capable layouts (ESP8266: 325 KB of a
-1019 KB slot; ESP32-S3: 366 KB of 2 MB).
-
 1. ✅ **Provisioning via captive portal.** Trigger: a "Network" entry at the end of the
    launcher list. Radio stays **off** until then. WiFiManager was rejected during
    implementation — it blocks the main loop, which would freeze the tube for the whole
@@ -413,11 +399,10 @@ Both current environments already have OTA-capable layouts (ESP8266: 325 KB of a
    excludes colourblind players.
 3. ✅ Verify offline behaviour is untouched: no saved credentials ⇒ never scans, never blocks,
    boots straight into the launcher.
-4. ✅ Add **firmware OTA** ("Update" from the Network scene) with a progress bar drawn on the
-   tube. ⚠️ Uses `setInsecure()` — **image signing is required before any real release**; see
-   [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md).
+Firmware updates are separate from WiFi provisioning; see
+[Phase 11](#phase-11--firmware-updates).
 
-✅ _Visible result: configure WiFi from your phone with no display, and push firmware updates over the air._
+✅ _Visible result: configure WiFi from your phone with no display._
 
 _Four bugs were caught in review; five more crashes were found on hardware. The last of
 those was confirmed fixed on ESP32-S3 hardware and left unfixed on the ESP8266 by
@@ -660,10 +645,9 @@ it over the air is item 5.)_
    the legacy numeric index remains only as a fallback for old saves. Rebuilds resolve by id and
    clamp safely after deletion; Settings remains selected across a Store-driven list rebuild.
 
-> **Implemented compatibility bridge:** point 1 needs Settings to be useful before point 2 splits
-> the final four flows. The current Settings scene therefore contains Network (including its
-> existing OTA action), Store and Brightness as three items. All are absent from the launcher,
-> and hold-B returns from each child to Settings. Point 2 still needs to split WiFi/OTA.
+> **Implemented Settings layout:** the four children are WiFi, Update firmware (unavailable
+> placeholder), Store and Brightness. Only Settings appears in the launcher; hold B returns
+> from each child to Settings. WiFi no longer contains the prototype OTA action.
 
 ✅ _Visible result: the launcher is always readable as one fixed 1D layout — up to nine games
 at the start, one Settings item at the far end, and honest darkness between them._
@@ -674,22 +658,27 @@ Entering Settings opens a second fixed menu with exactly four items for now. Use
 language and controls as the launcher (stick selects, A opens, hold B returns), but keep it a
 separate scene/menu model so settings utilities never masquerade as games.
 
-1. **WiFi**
+1. ✅ **WiFi**
    - Move the existing credential flow here: connect with stored credentials, open the captive
      portal for a new network, and forget credentials with the existing confirmation.
-   - Keep WiFi opt-in: merely opening Settings must not power the radio; entering WiFi does.
-2. **Update firmware**
-   - Split OTA out of the current combined Network scene into its own explicit item and scene.
-   - Reuse the existing `Network` and `Ota` components rather than duplicating connection logic.
-   - If no credentials exist, show a clear failure/direction back to WiFi instead of silently
-     opening provisioning or coupling the two menu items again.
-   - Preserve the deliberate confirmation before flashing, progress feedback, error state and
-     reboot-on-success behaviour.
-3. **Store**
+   - Keep WiFi opt-in: merely opening Settings must not power the radio. Entering WiFi loads
+     credentials; only explicitly choosing Connect or Setup starts the radio.
+   - Implemented in `NetworkScene`: stored-credential connection, captive portal, confirmed
+     Forget with a three-second expiry/disarm on navigation, connection result animations,
+     tap-B cancellation and radio shutdown on exit. The registry keeps the stable `network`
+     id but displays WiFi. Connected A no longer checks, installs or reboots firmware.
+2. **Update firmware -- placeholder only**
+   - Reserve the second menu position; current placeholder behaviour and all implementation
+     requirements are owned by [Phase 11](#phase-11--firmware-updates).
+3. ✅ **Store**
    - Move the existing cartridge store here unchanged in capability: connect, fetch the index,
      show install/update status, verify SHA-256, install, rebuild the game list without rebooting.
    - Apply the nine-game capacity rule before a new download; updates remain available at cap.
    - Returning from Store lands in Settings, not directly in the game launcher.
+   - Verified in `StoreScene`: credential-only connection (no automatic provisioning),
+     authenticated index fetch, installed/current/update status, size and SHA-256 verification
+     before publication, capacity check before download, and game-list rebuild with Store's
+     registry index resolved again by scene identity. Settings remains the return parent.
 4. ✅ **Brightness**
    - Interactive live preview: stick left/right lowers/raises brightness in bounded steps,
      so the tube itself is the meter and the player can judge it under actual room lighting.
@@ -701,10 +690,14 @@ separate scene/menu model so settings utilities never masquerade as games.
      recognizable default position and a way to restore it without factory-resetting everything.
 
    **Implemented controls:** left/right uses the menu's detent and auto-repeat to adjust by
-   4/255 per step, from a visible minimum of 8/255 to the board cap/default of 64/255.
-   These values scale with the board cap. The white fill previews the level; the blue endpoint
+   4/255 per step, from a visible minimum of 8/255 to the board cap of 128/255,
+   with the default unchanged at 64/255. Minimum and step scale with the default, not the cap.
+   The white fill previews the level; the blue endpoint
    marks the default and becomes brighter when selected. Clicking the stick restores that
    default. A saves in place (brief green feedback); hold B saves and returns to Settings.
+   The amber hold-B progress bar alpha-blends over the scene so it stays visible over white,
+   rather than disappearing through additive saturation. Full-white current at the new cap
+   still needs measurement on hardware.
    Changes are staged in RAM, not written on each step; the engine's existing sleep/shutdown
    flush also preserves a pending adjustment. A failed save logs an error and shows red feedback,
    leaving the preference dirty for retry. Startup handles the legacy zero/default sentinel and
@@ -713,10 +706,16 @@ separate scene/menu model so settings utilities never masquerade as games.
 ✅ _Visible result: the main launcher contains only games and one stable Settings endpoint;
 network setup, maintenance, downloads and display configuration are grouped behind it._
 
-#### 3. Polish binary score indicator
+#### 3. Polish binary score indicator ✅
 
-Now, with the final LED tube, the single LED dots cannot be distinguished that well anymore
-so we need to rework the score indicator a little.
+Implemented for the diffused 50-LED tube: use every second LED, leave dark spacers,
+and show zero bits as white at 25% intensity rather than near-invisible coloured dots.
+One bits keep their nibble colours, replacing the white group with turquoise. Both
+game-over reveals and instant launcher highscores use the same engine renderer.
+It clears stale pixels, supports reversal, reveals only significant bits, and reports overflow
+with alternating amber/white dots and the full value in serial. Six native renderer tests cover
+spacing, colours, brightness scaling, reveal timing, the exact capacity limit and reversal.
+Hardware tuning of the initial 25% zero intensity remains a visual check on the silicone tube.
 
 #### 5. Improve low power detection
 
@@ -765,6 +764,189 @@ Or does the correct shutdown abort only work if monitor is attached in some case
 settings home, persistent display preferences, safe maintenance flows, and documentation others
 can build games from._
 
+### Phase 11 — Firmware updates
+
+> _Goal: deliberate, authenticated firmware updates with verified recovery, without losing user data._
+
+**Two independent update paths — don't confuse them:**
+
+|              | Games (Phases 6–7)           | **Firmware OTA** (this phase)                           |
+| ------------ | ---------------------------- | ------------------------------------------------------- |
+| Updates      | Cartridge scripts + metadata | The C++ engine: renderer, input, launcher, network code |
+| Written to   | LittleFS data partition      | The **app partition** (executable)                      |
+| Reboot       | No                           | Yes                                                     |
+| Failure risk | One broken game              | **A bricked console**                                   |
+
+Firmware OTA is what lets you fix an engine bug, extend the script API, or patch a
+security hole on a device already in a user's hands, without asking them for a USB
+cable. It works by splitting flash into **two app slots**: the device runs from A,
+downloads into B, verifies, then flips a pointer and reboots into B. An interrupted
+or corrupt download leaves A untouched and the console boots normally. This is why
+the BOM specifies 8 MB flash — two complete copies must fit.
+
+Both supported ESP32-S3 environments already have two application slots: 2 MiB per slot on
+the Feather and `0x640000` bytes per slot on the DevKitC. Release images must fit their
+board's layout; the obsolete ESP8266 layout is not an update target.
+
+#### Current status and retained lesson
+
+The old Network-scene OTA action was removed in Phase 10. Settings now exposes a separate
+Update firmware placeholder: two separated amber bars indicate unavailable, A logs that no
+update was started, and hold B returns to Settings. It never connects, writes or reboots.
+The unused `Ota` component is retained for replacement, not as a release-ready updater.
+
+- Reuse the existing `Network` connection component and replace the unsafe internals of `Ota`,
+  rather than duplicating connectivity or coupling the WiFi and update menu items again.
+- Without credentials, direct the player to Settings > WiFi; never silently open provisioning.
+- Require deliberate confirmation before flashing, actual progress feedback, explicit errors
+  and a deliberate reboot after success, as specified below.
+
+- **An operation that _stages_ a change is not finished until the change is applied.** A
+  successful OTA that never reboots reports success, changes nothing, and offers itself again.
+
+#### Implementation plan (not implemented)
+
+**Confirmed scope and choices:** firmware updates are a separate opt-in flow, never a side
+effect of WiFi connection, Store access or boot. Use GitHub Releases for immutable, versioned,
+board-specific application binaries and GitHub Pages for the small discovery manifest, alongside
+the game store. Battery updates are allowed with a valid reading of at least 30%; recommend
+plugging in USB. The dummy scene and removal of the old WiFi action are the only updater-related
+runtime changes in this slice; the steps below are future work.
+
+**Current gaps -- do not treat the prototype as production-ready:**
+- `Ota` uses `https://beamboy.example/firmware/manifest.json`, a hard-coded `0.4.0`, insecure TLS,
+  a two-field substring parser, and installs any different version (including older versions).
+- Checking and installing currently block; `progress()` is not connected to download callbacks.
+  A static pre-painted frame is not genuine progress feedback or responsive cancellation.
+- A complete image in an inactive slot prevents partial-image boot, but does not alone recover
+  from a valid image that crashes. The installed ESP32-S3 SDK enables rollback, while Arduino's
+  weak `verifyOta()` defaults to true and normally marks the image valid during startup.
+  Its `verifyRollbackLater()` hook must be evaluated and exercised on the actual bootloader;
+  do not claim health-checked rollback until the hardware tests pass.
+- Native signed-app verification is not enabled in the current SDK configuration. The older
+  assertion that Arduino Update automatically authenticates our images is not a guarantee
+  for this ESP32-S3 build. Implement and test authenticity explicitly before selecting a slot.
+
+**1. Release contract and publishing**
+- Derive a displayed SemVer, monotonically increasing release sequence, board id and layout id
+  from the release build, not an independently edited string in `ota.cpp`.
+- Publish separate `firmware.bin` assets for `adafruit_feather_esp32s3_nopsram` and
+  `esp32-s3-devkitc-1-n16r8`; never offer one board's GPIO/flash configuration to the other.
+  OTA delivers only the app image, never a merged flash image, partition table, bootloader
+  or LittleFS image. Keep saves, brightness, credentials, highscores and cartridges intact.
+- The Feather currently has two 2 MiB app slots and the DevKitC two `0x640000`-byte slots.
+  CI must check each exact image size against its environment's inactive-slot capacity.
+  Runtime repeats that check using the actual partition, and rejects incompatible layout ids.
+  Layout changes require a separate USB migration, not an ordinary OTA.
+- Discovery URL: `https://jakopako.github.io/beam-boy/firmware/stable.json`.
+  Publish a versioned signed manifest with each release as well; update the stable pointer
+  only after all binaries, signatures and smoke tests succeed. Never overwrite release assets.
+- Proposed manifest envelope: `schema`, `key_id`, base64 `payload`, base64 `signature`.
+  The signature covers the exact decoded payload bytes (no ambiguous JSON reserialization).
+  Payload contains channel, SemVer, release sequence and per-board entries with board/layout id,
+  minimum compatible updater/save/API versions, image HTTPS URL, exact size and SHA-256.
+  Define bounded field lengths, a 16 KiB envelope cap, strict types, unique board entries,
+  duplicate-field rejection and rejection of unsupported schemas before implementation.
+
+**2. Trust, version selection and release keys**
+- Authenticate discovery and binary transport with the existing CA bundle; establish bounded
+  network time before TLS validation where required. Never fall back to `setInsecure()`.
+  GitHub asset redirects need a bounded hop count and HTTPS-only allowed destinations, including
+  the actual GitHub release-asset hosts; test those URLs on the device, not just on a PC.
+- Independently verify the manifest signature with a firmware-embedded public key, then match
+  the downloaded image to the signed size and SHA-256 before changing the boot target.
+  Proposed algorithm: RSA-PSS/SHA-256 with a 3072-bit key through ESP32's mbedTLS; measure
+  heap/flash cost and verify a release-tool/device test vector before adopting the format.
+  This is updater-level authenticity, not Secure Boot; do not burn eFuses in this work.
+- Keep private keys outside the repository and device. Signing uses a protected release
+  environment/manual approval; fork/PR builds cannot access keys or publish a stable pointer.
+  Plan key rotation with key ids and an overlap release that trusts old and new public keys.
+- Equal release sequence means up to date; only higher compatible stable sequences are offered.
+  Do not auto-install prereleases or downgrades. A bad release is replaced by a higher-sequence
+  corrective release; local boot rollback to the last working slot is still allowed.
+  Persisted update metadata must not replace build identity or let a failed install advance it.
+
+**3. User flow and state machine**
+- Enter -> load credentials -> check power -> connect -> fetch/authenticate manifest ->
+  up to date / available / failed. Reuse `Network` for connection and `Ota` as the update
+  service boundary, replacing the prototype's unsafe internals rather than copying them.
+- Missing credentials: explicit serial direction to Settings > WiFi and a distinct two-pulse
+  unavailable animation; never start the portal. Connection, manifest, compatibility and
+  power failures have logged reasons and distinguishable pulse rhythms, not colour alone.
+- Entering may check for an update, but must never flash. Available: a steady release-available
+  pattern. Require A to be released after entry, then hold A for 1.2 seconds to confirm install,
+  with a visible overlay. Releasing early cancels confirmation. Hold B returns to Settings.
+- Download: actual verified byte count fills the tube. Verification: a distinct inward sweep.
+  Error: red pulse rhythm and serial detail; A retries the check, hold B returns.
+  Up to date: steady blue plus a brief acknowledgement motion, hold B returns.
+- Success: green fills from both ends and holds with a white centre heartbeat. Disconnect radio.
+  After release, a new A press deliberately reboots; hold B returns without reboot.
+  A completed, selected image will boot on the next restart even if the user leaves or sleeps;
+  make that explicit in documentation. Do not reuse B for both reboot and exit.
+- Re-entering always clears stale UI/download state and performs a fresh check; a previously
+  completed pending image must be detected, not overwritten without acknowledgement.
+
+**4. Safe writing, responsiveness and engine coordination**
+- Before confirmation starts a write: on battery-equipped boards require a valid, fresh gauge
+  sample >=30%; refuse stale/unavailable readings, low/critical power and unavailable storage.
+  USB-powered DevKitC has no battery check. The Feather's charge-rate signal is not USB presence
+  and must not be used to bypass the threshold.
+- Flush pending saves and verify they are clean before writing; failed saves block installation.
+  Never format/migrate LittleFS as part of an update. Save migrations must remain rollback-safe:
+  additive/read-compatible until the new app is marked healthy, or use versioned backups.
+- Use bounded reads/timeouts and incremental writes to the inactive OTA slot, hashing while
+  streaming; reject zero/oversize images, truncation, extra bytes, bad hashes or invalid app
+  headers. Use ESP-IDF OTA begin/write/end followed by explicit boot-slot selection only after
+  all verification succeeds. On any failure/cancel, abort without selecting the incomplete slot.
+- Engine coordination is required, not a scene-local workaround: suspend idle sleep while the
+  confirmed write/verification is active, continue power monitoring, and allow hold-B cancellation
+  at safe chunk boundaries. Abort and clean up before exiting, disconnecting or critical shutdown.
+  Clear the operation guard on every terminal path; no early return may leave sleep disabled.
+- Preserve single ownership of display/input; do not introduce a second task that races the engine.
+  Retain idle servicing for WiFi. Measure flash-write latency and RMT display safety on both boards:
+  use safe inter-chunk progress updates, not an assumption that LEDs must always freeze.
+  If a synchronous library cannot satisfy cancellation/progress, replace that path rather than
+  advertising it as responsive. Every stall has an inactivity and total-operation deadline.
+
+**5. First boot, rollback and recovery**
+- Defer Arduino's automatic validity acknowledgement with the verified target hook.
+  For a pending-verification boot, mark healthy only after display/input init, filesystem mount,
+  readable saves and game-list construction succeed and the launcher runs stably for five seconds.
+  This must not depend on a network or a battery being charged.
+- Failure/watchdog reset before acknowledgement must return to the previous working slot;
+  test intentional crash, failed mount and interrupted first boot. A malformed cartridge should
+  be isolated/skipped as today, not treated as an unhealthy firmware boot.
+- Record/reset update diagnostics without erasing user content. Keep rollback-compatible storage
+  until acknowledgement, and keep a USB recovery recipe (Feather ROM/TinyUF2 where applicable,
+  DevKitC ROM flashing). An application OTA must not change partition/recovery images.
+- Confirm the first updater-capable firmware and its bootloader via USB on both boards before
+  enabling remote discovery. The existing placeholder is not a bootstrap update transport.
+
+**6. Implementation order and acceptance gates**
+1. Lock schema, board/layout identities, signature test vectors and publishing/signing tooling.
+   Build both environments and fail publishing on oversize or missing/wrong-board assets.
+2. Extract host-testable strict parsing, version/compatibility, power and confirmation policy.
+   Test same/new/old release, wrong board/layout, bad signatures, malformed/oversize manifests,
+   missing credentials, stale power, tap/held-A carried across entry and early-release cancellation.
+3. Replace `Ota` internals with the bounded authenticated stream and inactive-slot verifier.
+   Integration-test TLS/redirect/time failures, short/extra bodies, hash mismatch, out-of-space,
+   disconnect, safe cancellation and no boot-slot change on any failure.
+4. Wire the real scene, progress, reboot acknowledgement and engine power/idle guard.
+   Verify hold-B from every state, radio off after every exit/result, normal sleep after errors,
+   and brightness/highscores/credentials/cartridges unchanged across success and failure.
+5. Prove target first-boot rollback and USB recovery before declaring release readiness.
+   On both boards install release A -> B -> C across both slots; inject power loss during download,
+   verification, slot selection and first boot, plus a deliberately crashing signed image.
+   Verify the booted version, prior working slot, actual progress and restored user data.
+
+**Remaining design gate:** the signing-tool/key-management implementation and exact signature
+format above are proposals, not already implemented guarantees. Approve them and pass device
+test vectors before creating release keys or enabling an official update endpoint. Battery
+threshold, hosting and the separation from WiFi are confirmed.
+
+Visible result when complete: install a compatible authenticated engine release deliberately,
+see real progress, reboot into it, and recover safely if its first boot fails.
+
 ---
 
 ## 5. Suggested repo layout
@@ -796,14 +978,18 @@ beam-boy/
 | 1 Core engine       | 1–2 d  | 2½ d       |
 | 2 First game        | 2–3 d  | 5½ d       |
 | 3 Launcher          | 1–2 d  | 7½ d       |
-| 4 WiFi + OTA        | 1–2 d  | 9½ d       |
+| 4 WiFi              | 1–2 d  | 9½ d       |
 | 5 VM bake-off       | 1–2 d  | 11½ d      |
 | 6 Script games      | 2–3 d  | 14½ d      |
 | 7 Store             | 2 d    | 16½ d      |
 | 8 Power & Battery   | 1–2 d  | 18 d       |
 | 9 Enclosure         | 2–4 d  | 21 d       |
+| 10 Polish & Settings UX | TBD | TBD      |
+| 11 Firmware updates | TBD    | TBD        |
 
-**≈ 3 weeks of focused work**, with something playable from day 5.
+**≈ 3 weeks of focused work through Phase 9**, with something playable from day 5.
+Phases 10–11 are additional work; firmware-update effort must include release tooling and
+hardware recovery testing before it is estimated.
 
 ---
 
@@ -898,8 +1084,6 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Register callbacks once, not per-use.** Arduino `WebServer` frees route handlers only in its
   destructor, so re-registering on each portal open leaks permanently in a long-lived object.
   The symptom appears somewhere unrelated — a TLS handshake failing for want of contiguous heap.
-- **An operation that _stages_ a change is not finished until the change is applied.** A
-  successful OTA that never reboots reports success, changes nothing, and offers itself again.
 - **Engine-level input interception must be opt-in per scene type.** The engine grabs the nav
   button to guarantee a game can never trap the player. But the launcher marks _every_ entry as
   the "current game", so utility scenes had that button stolen too — and since the paused branch

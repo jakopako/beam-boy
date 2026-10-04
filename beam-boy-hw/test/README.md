@@ -51,9 +51,12 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 
 | Suite | Covers |
 |---|---|
-| `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, and the refresh divider that keeps LED DMA off the radio's back during provisioning |
+| `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, refresh behavior, and alpha-blended overlays (white backgrounds, anti-aliased edges, opacity and reversal) |
 | `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat |
-| `test_brightness` | Actual brightness scene controls and repeat timing, visible minimum, display power cap, default reset, deferred writes, confirmation/exit persistence, and failed-save feedback |
+| `test_brightness` | Actual brightness scene controls and repeat timing, visible minimum, 128 maximum with unchanged 64 default, display power cap, default reset, deferred writes, confirmation/exit persistence, failed-save feedback, and hold-progress contrast over white previews |
+| `test_settings` | Four-child Settings routing order, distinct registry indices, and the unavailable firmware-update placeholder's rendering and preservation of brightness, credentials and saves |
+| `test_score` | Actual engine score renderer: dark spacing, 25% white zeros, coloured nibble groups, reveal/instant timing, brightness scaling, 25-bit capacity, overflow and reversal |
+| `test_run_score` | Restart resets the active score, preserves the best run across retries and save/reload, defers flash writes, and refuses to lose a score when preservation fails |
 | `test_soak` | Long-run invariants: phase growth over 6 simulated hours, the `millis()` rollover, fade termination |
 | `test_net_policy` | The credential-retention truth table: which connection failures discard stored WiFi credentials |
 

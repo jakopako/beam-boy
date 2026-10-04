@@ -4,6 +4,16 @@ Networking that stays out of the way. The radio is **off** unless you walk into
 the Network scene and ask for it, and everything here is built so that offline
 behaviour is not merely the fallback but the default.
 
+> **Current Settings layout:** WiFi now owns credentials and connectivity only.
+> The old connected-A OTA action and result/reboot handling have been removed.
+> Settings contains WiFi, Update firmware, Store and Brightness in that order.
+> Update firmware is an unavailable placeholder (two separated amber bars);
+> A logs that no update was started, and hold B returns to Settings. It never
+> starts the radio or writes firmware. The legacy `Ota` component is retained
+> but has no scene caller. The historical OTA notes below are not a description
+> of a working release updater; see [Phase 11](../PLAN.md#phase-11--firmware-updates)
+> for the replacement and its release gates.
+
 > ## ✅ Status: ESP8266 provisioning crash confirmed fixed on ESP32
 >
 > Connecting to a network reliably crashed the NodeMCU inside the WiFi PHY. The
@@ -120,9 +130,7 @@ a red/green distinction is invisible to a red-green colourblind player.
 | Failed: password rejected | Red | **Two** flashes, then a dim hold |
 | Failed: network not found | Red | **Four** flashes, then a dim hold |
 | Failed: timed out / link lost | Red | **Three** flashes, then a dim hold |
-| OTA downloading | Amber | Static progress bar |
-| OTA installed | Green | Fills from both ends, then pulses white at centre |
-| OTA up to date | Blue | Steady dim |
+| Update firmware placeholder | Amber | Two separated gently breathing bars; no update operation |
 
 The selected menu entry breathes while the others sit dim and still — brightness
 and motion mark the selection. All entries are drawn the same width: an earlier
@@ -147,9 +155,8 @@ which is why the menu behind it has fallen back to Setup only.
 | Menu | A / nav click | Activate |
 | Menu, on Forget | A twice | Erase stored credentials (see below) |
 | Busy (any state) | B | Cancel, radio off |
-| Connected | A | Check for and install firmware update |
-| After OTA success | B | **Reboot into the new firmware** |
-| After other OTA result | B | Acknowledge, back to connected |
+| Connected | A | No action; firmware updates are a separate Settings item |
+| WiFi scene | Hold B | Return to Settings, radio off |
 
 The menu has **three entries once provisioned** and only one before, since there is
 nothing to connect to or forget until credentials exist:

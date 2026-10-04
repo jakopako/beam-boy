@@ -36,7 +36,7 @@ struct Color {
   // library calls on cores without an FPU.
   //
   // Note this TRUNCATES rather than rounds, unlike the blend path in
-  // addToPixel(). That is required, not an oversight: fade() calls this
+  // blendToPixel(). That is required, not an oversight: fade() calls this
   // repeatedly on its own output, and with rounding a channel at 1 scaled by
   // 0.9 gives (1*230+128)>>8 == 1, so a faded pixel would never reach black and
   // would stay faintly lit forever.
@@ -121,6 +121,10 @@ class Display {
   // ends. Used for health bars, hazard zones and the battery meter.
   void span(float from, float to, const Color& color, float intensity = 1.0f);
 
+  // Alpha-blended span for UI overlays that must remain visible over white.
+  void overlaySpan(float from, float to, const Color& color,
+                   float opacity = 1.0f);
+
   // Multiply the whole framebuffer toward black. Called once per frame instead
   // of clear() to leave motion trails; 0.0 keeps everything, 1.0 clears fully.
   void fade(float amount);
@@ -172,11 +176,14 @@ class Display {
 #endif
 
  private:
-  void addToPixel(uint16_t index, const Color& color, float weight);
+  void blendToPixel(uint16_t index, const Color& color, float weight,
+                    bool overlay = false);
+  void drawSpan(float from, float to, const Color& color, float intensity,
+                bool overlay);
 
   board::LedBus strip_;
   Color buffer_[board::kPixelCount];
-  uint8_t brightness_ = board::kBrightnessCap;
+  uint8_t brightness_ = board::kBrightnessDefault;
   bool reversed_ = false;
 
   float shake_ = 0.0f;

@@ -5,6 +5,7 @@
 
 #include "core/cartridge_store.h"
 #include "core/game_registry.h"
+#include "core/run_score.h"
 
 namespace beamboy {
 namespace {
@@ -224,6 +225,19 @@ int beam_highscore(bvm* vm) {
   be_return(vm);
 }
 
+int beam_reset_score(bvm* vm) {
+  const int8_t index = engine().currentGame();
+  if (index < 0 || index >= static_cast<int8_t>(gameList().count()) ||
+      !gameList().at(index).is_game) {
+    be_raise(vm, "score_error", "cannot reset score outside a game");
+  }
+  if (!resetRunScore(engine().storage(), gameList().at(index).id,
+                     g_ctx->score)) {
+    be_raise(vm, "score_error", "could not preserve previous run's highscore");
+  }
+  be_return_nil(vm);
+}
+
 int beam_exit(bvm* vm) {
   g_ctx->exit_requested = true;
   be_return_nil(vm);
@@ -330,6 +344,10 @@ void bindBeamApi(bvm* vm) {
 
   be_pushntvfunction(vm, beam_highscore);
   be_setmember(vm, -2, "highscore");
+  be_pop(vm, 1);
+
+  be_pushntvfunction(vm, beam_reset_score);
+  be_setmember(vm, -2, "reset_score");
   be_pop(vm, 1);
 
   be_pushntvfunction(vm, beam_exit);

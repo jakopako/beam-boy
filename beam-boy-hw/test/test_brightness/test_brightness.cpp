@@ -64,7 +64,10 @@ void setUp(void) {}
 void tearDown(void) {}
 
 void test_stored_brightness_is_safe_and_zero_means_default(void) {
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap, brightness::fromStored(0));
+  TEST_ASSERT_EQUAL_UINT8(64, brightness::fromStored(0));
+  TEST_ASSERT_EQUAL_UINT8(128, board::kBrightnessCap);
+  TEST_ASSERT_EQUAL_UINT8(8, brightness::kMinimum);
+  TEST_ASSERT_EQUAL_UINT8(4, brightness::kStep);
   TEST_ASSERT_EQUAL_UINT8(brightness::kMinimum, brightness::fromStored(1));
   TEST_ASSERT_EQUAL_UINT8(37, brightness::fromStored(37));
   TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap, brightness::fromStored(255));
@@ -97,7 +100,7 @@ void test_first_stick_step_changes_preview_immediately(void) {
   Fixture f;
   f.stick(-1);
   f.tick(16);
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap - brightness::kStep,
+  TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - brightness::kStep,
                          f.engine.display().brightness());
   TEST_ASSERT_TRUE(f.engine.storage().dirty());
 }
@@ -107,13 +110,13 @@ void test_held_stick_uses_existing_repeat_delay_and_rate(void) {
   f.stick(-1);
   f.tick();
   f.tick(399);
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap - brightness::kStep,
+  TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - brightness::kStep,
                          f.engine.display().brightness());
   f.tick(1);
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap - 2 * brightness::kStep,
+  TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - 2 * brightness::kStep,
                          f.engine.display().brightness());
   f.tick(140);
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap - 3 * brightness::kStep,
+  TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - 3 * brightness::kStep,
                          f.engine.display().brightness());
 }
 
@@ -160,7 +163,7 @@ void test_adjustments_stay_in_ram_until_a_confirms(void) {
   TEST_ASSERT_FALSE(f.engine.storage().dirty());
   Storage reloaded;
   TEST_ASSERT_TRUE(reloaded.begin());
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap - 2 * brightness::kStep,
+  TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - 2 * brightness::kStep,
                          brightness::fromStored(reloaded.brightness()));
   TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("wormfight"));
   TEST_ASSERT_EQUAL_STRING("wormfight", reloaded.lastGameId());
@@ -190,7 +193,7 @@ void test_pending_preview_is_available_to_engine_sleep_flush(void) {
   f.engine.storage().commit();
   Storage reloaded;
   reloaded.begin();
-  TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap - brightness::kStep,
+  TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - brightness::kStep,
                          brightness::fromStored(reloaded.brightness()));
 }
 
@@ -229,6 +232,34 @@ void test_failed_save_keeps_pending_preference_and_shows_red(void) {
   TEST_ASSERT_EQUAL_UINT8(0, engine.display().shownPixel(0).G);
 }
 
+void test_hold_progress_is_visible_over_white_preview(void) {
+  for (uint8_t level : {brightness::kMinimum, brightness::kDefault,
+                        board::kBrightnessCap}) {
+    Fixture f(level);
+    f.scene.render(f.engine);
+    f.engine.display().overlaySpan(0.0f, 0.5f, colors::kAmber, 0.8f);
+    f.engine.display().present();
+    const RgbColor& progress = f.engine.display().shownPixel(0);
+    TEST_ASSERT_EQUAL_UINT8(level, progress.R);
+    TEST_ASSERT_TRUE(progress.R > progress.G);
+    TEST_ASSERT_TRUE(progress.G > progress.B);
+    TEST_ASSERT_TRUE(progress.B < level / 2);
+  }
+}
+
+void test_new_maximum_persists_and_default_reset_stays_64(void) {
+  Fixture f;
+  for (int i = 0; i < 100; ++i) f.step(1);
+  f.scene.exit(f.engine);
+  Storage reloaded;
+  TEST_ASSERT_TRUE(reloaded.begin());
+  TEST_ASSERT_EQUAL_UINT8(128, reloaded.brightness());
+  TEST_ASSERT_EQUAL_UINT8(128, brightness::fromStored(reloaded.brightness()));
+  f.scene.enter(f.engine);
+  f.press(board::kPinStickSw);
+  TEST_ASSERT_EQUAL_UINT8(64, f.engine.display().brightness());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_stored_brightness_is_safe_and_zero_means_default);
@@ -242,5 +273,7 @@ int main(int, char**) {
   RUN_TEST(test_pending_preview_is_available_to_engine_sleep_flush);
   RUN_TEST(test_stick_click_restores_default_without_erasing_other_data);
   RUN_TEST(test_failed_save_keeps_pending_preference_and_shows_red);
+  RUN_TEST(test_hold_progress_is_visible_over_white_preview);
+  RUN_TEST(test_new_maximum_persists_and_default_reset_stays_64);
   return UNITY_END();
 }

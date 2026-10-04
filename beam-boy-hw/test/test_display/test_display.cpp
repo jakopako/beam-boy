@@ -121,6 +121,49 @@ void test_present_shows_every_frame(void) {
   TEST_ASSERT_EQUAL_UINT32(10, d.shownCount());
 }
 
+void test_overlay_replaces_white_and_preserves_uncovered_pixels(void) {
+  Display d;
+  d.setBrightness(128);
+  for (uint16_t i = 0; i < d.pixelCount(); ++i) {
+    d.rawPixel(i, colors::kWhite);
+  }
+  d.overlaySpan(0.0f, 2.5f * d.pixelWidth(), colors::kAmber);
+  d.present();
+  TEST_ASSERT_EQUAL_UINT8(128, d.shownPixel(0).R);
+  TEST_ASSERT_EQUAL_UINT8(70, d.shownPixel(0).G);
+  TEST_ASSERT_EQUAL_UINT8(0, d.shownPixel(0).B);
+  TEST_ASSERT_EQUAL_UINT8(0, d.shownPixel(1).B);
+  TEST_ASSERT_EQUAL_UINT8(64, d.shownPixel(2).B);
+  TEST_ASSERT_EQUAL_UINT8(128, d.shownPixel(3).B);
+}
+
+void test_overlay_respects_reversal_and_opacity(void) {
+  Display d;
+  d.setBrightness(128);
+  d.setReversed(true);
+  for (uint16_t i = 0; i < d.pixelCount(); ++i) {
+    d.rawPixel(i, colors::kWhite);
+  }
+  d.overlaySpan(0.0f, 2.5f * d.pixelWidth(), colors::kAmber, 0.8f);
+  d.present();
+  TEST_ASSERT_EQUAL_UINT8(128, d.shownPixel(0).B);
+  const RgbColor& end = d.shownPixel(d.pixelCount() - 1);
+  TEST_ASSERT_TRUE(end.R > end.G);
+  TEST_ASSERT_TRUE(end.G > end.B);
+  TEST_ASSERT_TRUE(end.B < 32);
+}
+
+void test_regular_span_remains_additive(void) {
+  Display d;
+  d.setBrightness(128);
+  d.rawPixel(0, colors::kWhite);
+  d.span(0.0f, 0.5f, colors::kAmber, 0.8f);
+  d.present();
+  TEST_ASSERT_EQUAL_UINT8(128, d.shownPixel(0).R);
+  TEST_ASSERT_EQUAL_UINT8(128, d.shownPixel(0).G);
+  TEST_ASSERT_EQUAL_UINT8(128, d.shownPixel(0).B);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_wrapped_sin_matches_sinf_at_small_phase);
@@ -132,5 +175,8 @@ int main(int, char**) {
   RUN_TEST(test_hsv_primaries);
   RUN_TEST(test_hsv_zero_saturation_is_grey);
   RUN_TEST(test_present_shows_every_frame);
+  RUN_TEST(test_overlay_replaces_white_and_preserves_uncovered_pixels);
+  RUN_TEST(test_overlay_respects_reversal_and_opacity);
+  RUN_TEST(test_regular_span_remains_additive);
   return UNITY_END();
 }

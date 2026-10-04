@@ -43,7 +43,8 @@ static_assert(kPixelCount > 0, "BEAMBOY_PIXEL_COUNT must be positive");
 // at 255 would pull ~2 A from the tube, beyond what the LiPo and its protection
 // circuit should supply) rather than to conserve battery. Raise it as far as
 // looks good; re-measure the full-white figure after any change.
-constexpr uint8_t kBrightnessCap = 64;
+constexpr uint8_t kBrightnessCap = 128;
+constexpr uint8_t kBrightnessDefault = 64;
 
 #if defined(ARDUINO_ARCH_ESP32)
 

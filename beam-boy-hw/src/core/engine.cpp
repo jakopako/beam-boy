@@ -12,27 +12,6 @@
 namespace beamboy {
 namespace {
 
-// Score bits are coloured by nibble so place values can be read without
-// counting pixels: bits 0-3 one colour, 4-7 the next, and so on.
-const Color kNibbleColors[] = {
-    Color(0, 150, 255),    // bits 0-3   blue
-    Color(0, 220, 80),     // bits 4-7   green
-    Color(255, 170, 0),    // bits 8-11  amber
-    Color(255, 40, 90),    // bits 12-15 red
-    Color(190, 90, 255),   // bits 16-19 violet
-    Color(255, 255, 255),  // bits 20+   white
-};
-constexpr uint8_t kNibbleColorCount =
-    sizeof(kNibbleColors) / sizeof(kNibbleColors[0]);
-
-// Brightness for a zero bit that sits below the score's highest set bit.
-// A run of unset bits is otherwise indistinguishable from a run of unlit
-// pixels the display simply never reached -- in a dark room there is no way
-// to tell "this bit is 0" from "the readout stops here". Lighting them at a
-// barely-visible level fixes that without competing with the set bits for
-// attention: it is a position marker, not part of the value being read.
-constexpr float kZeroBitIntensity = 0.015f;
-
 // A slow-filling green sweep, one full cycle every kChargingSweepMs -- distinct
 // from every other animation's pace so charging is never mistaken for a game
 // or a menu having been left running.
@@ -114,7 +93,7 @@ void Engine::renderPauseOverlay() {
   display_.fade(0.55f);
 
   if (exit_armed_ && exit_gesture_progress_ > 0.0f) {
-    display_.span(0.0f, exit_gesture_progress_, colors::kAmber, 0.85f);
+    display_.overlaySpan(0.0f, exit_gesture_progress_, colors::kAmber, 0.85f);
     return;
   }
 
@@ -509,7 +488,7 @@ void Engine::tick() {
   // over whatever they rendered. Without visible feedback, holding B looks like
   // the console has simply stopped responding.
   if (!is_game && exit_gesture_progress_ > 0.0f) {
-    display_.span(0.0f, exit_gesture_progress_, colors::kAmber, 0.8f);
+    display_.overlaySpan(0.0f, exit_gesture_progress_, colors::kAmber, 0.8f);
   }
 
   renderLowBatteryOverlay();
@@ -524,85 +503,6 @@ void Engine::tick() {
     frames_this_second_ = 0;
     fps_window_start_ms_ = now_ms;
   }
-}
-
-namespace {
-
-// Deliberately noinline: the Xtensa GCC shipped with the ESP32 platform hits an
-// internal compiler error ("insn does not satisfy its constraints" during
-// postreload, trying to load a float literal straight into an FP register) when
-// this is inlined into the loop in renderScore(). Keeping the float maths in
-// one non-inlined function sidesteps it and costs nothing at this call rate.
-//
-// The bit currently arriving fades up over its slot, so the reveal reads as
-// bits landing one by one rather than simply appearing; settled bits are full
-// bright.
-float __attribute__((noinline)) bitIntensity(uint16_t bit, uint32_t revealed,
-                                             uint32_t elapsed_ms,
-                                             uint32_t per_bit_ms) {
-  if (bit != revealed || per_bit_ms == 0) return 1.0f;
-  const float progress = static_cast<float>(elapsed_ms % per_bit_ms) /
-                         static_cast<float>(per_bit_ms);
-  return 0.35f + 0.65f * progress;
-}
-
-}  // namespace
-
-void Engine::renderScore(uint32_t score, uint32_t elapsed_ms, bool instant) {
-  const uint16_t pixels = display_.pixelCount();
-
-  // Only render as many bits as the score needs, so a small score does not look
-  // like a mostly-empty display.
-  uint8_t significant_bits = 1;
-  for (uint8_t bit = 0; bit < 32; bit++) {
-    if (score & (1UL << bit)) significant_bits = bit + 1;
-  }
-
-  // Anchor the readout at pixel 0 rather than centring it. A fixed origin means
-  // a given bit always appears at the same place, so values can be read by
-  // position; centring would shift the whole display as the score gains bits.
-  const uint16_t bits_to_show =
-      significant_bits > pixels ? pixels : significant_bits;
-
-  // A score of zero has no set bits at all, so bits_to_show above collapses to
-  // 1 (significant_bits' default) -- the loops below draw that single bit at
-  // kZeroBitIntensity, same as any other zero bit, rather than needing a
-  // special case here.
-
-  if (instant) {
-    // A glance at a score that already happened -- e.g. the launcher peeking
-    // at a highscore -- should read the whole value at once, not perform the
-    // reveal flourish that belongs to a score just earned.
-    for (uint16_t bit = 0; bit < bits_to_show; bit++) {
-      const bool set = (score & (1UL << bit)) != 0;
-      drawScoreBit(bit, set ? 1.0f : kZeroBitIntensity);
-    }
-    return;
-  }
-
-  // Reveal one bit at a time, then hold. Reading as a deliberate flourish
-  // rather than a limitation is most of the point.
-  const uint32_t per_bit_ms =
-      bits_to_show > 0 ? kScoreRevealMs / bits_to_show : kScoreRevealMs;
-  const uint32_t revealed =
-      per_bit_ms > 0 ? (elapsed_ms / per_bit_ms) : bits_to_show;
-
-  for (uint16_t bit = 0; bit < bits_to_show; bit++) {
-    if (bit > revealed) break;
-
-    const bool set = (score & (1UL << bit)) != 0;
-    // Zero bits are position markers, not part of the reveal -- they sit at a
-    // constant, barely-visible level rather than fading up the way a landing
-    // 1 bit does, so the flourish stays about the value, not the scaffolding
-    // around it.
-    drawScoreBit(bit, set ? bitIntensity(bit, revealed, elapsed_ms, per_bit_ms)
-                          : kZeroBitIntensity);
-  }
-}
-
-void Engine::drawScoreBit(uint16_t bit, float intensity) {
-  const Color color = kNibbleColors[(bit / 4) % kNibbleColorCount];
-  display_.rawPixel(bit, color.scaled(intensity));
 }
 
 }  // namespace beamboy

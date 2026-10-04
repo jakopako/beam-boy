@@ -116,9 +116,10 @@ class Engine {
   uint32_t sceneTime() const { return millis() - scene_started_ms_; }
 
   // --- Score readout -------------------------------------------------------
-  // A 1D display cannot render digits, so scores are shown in binary: one pixel
-  // per bit, least significant bit first. Bits are coloured by nibble so place
-  // values can be read at a glance rather than counted.
+  // Scores use every second LED, least significant bit first. Ones are
+  // coloured by nibble, zeros are white at 25%, and spacer LEDs stay dark.
+  // Values exceeding the available slots alternate amber/white dots and log
+  // the full score rather than silently truncating it.
   //
   // Lives in the engine rather than in each game so the presentation stays
   // consistent across cartridges.
@@ -128,7 +129,6 @@ class Engine {
   // score that already happened (the launcher's highscore peek) as opposed to
   // the dramatic reveal of a score just earned.
   void renderScore(uint32_t score, uint32_t elapsed_ms, bool instant = false);
-  void drawScoreBit(uint16_t bit, float intensity);
   void renderPauseOverlay();
 
   // How long a full score reveal animation takes.
@@ -146,6 +146,10 @@ class Engine {
   void resetDiagnostics();
 
  private:
+  void drawScoreBit(uint16_t bit, bool set, float intensity);
+  uint32_t last_overflow_score_ = 0;
+  bool score_overflow_logged_ = false;
+
   static constexpr uint32_t kTargetFps = 60;
   static constexpr uint32_t kFrameIntervalUs = 1000000UL / kTargetFps;
   static constexpr float kFixedDt = 1.0f / kTargetFps;

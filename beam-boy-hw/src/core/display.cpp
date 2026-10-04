@@ -81,7 +81,8 @@ void Display::clear() {
   }
 }
 
-void Display::addToPixel(uint16_t index, const Color& color, float weight) {
+void Display::blendToPixel(uint16_t index, const Color& color, float weight,
+                          bool overlay) {
   if (index >= board::kPixelCount || weight <= 0.0f) return;
 
   // Scale and blend in one pass. Converting the weight to fixed-point here,
@@ -94,6 +95,16 @@ void Display::addToPixel(uint16_t index, const Color& color, float weight) {
   if (f == 0) return;
 
   Color& target = buffer_[index];
+
+  if (overlay) {
+    target.r = (static_cast<uint16_t>(target.r) * (256 - f) +
+                static_cast<uint16_t>(color.r) * f + 128) >> 8;
+    target.g = (static_cast<uint16_t>(target.g) * (256 - f) +
+                static_cast<uint16_t>(color.g) * f + 128) >> 8;
+    target.b = (static_cast<uint16_t>(target.b) * (256 - f) +
+                static_cast<uint16_t>(color.b) * f + 128) >> 8;
+    return;
+  }
 
   // Additive blending: overlapping sprites brighten rather than overwrite,
   // which reads better than last-write-wins when entities cross on a 1D line.
@@ -123,13 +134,23 @@ void Display::point(float pos, const Color& color, float intensity) {
   const uint16_t lower = static_cast<uint16_t>(exact);
   const float frac = exact - lower;
 
-  addToPixel(lower, color, (1.0f - frac) * intensity);
+  blendToPixel(lower, color, (1.0f - frac) * intensity);
   if (frac > 0.0f) {
-    addToPixel(lower + 1, color, frac * intensity);
+    blendToPixel(lower + 1, color, frac * intensity);
   }
 }
 
 void Display::span(float from, float to, const Color& color, float intensity) {
+  drawSpan(from, to, color, intensity, false);
+}
+
+void Display::overlaySpan(float from, float to, const Color& color,
+                          float opacity) {
+  drawSpan(from, to, color, opacity, true);
+}
+
+void Display::drawSpan(float from, float to, const Color& color,
+                       float intensity, bool overlay) {
   from += shake_;
   to += shake_;
 
@@ -144,7 +165,7 @@ void Display::span(float from, float to, const Color& color, float intensity) {
   intensity = clamp01(intensity);
   if (intensity <= 0.0f) return;
 
-  if (reversed_) {
+  if (reversed_ && !overlay) {
     const float flipped_from = 1.0f - to;
     to = 1.0f - from;
     from = flipped_from;
@@ -155,20 +176,26 @@ void Display::span(float from, float to, const Color& color, float intensity) {
 
   const uint16_t first = static_cast<uint16_t>(start);
   const uint16_t last = static_cast<uint16_t>(end);
+  const auto drawPixel = [&](uint16_t index, float weight) {
+    // Mirror overlay coverage, not endpoints, so the leading pixel stays full.
+    const uint16_t target =
+        overlay && reversed_ ? board::kPixelCount - 1 - index : index;
+    blendToPixel(target, color, weight, overlay);
+  };
 
   if (first == last) {
     // The whole span sits inside one pixel, so light it proportionally to how
     // much of the pixel it actually covers.
-    addToPixel(first, color, (end - start) * intensity);
+    drawPixel(first, (end - start) * intensity);
     return;
   }
 
   // Partially-covered first and last pixels, fully-covered ones between.
-  addToPixel(first, color, (1.0f - (start - first)) * intensity);
+  drawPixel(first, (1.0f - (start - first)) * intensity);
   for (uint16_t i = first + 1; i < last && i < board::kPixelCount; i++) {
-    addToPixel(i, color, intensity);
+    drawPixel(i, intensity);
   }
-  addToPixel(last, color, (end - last) * intensity);
+  drawPixel(last, (end - last) * intensity);
 }
 
 void Display::fade(float amount) {

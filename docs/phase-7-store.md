@@ -11,7 +11,7 @@ appear in the launcher without a firmware flash.
   that turns WiFi on.
 - **Credentials:** Store reuses the existing `Network` state machine. It does
   not open the captive portal itself; if there are no stored credentials it fails
-  and the user should visit **Network** first.
+  and the user should visit **Settings > WiFi** first.
 - **Index fetch:** the scene fetches `BEAMBOY_STORE_INDEX_URL`, which defaults
   to the GitHub Pages store index:
   `https://jakopako.github.io/beam-boy/games/index.json`. In normal builds the
