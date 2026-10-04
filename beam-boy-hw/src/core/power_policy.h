@@ -63,12 +63,12 @@ inline PowerLevel classifyPowerLevel(float percent, PowerLevel previous) {
   if (previous == PowerLevel::kCritical) {
     if (percent < kCriticalBatteryRecoverPercent) return PowerLevel::kCritical;
     return percent >= kLowBatteryRecoverPercent ? PowerLevel::kNormal
-                                                 : PowerLevel::kLow;
+                                                : PowerLevel::kLow;
   }
   if (previous == PowerLevel::kLow) {
     if (percent <= kCriticalBatteryPercent) return PowerLevel::kCritical;
     return percent >= kLowBatteryRecoverPercent ? PowerLevel::kNormal
-                                                 : PowerLevel::kLow;
+                                                : PowerLevel::kLow;
   }
   // previous == PowerLevel::kNormal
   if (percent <= kCriticalBatteryPercent) return PowerLevel::kCritical;
@@ -116,7 +116,7 @@ constexpr float kMaxPlausiblePercent = 110.0f;
 
 constexpr bool isPlausibleReading(float percent, float voltage) {
   return voltage >= kMinPlausibleVoltage && voltage <= kMaxPlausibleVoltage &&
-         percent >= 0.0f && percent <= kMaxPlausiblePercent;
+         percent >= 0.01f && percent <= kMaxPlausiblePercent;
 }
 
 // How long the console sits idle before it sleeps.

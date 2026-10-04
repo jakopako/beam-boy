@@ -703,7 +703,28 @@ separate scene/menu model so settings utilities never masquerade as games.
 ✅ _Visible result: the main launcher contains only games and one stable Settings endpoint;
 network setup, maintenance, downloads and display configuration are grouped behind it._
 
-#### 3. Remaining product polish
+#### 3. Polish binary score indicator
+
+Now, with the final LED tube, the single LED dots cannot be distinguished that well anymore
+so we need to rework the score indicator a little.
+
+#### 5. Improve low power detection
+
+It still sometimes happens that power is initially considered low and the device therefore doesn't start.
+
+barely successful run:
+
+```
+==================================
+[power] CRITICAL at 0.0%  4.23V -- flushing and shutting down
+[PERF] fps=0.0  worst frame=0us / 16667us budget  stick=0.00 (raw 0.466)  batt=0.0% 4.23V CRITICAL
+[power] level CRITICAL -> normal  (105.3%  4.22V)
+[power] battery back to 105.3% -- shutdown aborted, resuming
+```
+
+Or does the correct shutdown abort only work if monitor is attached in some cases?
+
+#### 4. Remaining product polish
 
 1. **Factory reset gesture:** add a hard-to-trigger, confirmed gesture from the Settings root
    (not a fifth visible item). It should erase saved settings, highscores and WiFi credentials;

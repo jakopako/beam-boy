@@ -7,7 +7,7 @@
 namespace beamboy {
 namespace {
 
-constexpr uint8_t kItemCount = 2;
+constexpr uint8_t kItemCount = 3;
 constexpr float kHighlightEase = 12.0f;
 
 }  // namespace
@@ -19,7 +19,9 @@ void SettingsScene::enter(Engine& engine) {
 
 Scene* SettingsScene::selectedScene() const {
   const uint8_t utility_index =
-      selected_ == 0 ? games::kNetworkUtilityIndex : games::kStoreUtilityIndex;
+      selected_ == 0 ? games::kNetworkUtilityIndex
+                     : (selected_ == 1 ? games::kStoreUtilityIndex
+                                       : games::kBrightnessUtilityIndex);
   return games::kUtilities[utility_index].scene;
 }
 
@@ -56,15 +58,16 @@ void SettingsScene::render(Engine& engine) {
   // Two evenly-spaced items for the compatibility bridge. Point 2 will replace
   // these with the final four-item settings layout.
   for (uint8_t i = 0; i < kItemCount; i++) {
-    const float position = i == 0 ? 0.32f : 0.68f;
+    const float position = (static_cast<float>(i) + 1.0f) /
+                           (static_cast<float>(kItemCount) + 1.0f);
     const uint8_t utility_index =
-        i == 0 ? games::kNetworkUtilityIndex : games::kStoreUtilityIndex;
+        i == 0 ? games::kNetworkUtilityIndex
+               : (i == 1 ? games::kStoreUtilityIndex
+                         : games::kBrightnessUtilityIndex);
     const float distance = fabsf(highlight_ - static_cast<float>(i));
-    float intensity =
-        distance < 1.0f ? 0.2f + 0.8f * (1.0f - distance) : 0.2f;
+    float intensity = distance < 1.0f ? 0.2f + 0.8f * (1.0f - distance) : 0.2f;
     if (i == selected_) {
-      intensity *=
-          0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
+      intensity *= 0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
     }
     display.point(position, games::kUtilities[utility_index].accent, intensity);
   }

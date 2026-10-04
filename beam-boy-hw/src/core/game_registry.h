@@ -67,8 +67,9 @@ extern const uint8_t kGameCount;
 extern const GameEntry kUtilities[];
 constexpr uint8_t kStoreUtilityIndex = 0;
 constexpr uint8_t kNetworkUtilityIndex = 1;
-constexpr uint8_t kSettingsUtilityIndex = 2;
-constexpr uint8_t kUtilityCount = 3;
+constexpr uint8_t kBrightnessUtilityIndex = 2;
+constexpr uint8_t kSettingsUtilityIndex = 3;
+constexpr uint8_t kUtilityCount = 4;
 
 }  // namespace games
 }  // namespace beamboy
