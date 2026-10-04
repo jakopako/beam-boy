@@ -5,6 +5,7 @@
 #include "core/cartridge_store.h"
 #include "core/game_registry.h"
 #include "core/launcher_policy.h"
+#include "scenes/launcher_delete_feedback.h"
 
 namespace beamboy {
 namespace {
@@ -55,6 +56,7 @@ void LauncherScene::enter(Engine& engine) {
   launch_timer_ = 0.0f;
   nav_hold_exceeded_ = false;
   deleting_ = false;
+  delete_confirmation_ = false;
   showing_battery_ = false;
   delete_hold_ms_ = 0;
   gestures_.reset();
@@ -79,6 +81,11 @@ uint8_t LauncherScene::selectedPhysicalSlot() const {
 void LauncherScene::update(Engine& engine, float dt) {
   Input& input = engine.input();
 
+  if (delete_confirmation_) {
+    if (millis() - deleted_at_ms_ < kDeleteConfirmationMs) return;
+    delete_confirmation_ = false;
+  }
+
   if (launching_) {
     launch_timer_ -= dt;
     if (launch_timer_ <= 0.0f) {
@@ -100,6 +107,7 @@ void LauncherScene::update(Engine& engine, float dt) {
   // its physical layout has a dark gap: the step after the last game lands
   // directly on Settings at slot 9.
   const int8_t step = input.navDelta();
+  const uint8_t previous_selection = selected_;
   if (step != 0) {
     const uint8_t settings_selection = gameList().gameCount();
     // Clamp rather than wrap: on a physical line, running off the end and
@@ -118,6 +126,7 @@ void LauncherScene::update(Engine& engine, float dt) {
   // scenes/launcher_gestures.h for the ordering traps that logic exists to
   // close, and test_launcher_gestures for the cases that pin it down.
   ButtonSnapshot buttons;
+  buttons.selection_changed = selected_ != previous_selection;
   buttons.a_down = input.held(Button::kA);
   buttons.b_down = input.held(Button::kB);
   buttons.a_released = input.released(Button::kA);
@@ -147,9 +156,21 @@ void LauncherScene::update(Engine& engine, float dt) {
   if (!deleting_ && selected_ < gameList().gameCount() &&
       selectedEntry().is_installed &&
       delete_hold_ms_ >= kDeleteHoldMs) {
+    // Present the completed warning before the filesystem work removes it.
+    deleted_slot_ = selectedPhysicalSlot();
+    engine.display().clear();
+    renderList(engine);
+    drawLauncherSlot(engine.display(), deleted_slot_, colors::kRed, 1.0f);
+    engine.display().present();
     deleting_ = true;
     const char* deleted_id = selectedEntry().id;
-    CartridgeStore::remove(deleted_id);
+    if (!CartridgeStore::remove(deleted_id)) {
+      Serial.println("[launcher] uninstall failed; highscore retained");
+      gestures_.reset();
+      delete_hold_ms_ = 0;
+      return;
+    }
+    delete_confirmation_ = true;
     // The cartridge is gone; its highscore must go with it, or a later game
     // that happens to reuse the same id would inherit a score it never
     // earned. Flush immediately -- deletion is deliberate and rare enough
@@ -172,6 +193,7 @@ void LauncherScene::update(Engine& engine, float dt) {
     }
     engine.storage().commit();
     highlight_ = static_cast<float>(selectedPhysicalSlot());
+    deleted_at_ms_ = millis();
   } else if (!input.held(Button::kB)) {
     deleting_ = false;
   }
@@ -202,12 +224,19 @@ void LauncherScene::renderList(Engine& engine) {
     // selection. Restricting this to an exact index match keeps the glow
     // (still driven by distance, for the moving-highlight animation) but
     // limits breathing to the one slot that is actually selected.
-    if (index == selected_) {
+    Color color = game.accent;
+    if (index == selected_ && game.is_installed && !deleting_ &&
+        delete_hold_ms_ > 0) {
+      const DeleteFeedback feedback =
+          launcherDeleteFeedback(game.accent, delete_hold_ms_);
+      color = feedback.color;
+      intensity = feedback.intensity;
+    } else if (index == selected_) {
       const float level = 0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
       intensity *= level;
     }
 
-    drawLauncherSlot(display, index, game.accent, intensity);
+    drawLauncherSlot(display, index, color, intensity);
   }
 
   const uint8_t settings_selection = gameList().gameCount();
@@ -287,30 +316,16 @@ void LauncherScene::render(Engine& engine) {
     return;
   }
 
-  // Once the delete hold has crossed the threshold (see update()), the game
-  // is already gone -- show a solid red confirmation flash.
-  if (deleting_) {
-    display.span(0.0f, 1.0f, colors::kRed, 1.0f);
+  if (delete_confirmation_) {
+    renderList(engine);
+    drawLauncherSlot(display, deleted_slot_, colors::kRed, 1.0f);
     return;
   }
 
-  // Holding B on an installed cartridge counts down to a delete: the readout
-  // bleeds toward red as the hold approaches the threshold, so it is never a
-  // surprise. B does nothing on a built-in or a utility scene -- neither can
-  // be deleted this way.
-  //
-  // Driven by the same arbitrated delete_hold_ms_ that update() acts on, so a
-  // suppressed hold (the A+B combo, or one carried in from the game exit
-  // gesture) draws no warning for a deletion that is never going to happen.
-  if (delete_hold_ms_ > 0 && selected_ < gameList().gameCount() &&
+  if (!deleting_ && delete_hold_ms_ > 0 && selected_ < gameList().gameCount() &&
       selectedEntry().is_installed) {
-    const float warn = static_cast<float>(delete_hold_ms_) /
-                       static_cast<float>(kDeleteHoldMs);
-    if (warn > 0.5f) {
-      const float mix = (warn - 0.5f) / 0.5f;
-      display.span(0.0f, 1.0f, colors::kRed, mix > 1.0f ? 1.0f : mix);
-      return;
-    }
+    renderList(engine);
+    return;
   }
 
   // Holding the nav button past kHighscoreHoldMs shows the selected game's

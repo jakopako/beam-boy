@@ -51,6 +51,7 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 
 | Suite | Covers |
 |---|---|
+| `test_launcher_delete_feedback` | Immediate accent-to-red blend, rising visible pulse floor, accelerating pulse frequency and solid full-brightness completion at three seconds |
 | `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, refresh behavior, and alpha-blended overlays (white backgrounds, anti-aliased edges, opacity and reversal) |
 | `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat |
 | `test_brightness` | Actual brightness scene controls and repeat timing, visible minimum, 128 maximum with unchanged 64 default, display power cap, default reset, deferred writes, confirmation/exit persistence, failed-save feedback, and hold-progress contrast over white previews |

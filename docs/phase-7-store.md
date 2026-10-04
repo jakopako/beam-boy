@@ -137,6 +137,16 @@ or commit, regardless of a contributor's `core.autocrlf` setting.
 
 ## Controls and tube vocabulary
 
+In the launcher, hold **B alone for three seconds** on an installed game to
+uninstall it. Its block immediately fades from its accent colour toward red,
+with an accelerating pulse and a rising brightness floor. At three seconds
+it reaches solid bright red and is deleted; the same slot stays red for 400 ms
+before the updated list appears. The rest of the tube is not flooded red.
+Release early to cancel. Changing selection cancels the hold until B is released;
+the A+B gauge and holds carried over from game exit cannot trigger deletion.
+Built-in games and Settings cannot be deleted. A failed removal is logged and
+does not erase the highscore or display a success confirmation.
+
 - Enter **Settings** from the launcher, then choose **Store**.
 - Blue sweep: connecting to stored WiFi.
 - Amber sweep: fetching the index.

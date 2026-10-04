@@ -16,7 +16,7 @@
 //   Nav press (hold)   show the selected game's highscore in binary,
 //                      instantly, for as long as it's held
 //   B (hold)           on an installed cartridge only: delete it, after
-//                      a red countdown so it's never a surprise
+//                      a three-second accelerating colour-to-red countdown
 //   A + B (hold)       show the battery gauge as a proportional bar, for as
 //                      long as it's held -- launcher only, so a game never
 //                      has to reserve this combo for itself
@@ -64,9 +64,11 @@ class LauncherScene : public Scene {
 
   // Set once a hold-B on an installed cartridge crosses kDeleteHoldMs, so the
   // deletion itself only fires once per hold rather than every frame past the
-  // threshold, and so update() can hand off to render() which entry to wipe
-  // the flash for after B is released.
+  // threshold. Remains latched until B is released.
   bool deleting_ = false;
+  bool delete_confirmation_ = false;
+  uint8_t deleted_slot_ = 0;
+  uint32_t deleted_at_ms_ = 0;
 
   // True once A and B have been held together past kBatteryHoldMs, as decided
   // by gestures_.

@@ -25,8 +25,10 @@ class Rig {
   // nothing pressed.
   void armed() { frame(false, false, 0); }
 
-  GestureResult frame(bool a_down, bool b_down, uint32_t dt_ms) {
+  GestureResult frame(bool a_down, bool b_down, uint32_t dt_ms,
+                      bool selection_changed = false) {
     ButtonSnapshot s;
+    s.selection_changed = selection_changed;
     s.a_released = a_was_down_ && !a_down;
 
     a_hold_ms_ = a_down ? (a_was_down_ ? a_hold_ms_ + dt_ms : 0) : 0;
@@ -197,7 +199,7 @@ void test_a_fresh_b_hold_after_the_gauge_deletes_normally() {
 // --- arming ----------------------------------------------------------------
 
 // Entering the launcher mid-hold: the B press that exited a game (1.2 s) is
-// still down and already past the 2.5 s delete threshold by the time the
+// still down and already past the delete threshold by the time the
 // launcher sees it. It must not delete the cartridge the player just left.
 void test_a_hold_carried_in_from_the_previous_scene_never_deletes() {
   Rig rig;
@@ -224,6 +226,38 @@ void test_gestures_work_again_after_the_carried_in_hold_is_released() {
                    kDeleteHoldMs);
 }
 
+void test_delete_threshold_is_exactly_three_seconds() {
+  Rig rig;
+  rig.armed();
+  rig.frame(false, true, 0);
+  TEST_ASSERT_EQUAL_UINT32(3000, kDeleteHoldMs);
+  TEST_ASSERT_EQUAL_UINT32(2999, rig.frame(false, true, 2999).delete_hold_ms);
+  TEST_ASSERT_EQUAL_UINT32(3000, rig.frame(false, true, 1).delete_hold_ms);
+}
+
+void test_selection_change_cancels_until_b_is_released() {
+  Rig rig;
+  rig.armed();
+  rig.frame(false, true, 0);
+  rig.frame(false, true, 2000);
+  TEST_ASSERT_EQUAL_UINT32(0, rig.frame(false, true, 16, true).delete_hold_ms);
+  TEST_ASSERT_EQUAL_UINT32(0, rig.hold(false, true, 4000).delete_hold_ms);
+  TEST_ASSERT_EQUAL_UINT32(0, rig.frame(false, true, 16, true).delete_hold_ms);
+  rig.frame(false, false, 16);
+  rig.frame(false, true, 0);
+  TEST_ASSERT_EQUAL_UINT32(100, rig.frame(false, true, 100).delete_hold_ms);
+}
+
+void test_release_early_resets_countdown() {
+  Rig rig;
+  rig.armed();
+  rig.frame(false, true, 0);
+  rig.frame(false, true, 2999);
+  TEST_ASSERT_EQUAL_UINT32(0, rig.frame(false, false, 1).delete_hold_ms);
+  rig.frame(false, true, 0);
+  TEST_ASSERT_EQUAL_UINT32(1, rig.frame(false, true, 1).delete_hold_ms);
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -245,5 +279,8 @@ int main(int, char**) {
   RUN_TEST(test_a_hold_carried_in_from_the_previous_scene_never_deletes);
   RUN_TEST(test_a_hold_carried_in_from_the_previous_scene_never_launches);
   RUN_TEST(test_gestures_work_again_after_the_carried_in_hold_is_released);
+  RUN_TEST(test_delete_threshold_is_exactly_three_seconds);
+  RUN_TEST(test_selection_change_cancels_until_b_is_released);
+  RUN_TEST(test_release_early_resets_countdown);
   return UNITY_END();
 }

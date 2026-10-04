@@ -17,7 +17,7 @@
 //     selected cartridge, because B's hold duration was already past the
 //     delete threshold.
 //   * Holding B to exit a game (1.2 s) rolled straight on past the launcher's
-//     delete threshold (2.5 s) and wiped the cartridge the player was only
+//     delete threshold and wiped the cartridge the player was only
 //     trying to leave.
 //
 // None of those reproduce reliably by hand -- they depend on millisecond
@@ -34,7 +34,7 @@ constexpr uint32_t kBatteryHoldMs = 500;
 
 // How long B alone must be held on an installed cartridge before it is
 // deleted.
-constexpr uint32_t kDeleteHoldMs = 2500;
+constexpr uint32_t kDeleteHoldMs = 3000;
 
 static_assert(kBatteryHoldMs < kDeleteHoldMs,
               "the gauge must appear before the delete countdown could ever "
@@ -42,6 +42,7 @@ static_assert(kBatteryHoldMs < kDeleteHoldMs,
 
 // One frame's worth of the two face buttons, as the launcher sees them.
 struct ButtonSnapshot {
+  bool selection_changed = false;
   bool a_down = false;
   bool b_down = false;
   // True for exactly the frame A comes up, matching Input::released().
@@ -78,10 +79,12 @@ class LauncherGestures {
   void reset() {
     combo_engaged_ = false;
     armed_ = false;
+    delete_cancelled_ = false;
   }
 
   GestureResult update(const ButtonSnapshot& buttons) {
     GestureResult out;
+    if (buttons.selection_changed && buttons.b_down) delete_cancelled_ = true;
 
     // Latches as soon as both are down and clears only once both are back up.
     // Outliving the combo itself is the point: it keeps the individual A and
@@ -109,7 +112,7 @@ class LauncherGestures {
 
     // combo_engaged_ covers the "A is also down right now" case on its own,
     // including the very first frame of a combo, since it was set above.
-    if (armed_ && !combo_engaged_ && buttons.b_down) {
+    if (armed_ && !combo_engaged_ && !delete_cancelled_ && buttons.b_down) {
       out.delete_hold_ms = buttons.b_hold_ms;
     }
 
@@ -120,6 +123,7 @@ class LauncherGestures {
       armed_ = true;
       combo_engaged_ = false;
     }
+    if (!buttons.b_down) delete_cancelled_ = false;
 
     return out;
   }
@@ -127,6 +131,7 @@ class LauncherGestures {
  private:
   bool combo_engaged_ = false;
   bool armed_ = false;
+  bool delete_cancelled_ = false;
 };
 
 }  // namespace beamboy

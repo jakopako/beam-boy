@@ -524,7 +524,10 @@ it over the air is item 5.)_
 **Known issues to fix (reported after real-hardware use):**
 
 - ✅ Launcher hold-B was overloaded (highscore + delete). Resolved: hold-B now
-  only deletes an installed cartridge (with a red countdown), and holding the
+  only deletes an installed cartridge (with a three-second, slot-local colour-to-red
+  countdown whose pulse accelerates to solid bright red, followed by a 400 ms confirmation).
+  Releasing early or changing selection cancels; a fresh B press is required after navigation.
+  Holding the
   nav button/stick (rather than tapping it to launch) shows the selected
   game's highscore instead — instantly, not the bit-by-bit reveal used for a
   score just earned. See `docs/phase-3-launcher.md` and

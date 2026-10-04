@@ -119,7 +119,7 @@ ordering between two thumbs) and two of which destroyed user data:
    thumb has lifted and the other hasn't.
 3. **Holding B to exit a game rolled straight on into a delete.** The engine's
    exit gesture is `kExitHoldMs` (1.2 s) and the launcher's delete is
-   `kDeleteHoldMs` (2.5 s), so continuing to hold B for another 1.3 s after
+   `kDeleteHoldMs` (now 3 s), so continuing to hold B for another 1.8 s after
    landing in the launcher wiped the cartridge the player was only trying to
    leave. This one predates the battery gauge entirely. Fixed with an `armed_`
    flag mirroring `Engine::exit_armed_`: both buttons must be seen up once
@@ -233,7 +233,7 @@ and a deliberate one produce an identical boot.
 | `kCriticalShutdownMs` | 1500 | `engine.h` |
 | `kChargingSweepMs` | 2600 | `engine.cpp` |
 | `kBatteryHoldMs` (A+B gauge) | 500 | `launcher_gestures.h` |
-| `kDeleteHoldMs` | 2500 | `launcher_gestures.h` |
+| `kDeleteHoldMs` | 3000 | `launcher_gestures.h` |
 | `kMinPlausibleVoltage` / max | 2.5 / 5.0 V | `power_policy.h` |
 | `kWarmupAttempts` × `kWarmupDelayMs` | 8 × 50 ms | `power.h` |
 
