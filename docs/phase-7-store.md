@@ -14,7 +14,7 @@ appear in the launcher without a firmware flash.
   and the user should visit **Settings > WiFi** first.
 - **Index fetch:** the scene fetches `BEAMBOY_STORE_INDEX_URL`, which defaults
   to the GitHub Pages store index:
-  `https://jakopako.github.io/beam-boy/games/index.json`. In normal builds the
+  `https://beamboy.ch/games/index.json`. In normal builds the
   index must be HTTPS and is validated against the embedded Mozilla/certifi CA
   bundle in `beam-boy-hw/cert/x509_crt_bundle.bin`, because the index is the
   trust root for every script hash. Override the URL with a PlatformIO build
@@ -107,7 +107,7 @@ Constraints:
 
 ## Publishing a cartridge to the store
 
-`docs/games/index.json` is the trust root for every downloaded script: the
+`website/games/index.json` is the trust root for every downloaded script: the
 device verifies each `game.be` against the `sha256`/`size` recorded there. That
 means the recorded hash/size must match the *exact bytes* GitHub Pages serves —
 not whatever a local editor/OS happens to have on disk. Windows checkouts in
@@ -117,13 +117,14 @@ particular can silently reintroduce CRLF line endings, which changes the bytes
 To avoid computing/copying hashes by hand, use
 [`tools/build_store_index.py`](../tools/build_store_index.py):
 
-1. Add or update a cartridge folder under `docs/games/<id>/`, containing:
+1. Add or update a cartridge folder under `website/games/<id>/`, containing:
    - `game.be` — the Berry script, LF line endings only.
    - `meta.json` — `{"id": "<id>", "title": "...", "color": "rrggbb"}`.
 2. Run `python tools/build_store_index.py` from the repo root. It reads each
    `game.be` directly, computes `sha256`/`size` from those bytes, and rewrites
-   `docs/games/index.json` deterministically.
-3. Commit `docs/games/**` and the regenerated `index.json` together, then push.
+   `website/games/index.json` deterministically.
+3. Commit `website/games/**` and the regenerated `index.json` together, then push.
+   The Pages workflow checks the index before publishing `website` from `main`.
 
 The script refuses to run if a `game.be` contains CR bytes, so a CRLF
 regression is caught before it's published rather than causing a confusing
@@ -175,8 +176,10 @@ highscore; only **A** launches a game there.
 
 ## Current limitations
 
-- The default URL points at this repo's GitHub Pages site. It will return 404
-  until GitHub Pages is enabled/deployed for the repository.
+- The default URL points at this repo's GitHub Pages site on `beamboy.ch`.
+  DNS and HTTPS must be configured as described in [Website hosting](website.md).
+  Firmware uses the custom domain directly because its HTTP client does not
+  follow redirects from the old GitHub Pages URLs.
 - Downloads are blocking once started. The scene paints a static "working" frame
   first, the same pattern used by OTA. This is acceptable for the first slice
   because LittleFS writes already make animation unreliable during install.
