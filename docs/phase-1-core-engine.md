@@ -53,6 +53,20 @@ the stick.
 
 ## Controls
 
+### Current ESP32 case mounting
+
+The firmware compensates for a joystick mounted **90 degrees to the left
+(counterclockwise), viewed from above**, relative to its original orientation.
+Keep `VRx` and `VRy` connected to their existing pins: logical horizontal input
+uses electrical Y, and logical vertical input uses the negated electrical X axis.
+This applies to games, cartridges, and launcher navigation. Calibration and raw
+diagnostic readings still use the original electrical axes.
+
+The orientation is hardcoded in
+[`input.cpp`](../beam-boy-hw/src/core/input.cpp); there is no rotation setting or
+build flag. Native tests use the same mapping as the hardware. Axis inversion
+setters apply to the logical axes. Leave the stick untouched during boot as before.
+
 | Input | Action |
 |---|---|
 | **Joystick** (left/right) | Move the dot |
@@ -103,14 +117,14 @@ white dots every 300 ms, keeping spacers dark, and logs the full score to serial
 Every 5 s the serial monitor prints:
 
 ```
-[PERF] fps=60.0  worst frame=1234us / 16667us budget  stick=0.00 (raw 0.512)
+[PERF] fps=60.0  worst frame=1234us / 16667us budget  stick=0.00 (raw X=0.512 Y=0.500)
 ```
 
 - **fps** should sit at ~60.
 - **worst frame** is the number that matters. It's the headroom the Phase 5 scripting VM
   will have to fit inside — if native rendering already uses most of 16667 µs, a script
   engine can't work.
-- **raw** shows the uncalibrated stick reading; ~0.5 at rest is healthy.
+- **raw X/Y** show the uncalibrated electrical axes; ~0.5 at rest is healthy.
 
 ---
 

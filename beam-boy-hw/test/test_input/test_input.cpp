@@ -22,13 +22,13 @@ void setButton(uint8_t pin, bool down) {
 }
 
 void setStick(float normalised) {
-  beamboy_host::state().pin_analog[board::kPinStickX] =
+  beamboy_host::state().pin_analog[board::kPinStickY] =
       static_cast<int>(normalised * board::kAdcMax);
 }
 
 void setStickY(float normalised) {
-  beamboy_host::state().pin_analog[board::kPinStickY] =
-      static_cast<int>(normalised * board::kAdcMax);
+  beamboy_host::state().pin_analog[board::kPinStickX] =
+      static_cast<int>((1.0f - normalised) * board::kAdcMax);
 }
 
 // Advances the simulated clock and samples input, the way the engine does once
@@ -182,6 +182,81 @@ void test_stick_y_inversion_flips_the_axis(void) {
   TEST_ASSERT_TRUE(input.stickY() < -0.9f);
 }
 
+void test_left_rotated_stick_maps_all_four_directions(void) {
+  Input input = freshInput();
+
+  beamboy_host::state().pin_analog[board::kPinStickY] = board::kAdcMax;
+  tick(input, 100);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickX());
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickY());
+  TEST_ASSERT_EQUAL_INT8(1, input.navDelta());
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, input.rawStickY());
+
+  beamboy_host::state().pin_analog[board::kPinStickY] = board::kAdcMax / 2;
+  tick(input, 116);
+  beamboy_host::state().pin_analog[board::kPinStickY] = 0;
+  tick(input, 132);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickX());
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickY());
+  TEST_ASSERT_EQUAL_INT8(-1, input.navDelta());
+
+  beamboy_host::state().pin_analog[board::kPinStickY] = board::kAdcMax / 2;
+  beamboy_host::state().pin_analog[board::kPinStickX] = 0;
+  tick(input, 148);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickY());
+  TEST_ASSERT_EQUAL_INT8(0, input.navDelta());
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.rawStickX());
+
+  beamboy_host::state().pin_analog[board::kPinStickX] = board::kAdcMax;
+  tick(input, 164);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickY());
+  TEST_ASSERT_EQUAL_INT8(0, input.navDelta());
+}
+
+void test_left_rotated_stick_preserves_calibration_and_deadzone(void) {
+  Input input = freshInput();
+  setStick(0.40f);
+  setStickY(0.60f);
+  input.calibrateCenter();
+
+  setStick(0.42f);
+  setStickY(0.58f);
+  tick(input, 100);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickX());
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickY());
+  TEST_ASSERT_EQUAL_INT8(0, input.navDelta());
+
+  setStick(1.0f);
+  setStickY(1.0f);
+  tick(input, 116);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickY());
+
+  setStick(0.0f);
+  setStickY(0.0f);
+  tick(input, 132);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickY());
+}
+
+void test_left_rotated_stick_inverts_logical_axes(void) {
+  Input input = freshInput();
+  input.setStickInverted(true, true);
+  setStick(1.0f);
+  setStickY(1.0f);
+  tick(input, 100);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, input.stickY());
+  TEST_ASSERT_EQUAL_INT8(-1, input.navDelta());
+
+  input.setStickInverted(false, false);
+  tick(input, 116);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, input.stickY());
+}
+
 void test_nav_emits_one_step_per_flick(void) {
   Input input = freshInput();
   tick(input, 100);
@@ -275,6 +350,9 @@ int main(int, char**) {
   RUN_TEST(test_stick_y_deadzone_keeps_a_resting_hand_still);
   RUN_TEST(test_stick_y_reaches_full_deflection_despite_deadzone);
   RUN_TEST(test_stick_y_inversion_flips_the_axis);
+  RUN_TEST(test_left_rotated_stick_maps_all_four_directions);
+  RUN_TEST(test_left_rotated_stick_preserves_calibration_and_deadzone);
+  RUN_TEST(test_left_rotated_stick_inverts_logical_axes);
   RUN_TEST(test_nav_emits_one_step_per_flick);
   RUN_TEST(test_nav_auto_repeats_after_the_delay);
   RUN_TEST(test_nav_hysteresis_prevents_a_stream_of_steps);

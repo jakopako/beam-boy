@@ -38,7 +38,7 @@ struct Fixture {
   }
 
   void stick(int8_t direction) {
-    beamboy_host::state().pin_analog[board::kPinStickX] =
+    beamboy_host::state().pin_analog[board::kPinStickY] =
         direction < 0 ? 0 : (direction > 0 ? board::kAdcMax
                                           : board::kAdcMax / 2);
   }
@@ -216,10 +216,11 @@ void test_failed_save_keeps_pending_preference_and_shows_red(void) {
   BrightnessScene scene;
   beamboy_host::state().reset();
   beamboy_host::state().pin_analog[board::kPinStickX] = board::kAdcMax / 2;
+  beamboy_host::state().pin_analog[board::kPinStickY] = board::kAdcMax / 2;
   engine.input().begin();
   engine.display().begin();
   scene.enter(engine);
-  beamboy_host::state().pin_analog[board::kPinStickX] = 0;
+  beamboy_host::state().pin_analog[board::kPinStickY] = 0;
   engine.input().update(100);
   scene.update(engine, 1.0f / 60.0f);
   beamboy_host::state().pin_digital[board::kPinButtonA] = LOW;

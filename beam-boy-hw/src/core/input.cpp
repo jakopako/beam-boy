@@ -120,11 +120,12 @@ void Input::update(uint32_t now_ms) {
   // --- Joystick ------------------------------------------------------------
   raw_stick_x_ =
       static_cast<float>(analogRead(board::kPinStickX)) / board::kAdcMax;
-  stick_x_ = shapeAxis(raw_stick_x_, stick_center_x_, stick_x_inverted_);
-
   raw_stick_y_ =
       static_cast<float>(analogRead(board::kPinStickY)) / board::kAdcMax;
-  stick_y_ = shapeAxis(raw_stick_y_, stick_center_y_, stick_y_inverted_);
+
+  // Fixed case orientation: horizontal is electrical Y, vertical is -X.
+  stick_x_ = shapeAxis(raw_stick_y_, stick_center_y_, stick_x_inverted_);
+  stick_y_ = shapeAxis(raw_stick_x_, stick_center_x_, !stick_y_inverted_);
 
   updateNav();
 }

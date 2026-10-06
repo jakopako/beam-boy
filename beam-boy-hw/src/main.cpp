@@ -160,8 +160,10 @@ void loop() {
     Serial.print(engine.worstFrameUs());
     Serial.print("us / 16667us budget  stick=");
     Serial.print(engine.input().stickX(), 2);
-    Serial.print(" (raw ");
+    Serial.print(" (raw X=");
     Serial.print(engine.input().rawStickX(), 3);
+    Serial.print(" Y=");
+    Serial.print(engine.input().rawStickY(), 3);
     Serial.print(")");
     // Folded into the existing periodic line rather than given one of its own:
     // the battery moves over minutes, so a separate timer would either

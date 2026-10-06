@@ -61,7 +61,7 @@ class Input {
   // curve shaped. Positive is forward / up.
   float stickY() const { return stick_y_; }
 
-  // Raw axis values before shaping, for calibration and diagnostics.
+  // Raw electrical axes before rotation or shaping, for diagnostics.
   float rawStickX() const { return raw_stick_x_; }
   float rawStickY() const { return raw_stick_y_; }
 
@@ -70,7 +70,7 @@ class Input {
   // the stick untouched.
   void calibrateCenter();
 
-  // Invert axes if the stick is mounted the other way round in the case.
+  // Invert logical axes after compensating for the mounting orientation.
   void setStickInverted(bool inverted_x, bool inverted_y = false) {
     stick_x_inverted_ = inverted_x;
     stick_y_inverted_ = inverted_y;
