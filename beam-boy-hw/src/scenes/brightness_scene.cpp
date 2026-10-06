@@ -60,8 +60,13 @@ void BrightnessScene::render(Engine& engine) {
   Display& display = engine.display();
   display.clear();
 
-  const float fill =
-      static_cast<float>(current_brightness_) / board::kBrightnessCap;
+  const float progress =
+      board::kBrightnessCap == brightness::kMinimum
+          ? 0.0f
+          : static_cast<float>(current_brightness_ - brightness::kMinimum) /
+                (board::kBrightnessCap - brightness::kMinimum);
+  const float minimum_fill = fminf(1.0f, 3.0f * display.pixelWidth());
+  const float fill = minimum_fill + (1.0f - minimum_fill) * progress;
   const Color bar = feedback_remaining_ > 0.0f
                         ? (save_failed_ ? colors::kRed : colors::kGreen)
                         : colors::kWhite;

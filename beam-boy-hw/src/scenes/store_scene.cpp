@@ -32,9 +32,7 @@ constexpr size_t kMaxIndexBytes = 8 * 1024;
 constexpr uint32_t kHttpTimeoutMs = 15000;
 
 const Color kConnectColor(0, 160, 255);
-const Color kFetchColor(255, 140, 0);
 const Color kInstallColor(255, 255, 255);
-const Color kOkColor(0, 255, 60);
 const Color kFailColor(255, 30, 20);
 
 bool isHttps(const char* url) { return strncmp(url, "https://", 8) == 0; }
@@ -354,6 +352,7 @@ void StoreScene::enter(Engine& engine) {
   selected_ = 0;
   phase_ = 0.0f;
   settled_at_ms_ = 0;
+  current_feedback_.cancel();
   error_ = "";
 
   if (!net_.hasCredentials()) {
@@ -562,6 +561,7 @@ bool StoreScene::installSelected(Engine& engine) {
   if (new_index >= 0) engine.setCurrentGame(new_index);
 
   state_ = StoreState::kSuccess;
+  success_fill_drawn_ = false;
   settled_at_ms_ = millis();
   Serial.print(F("[store] installed "));
   Serial.println(entry.id);
@@ -574,6 +574,10 @@ void StoreScene::update(Engine& engine, float dt) {
 
   net_.tick();
 
+  if (state_ == StoreState::kSuccess && success_fill_drawn_) {
+    state_ = StoreState::kReady;
+  }
+
   if (state_ == StoreState::kFull &&
       millis() - settled_at_ms_ >= kResultFlashMs) {
     state_ = StoreState::kReady;
@@ -581,9 +585,9 @@ void StoreScene::update(Engine& engine, float dt) {
 
   if (state_ == StoreState::kConnecting) {
     if (net_.state() == NetState::kConnected) {
+      // Blank the tube rather than freeze the sweep during the blocking fetch.
       Display& display = engine.display();
       display.clear();
-      drawBusy(engine, kFetchColor);
       display.present();
       fetchIndex();
     } else if (net_.state() == NetState::kFailed) {
@@ -600,20 +604,16 @@ void StoreScene::update(Engine& engine, float dt) {
       const int16_t next = static_cast<int16_t>(selected_) + step;
       if (next >= 0 && next < static_cast<int16_t>(index_.count())) {
         selected_ = static_cast<uint8_t>(next);
+        current_feedback_.cancel();
       }
     }
 
     if (engine.input().pressed(Button::kA)) {
       if (statuses_[selected_] == CartridgeStatus::kUpToDate) {
-        // Already current: a quick flash of the game's own colour says so
-        // without spending time and battery re-downloading and re-verifying
-        // bytes that would come back identical.
-        Display& display = engine.display();
-        display.clear();
-        display.span(0.0f, 1.0f, kOkColor, 0.5f);
-        display.present();
+        current_feedback_.begin(millis());
         return;
       }
+      current_feedback_.cancel();
       Display& display = engine.display();
       display.clear();
       display.span(0.0f, 1.0f, kInstallColor, 0.35f);
@@ -632,7 +632,6 @@ void StoreScene::render(Engine& engine) {
       drawBusy(engine, kConnectColor);
       break;
     case StoreState::kFetching:
-      drawBusy(engine, kFetchColor);
       break;
     case StoreState::kInstalling:
       display.span(0.0f, 1.0f, kInstallColor, 0.35f);
@@ -645,7 +644,9 @@ void StoreScene::render(Engine& engine) {
       const float t = since >= kResultFlashMs
                           ? 1.0f
                           : static_cast<float>(since) / kResultFlashMs;
-      display.span(0.5f - t * 0.5f, 0.5f + t * 0.5f, kOkColor, 0.9f);
+      display.span(0.5f - t * 0.5f, 0.5f + t * 0.5f, kStoreOkColor, 0.9f);
+      // Show the fully filled frame before resuming browsing on the next tick.
+      success_fill_drawn_ = since >= kResultFlashMs;
       break;
     }
     case StoreState::kFull: {
@@ -677,11 +678,12 @@ void StoreScene::drawBusy(Engine& engine, const Color& color) {
 void StoreScene::drawReady(Engine& engine) {
   Display& display = engine.display();
   if (index_.count() == 0) {
-    display.span(0.0f, 1.0f, kOkColor, 0.12f);
+    display.span(0.0f, 1.0f, kStoreOkColor, 0.12f);
     return;
   }
 
   const float step = 1.0f / index_.count();
+  const uint32_t now_ms = millis();
   for (uint8_t i = 0; i < index_.count(); i++) {
     const float center = (i + 0.5f) * step;
     const float half = fmaxf(display.pixelWidth(), step * 0.35f);
@@ -705,7 +707,7 @@ void StoreScene::drawReady(Engine& engine) {
         base = 0.15f;
         break;
     }
-    const float intensity =
+    float intensity =
         selected ? fmaxf(base, 0.55f + 0.35f * wrappedSin(phase_ * 5.0f))
                  : base;
 
@@ -716,6 +718,7 @@ void StoreScene::drawReady(Engine& engine) {
     Color color(static_cast<uint8_t>((packed >> 16) & 0xFF),
                 static_cast<uint8_t>((packed >> 8) & 0xFF),
                 static_cast<uint8_t>(packed & 0xFF));
+    current_feedback_.apply(selected, now_ms, color, intensity);
     display.span(center - half, center + half, color, intensity);
   }
 }

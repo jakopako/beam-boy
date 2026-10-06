@@ -66,9 +66,13 @@ void tearDown(void) {}
 void test_stored_brightness_is_safe_and_zero_means_default(void) {
   TEST_ASSERT_EQUAL_UINT8(64, brightness::fromStored(0));
   TEST_ASSERT_EQUAL_UINT8(128, board::kBrightnessCap);
-  TEST_ASSERT_EQUAL_UINT8(8, brightness::kMinimum);
+  TEST_ASSERT_EQUAL_UINT8(32, brightness::kMinimum);
   TEST_ASSERT_EQUAL_UINT8(4, brightness::kStep);
   TEST_ASSERT_EQUAL_UINT8(brightness::kMinimum, brightness::fromStored(1));
+  TEST_ASSERT_EQUAL_UINT8(32, brightness::fromStored(8));
+  TEST_ASSERT_EQUAL_UINT8(32, brightness::fromStored(16));
+  TEST_ASSERT_EQUAL_UINT8(32, brightness::fromStored(31));
+  TEST_ASSERT_EQUAL_UINT8(32, brightness::fromStored(32));
   TEST_ASSERT_EQUAL_UINT8(37, brightness::fromStored(37));
   TEST_ASSERT_EQUAL_UINT8(board::kBrightnessCap, brightness::fromStored(255));
   for (int value = 0; value <= 255; ++value) {
@@ -146,6 +150,40 @@ void test_idle_and_render_do_not_change_preference(void) {
   TEST_ASSERT_EQUAL_UINT8(32, f.engine.display().brightness());
   TEST_ASSERT_FALSE(f.engine.storage().dirty());
   TEST_ASSERT_TRUE(saved == beamboy_host::files()["/beamboy.sav"]);
+}
+
+void test_preview_scales_from_three_lower_leds_to_full_tube(void) {
+  uint16_t previous_count = 0;
+  for (int level = brightness::kMinimum; level <= board::kBrightnessCap;
+       level += brightness::kStep) {
+    Fixture f(static_cast<uint8_t>(level));
+    f.scene.render(f.engine);
+    f.engine.display().present();
+    uint16_t lit_bar_pixels = 0;
+    for (uint16_t i = 0; i < board::kPixelCount - 1; ++i) {
+      const RgbColor& pixel = f.engine.display().shownPixel(i);
+      if (pixel.R > 0) {
+        ++lit_bar_pixels;
+        TEST_ASSERT_EQUAL_UINT8(pixel.R, pixel.G);
+        TEST_ASSERT_EQUAL_UINT8(pixel.R, pixel.B);
+      } else {
+        TEST_ASSERT_EQUAL_UINT8(0, pixel.G);
+        TEST_ASSERT_EQUAL_UINT8(0, pixel.B);
+      }
+      if (level == brightness::kMinimum) {
+        TEST_ASSERT_EQUAL_UINT8(i < 3 ? level : 0, pixel.R);
+      }
+    }
+    TEST_ASSERT_TRUE(lit_bar_pixels >= previous_count);
+    previous_count = lit_bar_pixels;
+    if (level == board::kBrightnessCap) {
+      TEST_ASSERT_EQUAL_UINT16(board::kPixelCount - 1, lit_bar_pixels);
+    }
+    const RgbColor& marker =
+        f.engine.display().shownPixel(board::kPixelCount - 1);
+    TEST_ASSERT_EQUAL_UINT8(0, marker.R);
+    TEST_ASSERT_TRUE(marker.B > 0);
+  }
 }
 
 void test_adjustments_stay_in_ram_until_a_confirms(void) {
@@ -269,6 +307,7 @@ int main(int, char**) {
   RUN_TEST(test_held_stick_uses_existing_repeat_delay_and_rate);
   RUN_TEST(test_steps_stop_at_visible_minimum_and_safe_maximum);
   RUN_TEST(test_idle_and_render_do_not_change_preference);
+  RUN_TEST(test_preview_scales_from_three_lower_leds_to_full_tube);
   RUN_TEST(test_adjustments_stay_in_ram_until_a_confirms);
   RUN_TEST(test_leaving_editor_commits_without_a_confirmation);
   RUN_TEST(test_pending_preview_is_available_to_engine_sleep_flush);

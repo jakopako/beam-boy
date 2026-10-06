@@ -56,8 +56,10 @@ appear in the launcher without a firmware flash.
   offers ("update available"). Status is shown as brightness/animation on the
   same coloured block, not a new colour, since colour is reserved for game
   identity: dim = up to date, breathing = update available, normal = not
-  installed. Pressing **A**/nav on an up-to-date entry is a harmless no-op (a
-  quick green flash) rather than re-downloading. A cartridge with no recorded
+  installed. Pressing **A** on an up-to-date entry pulses only its selected
+  block green twice over 1.2 seconds rather than re-downloading. The other
+  entries stay visible; moving selection cancels the confirmation, and pressing
+  **A** again restarts it. A cartridge with no recorded
   hash (hand-authored, or copied in via `uploadfs`) can only ever read as "not
   installed" or "up to date" by id — never "update available", since there is
   no trustworthy prior hash to compare against.
@@ -149,15 +151,20 @@ Built-in games and Settings cannot be deleted. A failed removal is logged and
 does not erase the highscore or display a success confirmation.
 
 - Enter **Settings** from the launcher, then choose **Store**.
-- Blue sweep: connecting to stored WiFi.
-- Amber sweep: fetching the index.
+- Blue sweep: connecting to stored WiFi. Once connected, the tube goes dark
+  during the blocking index fetch, then the game list appears. No frozen dot
+  or amber flash is shown.
 - Store entries: coloured blocks from the index; selected block breathes.
   Status overlays brightness: dim = already installed and current, breathing
   (independent of selection) = update available, normal = not installed.
-- **A**: install selected cartridge, or a quick green flash and
-  no-op if it is already up to date.
+- **A**: install selected cartridge, or confirm it is already up to date
+  without downloading or writing anything.
 - White bar: install in progress.
-- Green centre-out flash: install succeeded.
+- Two green pulses on the selected block: already installed and up to date;
+  returns to its normal game colour after 1.2 seconds.
+- Green centre-out fill: install succeeded. After the 1.8-second fill reaches
+  the whole tube, Store browsing resumes with the installed game still selected
+  and its status updated.
 - Nine amber markers: the game library is full; delete an installed cartridge
   before adding a new game. The Store resumes browsing after the indication.
 - Red pulse: failure; read the serial log for the precise reason.
@@ -180,8 +187,9 @@ highscore; only **A** launches a game there.
   DNS and HTTPS must be configured as described in [Website hosting](website.md).
   Firmware uses the custom domain directly because its HTTP client does not
   follow redirects from the old GitHub Pages URLs.
-- Downloads are blocking once started. The scene paints a static "working" frame
-  first, the same pattern used by OTA. This is acceptable for the first slice
+- Downloads are blocking once started. The index fetch blanks the tube; game
+  installs paint a static "working" frame first, the same pattern used by OTA.
+  This is acceptable for the first slice
   because LittleFS writes already make animation unreliable during install.
 - The index is authenticated by the embedded standard CA bundle in normal
   builds. Individual script downloads may still use unauthenticated HTTP/HTTPS

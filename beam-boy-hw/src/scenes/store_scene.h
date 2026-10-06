@@ -11,6 +11,7 @@
 #include "core/engine.h"
 #include "core/network.h"
 #include "core/store_index.h"
+#include "scenes/store_current_feedback.h"
 
 namespace beamboy {
 
@@ -61,10 +62,12 @@ class StoreScene : public Scene {
   // truth for what is actually launchable.
   CartridgeStore installed_;
   CartridgeStatus statuses_[StoreIndex::kMaxEntries] = {};
+  StoreCurrentFeedback current_feedback_;
   StoreState state_ = StoreState::kConnecting;
   uint8_t selected_ = 0;
   float phase_ = 0.0f;
   uint32_t settled_at_ms_ = 0;
+  bool success_fill_drawn_ = false;
   const char* error_ = "";
 };
 

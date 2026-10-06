@@ -11,8 +11,9 @@ static_assert(board::kBrightnessCap > 0, "brightness cap must be nonzero");
 constexpr uint8_t kDefault = board::kBrightnessDefault;
 static_assert(kDefault > 0 && kDefault <= board::kBrightnessCap,
               "default brightness must be within the board cap");
-constexpr uint8_t kMinimum =
-    kDefault >= 8 ? kDefault / 8 : 1;
+constexpr uint8_t kMinimum = 32;
+static_assert(kMinimum <= kDefault,
+              "minimum brightness must not exceed the default");
 constexpr uint8_t kStep =
     kDefault >= 16 ? kDefault / 16 : 1;
 
