@@ -15,7 +15,7 @@
 
 #ifndef BEAMBOY_STORE_INDEX_URL
 #define BEAMBOY_STORE_INDEX_URL \
-  "https://jakopako.github.io/beam-boy/games/index.json"
+  "https://beamboy.ch/games/index.json"
 #endif
 
 #ifndef BEAMBOY_STORE_ALLOW_INSECURE_INDEX

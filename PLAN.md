@@ -504,13 +504,13 @@ it over the air is item 5.)_
 > coloured blocks, downloads the selected `game.be`, checks size + SHA-256, writes
 > `/games/<id>/{meta.json,game.be}`, rescans cartridges, and makes the install
 > playable without rebooting. The store URL defaults to this repo's GitHub Pages
-> index (`https://jakopako.github.io/beam-boy/games/index.json`) and remains
+> index (`https://beamboy.ch/games/index.json`) and remains
 > configurable via `BEAMBOY_STORE_INDEX_URL`. See
 > [`docs/phase-7-store.md`](docs/phase-7-store.md).
 
-1. ✅ Publish a first `games/` index to GitHub Pages: `docs/games/index.json`
-   plus `docs/games/reflex/game.be`. GitHub Pages still has to be enabled for
-   the repo if `https://jakopako.github.io/beam-boy/` returns 404.
+1. ✅ Publish a first `games/` index to GitHub Pages: `website/games/index.json`
+   plus `website/games/reflex/game.be`. The Pages workflow publishes only
+   `main`'s `website` directory; see [Website hosting](docs/website.md) for setup.
 2. ✅ Firmware "Store" scene: fetch index → show available games as blocks → **A** downloads →
    SHA-256 verify → install → appears in the launcher. First slice uses a static working
    animation during the blocking download/write; this is acceptable while LittleFS writes
@@ -841,7 +841,7 @@ runtime changes in this slice; the steps below are future work.
   CI must check each exact image size against its environment's inactive-slot capacity.
   Runtime repeats that check using the actual partition, and rejects incompatible layout ids.
   Layout changes require a separate USB migration, not an ordinary OTA.
-- Discovery URL: `https://jakopako.github.io/beam-boy/firmware/stable.json`.
+- Discovery URL: `https://beamboy.ch/firmware/stable.json`.
   Publish a versioned signed manifest with each release as well; update the stable pointer
   only after all binaries, signatures and smoke tests succeed. Never overwrite release assets.
 - Proposed manifest envelope: `schema`, `key_id`, base64 `payload`, base64 `signature`.

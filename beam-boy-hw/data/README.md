@@ -55,7 +55,7 @@ consoles running older firmware.
   `uploadfs` picks up the change without a firmware flash.
 - `games/fishing/` is a work-in-progress cartridge (a green bar drifts along
   the tube; keep the blue dot inside it) that only exists here for now —
-  not yet published to `docs/games/` / the store index while the design is
+  not yet published to `website/games/` / the store index while the design is
   still being iterated on. See the game-ideas list in `PLAN.md`.
 
 ## Store index

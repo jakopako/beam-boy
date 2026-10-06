@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Regenerate docs/games/index.json from the published cartridges.
+"""Regenerate website/games/index.json from the published cartridges.
 
-Beam Boy's Store scene trusts docs/games/index.json as the root of trust for
+Beam Boy's Store scene trusts website/games/index.json as the root of trust for
 every downloaded script: it verifies each game.be against the sha256/size
 recorded there (see docs/phase-7-store.md and
 beam-boy-hw/src/core/store_index.h). That means the hash/size MUST match the
@@ -9,7 +9,7 @@ exact bytes GitHub Pages serves -- not whatever a local editor/OS happens to
 have on disk (Windows checkouts can silently reintroduce CRLF line endings).
 
 This script removes that manual, error-prone step: it reads each
-docs/games/<id>/game.be directly, computes size + sha256 from those bytes, and
+website/games/<id>/game.be directly, computes size + sha256 from those bytes, and
 writes index.json deterministically. Run it after adding or updating a
 published cartridge, then commit both the cartridge files and the
 regenerated index.json together.
@@ -31,9 +31,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-GAMES_DIR = REPO_ROOT / "docs" / "games"
+GAMES_DIR = REPO_ROOT / "website" / "games"
 INDEX_PATH = GAMES_DIR / "index.json"
-DEFAULT_BASE_URL = "https://jakopako.github.io/beam-boy/games"
+DEFAULT_BASE_URL = "https://beamboy.ch/games"
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,10}$")
 COLOR_RE = re.compile(r"^[0-9a-fA-F]{6}$")

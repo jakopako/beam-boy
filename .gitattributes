@@ -3,5 +3,5 @@
 # published bytes will silently drift from what's committed and break store
 # hash verification on-device.
 *.be -text
-docs/games/**/meta.json -text
+website/games/**/meta.json -text
 beam-boy-hw/data/games/**/meta.json -text
