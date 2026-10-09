@@ -169,7 +169,6 @@ class Engine {
 
   void updatePower(uint32_t now_ms);
   bool isIdleActivity() const;
-  void renderChargingAnimation();
   void renderLowBatteryOverlay();
   void beginCriticalShutdown();
   void renderCriticalShutdown(uint32_t elapsed_ms);
@@ -195,11 +194,10 @@ class Engine {
   uint32_t scene_started_ms_ = 0;
 
   // Idle/sleep tracking. last_activity_ms_ resets on any button or stick
-  // input; tick() derives everything else (whether to fade, whether to show
-  // the charging animation, whether to sleep) from how far now_ms has drifted
-  // from it, rather than latching a separate one-shot state -- so plugging in
-  // USB or touching a control mid-fade falls back out of the idle path on the
-  // very next frame with no extra bookkeeping.
+  // input; tick() derives everything else (whether to fade, whether to sleep)
+  // from how far now_ms has drifted from it, rather than latching a separate
+  // one-shot state -- so touching a control mid-fade falls back out of the
+  // idle path on the very next frame with no extra bookkeeping.
   uint32_t last_activity_ms_ = 0;
   // Set once the critical-shutdown sweep begins, so it is entered exactly
   // once rather than being retriggered every frame the battery stays

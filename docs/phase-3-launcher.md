@@ -14,7 +14,7 @@ reflashing.
 - **`navDelta()`** — a device-independent navigation abstraction (see below).
 
 Deferred: **power management** (§5 of the plan's Phase 3). Battery sensing, the
-low-battery pulse, the charging sweep and deep-sleep all need the ESP32 Feather's
+low-battery pulse, the charge indicator and deep-sleep all need the ESP32 Feather's
 fuel gauge and its LiPo charging circuit, so they wait for the hardware —
 implemented in Phase 8, see [`docs/phase-8-power.md`](phase-8-power.md).
 
@@ -317,5 +317,6 @@ out to have no battery-sense ADC pin at all, just an on-board MAX17048 fuel gaug
    delete an installed cartridge), so this needs a different trigger~~ — done: holding
    **A + B together** in the launcher shows the gauge (`LauncherScene`).
 3. ~~The low-battery pulse and critical-voltage safe shutdown~~ — done (`Engine::updatePower()`).
-4. ~~The charging sweep animation~~ — done (`Engine::renderChargingAnimation()`).
+4. ~~The charging indicator~~ — done, as part of the A+B gauge
+   (`LauncherScene::renderBatteryGauge()`).
 5. ~~Idle deep-sleep with button wake~~ — done (`Engine::enterDeepSleep()`).

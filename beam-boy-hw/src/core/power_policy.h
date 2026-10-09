@@ -10,7 +10,7 @@
 // gauge driver, which cannot be exercised natively -- but the interesting part
 // is not the I2C transaction, it is the small set of threshold-and-hysteresis
 // questions built on top of it: is this worth warning about, is it worth
-// shutting down for, is it worth staying awake for. Getting any of those wrong
+// shutting down for, is it charging or full. Getting any of those wrong
 // is either a console that cries wolf or one that lets its own flash get
 // corrupted mid-write. They deserve tests; the register read around them does
 // not.
@@ -76,23 +76,92 @@ inline PowerLevel classifyPowerLevel(float percent, PowerLevel previous) {
   return PowerLevel::kNormal;
 }
 
-// The fuel gauge's %/hr charge-rate register is noisy at rest -- a battery
-// doing nothing still reports a few tenths of a percent per hour of jitter --
-// so a small positive threshold, not "greater than zero", is what keeps the
-// charging indicator from flickering on a battery that is simply sitting
-// still on a desk.
+// The level every warning and shutdown decision should act on, as opposed to
+// the battery's own classification.
 //
-// Expect this to lag reality by minutes, not seconds. CRATE is derived from
-// the ModelGauge algorithm's filtered state-of-charge trend, not from a
-// current measurement, so the Feather's own orange CHG LED lights well before
-// this reads true. That is the sensor, not a bug -- and lowering the threshold
-// to chase it just trades the lag for the resting-jitter false positives this
-// threshold exists to prevent. A genuinely prompt answer would need a real
-// VBUS-present signal, which this board does not expose.
-constexpr float kChargingRateThreshold = 1.0f;  // percent per hour
+// On USB the Feather's load-sharing charger runs the console from VBUS, so a
+// flat cell is no longer a threat: there is nothing to warn about and no
+// cutoff to get ahead of. Shutting down then would only interrupt someone who
+// has just done the right thing by plugging in.
+//
+// The battery's own level keeps being classified underneath (with its
+// hysteresis intact), so pulling the cable on a near-empty cell brings the
+// warning -- or the safe shutdown -- straight back on the next frame.
+constexpr PowerLevel effectivePowerLevel(PowerLevel battery_level,
+                                         bool usb_present) {
+  return usb_present ? PowerLevel::kNormal : battery_level;
+}
 
-constexpr bool isChargingRate(float charge_rate_percent_per_hour) {
-  return charge_rate_percent_per_hour >= kChargingRateThreshold;
+// Where the energy is coming from and where it is going, as far as the UI
+// cares.
+enum class ChargeState : uint8_t {
+  kOnBattery,  // No USB power: the battery is running the console.
+  kCharging,   // USB present, charger still pushing current into the cell.
+  kFull,       // USB present, charge complete or in its final taper.
+};
+
+// The LiPo charger works in two phases: constant current until the cell
+// reaches ~4.2 V, then constant voltage while the current tapers off. Cell
+// voltage therefore stops being informative the moment CV begins -- it sits at
+// ~4.2 V for the last 20-30% of the charge, and reads high while it does,
+// because the gauge is measuring a cell with current being forced into it.
+// Voltage alone would declare "full" at ~75%.
+//
+// So "full" needs both: the voltage proving CV has been reached, and the
+// gauge's state-of-charge agreeing that the taper is mostly done. Not 100%:
+// the charger terminates (and the cell then relaxes) while the gauge's model
+// often still reads in the high 90s, so a 100% rule might never be met.
+constexpr float kFullVoltage = 4.15f;
+constexpr float kFullPercent = 98.0f;
+
+// Once full, the charger stops and the cell relaxes from ~4.2 V towards its
+// resting voltage. Re-applying kFullVoltage at that point would immediately
+// flip back to "charging" even though no current is flowing -- and then sit
+// there for hours, because the charger does not restart until the cell has
+// sagged to its recharge threshold (~3.95-4.05 V, depending on the charger).
+// So kFull is latched and only released once the cell has genuinely dropped
+// to where a recharge cycle will begin.
+constexpr float kRechargeVoltage = 4.0f;
+
+static_assert(kRechargeVoltage < kFullVoltage,
+              "the latch release must sit below the entry voltage, or kFull "
+              "has no hysteresis and flickers as the cell relaxes");
+
+// `previous` carries the full-latch, exactly the way classifyPowerLevel()'s
+// `previous` carries its hysteresis.
+//
+// `voltage` and `percent` must come from a reading isPlausibleReading()
+// accepted; callers with no believable reading should not call this at all.
+inline ChargeState classifyChargeState(bool usb_present, float voltage,
+                                       float percent, ChargeState previous) {
+  if (!usb_present) return ChargeState::kOnBattery;
+  if (previous == ChargeState::kFull) {
+    return voltage < kRechargeVoltage ? ChargeState::kCharging
+                                      : ChargeState::kFull;
+  }
+  // Coming from kOnBattery covers "plugged in with an already-full cell": it
+  // goes straight to kFull rather than claiming to charge a battery the
+  // charger will not touch.
+  return voltage >= kFullVoltage && percent >= kFullPercent
+             ? ChargeState::kFull
+             : ChargeState::kCharging;
+}
+
+// How long the USB-sense pin has to hold a new level before it counts. A
+// connector being pushed in makes and breaks contact for a few milliseconds;
+// without this, every plug-in would log (and animate) a burst of transitions.
+constexpr uint32_t kUsbDebounceMs = 50;
+
+// For logs only.
+inline const char* chargeStateName(ChargeState state) {
+  switch (state) {
+    case ChargeState::kCharging:
+      return "charging";
+    case ChargeState::kFull:
+      return "full";
+    default:
+      return "on battery";
+  }
 }
 
 // Whether a reading from the gauge can be believed at all.
@@ -103,34 +172,37 @@ constexpr bool isChargingRate(float charge_rate_percent_per_hour) {
 // classifyPowerLevel() that is indistinguishable from a battery about to die,
 // and the console shuts itself down one second into a boot on a full charge.
 //
-// Voltage is the discriminator, not percent: 0 % is a legitimate thing for a
-// flat battery to report, but 0.00 V is not something a board can read while
-// it is executing this code -- below ~2.5 V the LiPo's own protection circuit
-// has long since cut power. Anything outside the range is the chip not being
-// ready (or not being there), never a battery state worth acting on.
+// Voltage is the main discriminator: 0.00 V is not something a board can read
+// while it is executing this code -- below ~2.5 V the LiPo's own protection
+// circuit has long since cut power. Anything outside the range is the chip not
+// being ready (or not being there), never a battery state worth acting on.
+//
+// An exact 0 % is rejected too, even at a believable voltage: on hardware the
+// gauge was seen reporting 0 % alongside a normal VCELL shortly after boot
+// (VCELL settles before SOC does), which still shut a charged console down.
+// Rejecting it costs nothing for a genuinely draining battery: it passes
+// kCriticalBatteryPercent (5 %) long before reaching 0 %, so the critical
+// shutdown has already happened.
 constexpr float kMinPlausibleVoltage = 2.5f;
 constexpr float kMaxPlausibleVoltage = 5.0f;
+constexpr float kMinPlausiblePercent = 0.01f;
 // The gauge reports slightly over 100% on a freshly-charged cell; that is
 // normal and must not be mistaken for a bad reading.
 constexpr float kMaxPlausiblePercent = 110.0f;
 
 constexpr bool isPlausibleReading(float percent, float voltage) {
   return voltage >= kMinPlausibleVoltage && voltage <= kMaxPlausibleVoltage &&
-         percent >= 0.01f && percent <= kMaxPlausiblePercent;
+         percent >= kMinPlausiblePercent && percent <= kMaxPlausiblePercent;
 }
 
 // How long the console sits idle before it sleeps.
 constexpr uint32_t kIdleSleepMs = 120000;  // 2 minutes
 
-// Whether the idle timer should sleep the device now.
-//
-// Gated on `charging`: a battery being fed by USB is going to keep charging
-// regardless of what the ESP32 does, so a deep sleep saves nothing there and
-// only costs the one piece of feedback a plugged-in, otherwise-idle console
-// can usefully show -- the charging animation. Staying awake to show it is
-// strictly better than sleeping and going dark.
-constexpr bool shouldEnterIdleSleep(uint32_t idle_ms, bool charging) {
-  return !charging && idle_ms >= kIdleSleepMs;
+// Whether the idle timer should sleep the device now. Deliberately ignores
+// USB and charging: a plugged-in console sleeps exactly like one on battery,
+// and the charge state is only shown on demand (A+B in the launcher).
+constexpr bool shouldEnterIdleSleep(uint32_t idle_ms) {
+  return idle_ms >= kIdleSleepMs;
 }
 
 // For logs only. Kept next to the enum so a new level cannot be added without

@@ -103,12 +103,9 @@ void setup() {
     Serial.print(engine.power().voltage(), 2);
     Serial.print("V  ");
     Serial.print(beamboy::powerLevelName(engine.power().level()));
-    // The gauge's charge-rate register is a filtered trend, not a current
-    // measurement, so this reads "no" for the first minutes on a board that
-    // is plainly charging. Said out loud here rather than left to puzzle
-    // over against the board's own CHG LED -- see core/power_policy.h.
-    Serial.println(engine.power().charging() ? "  (charging)"
-                                             : "  (not charging yet)");
+    Serial.print("  (");
+    Serial.print(beamboy::chargeStateName(engine.power().chargeState()));
+    Serial.println(")");
   } else if (engine.power().gaugePresent()) {
     Serial.println("gauge not responding -- battery management disabled");
   } else {
@@ -176,6 +173,9 @@ void loop() {
       Serial.print(engine.power().voltage(), 2);
       Serial.print("V");
       if (engine.power().charging()) Serial.print(" chg");
+      if (engine.power().chargeState() == beamboy::ChargeState::kFull) {
+        Serial.print(" full");
+      }
       if (engine.power().level() != beamboy::PowerLevel::kNormal) {
         Serial.print(" ");
         Serial.print(beamboy::powerLevelName(engine.power().level()));

@@ -10,14 +10,6 @@
 #include "game_registry.h"
 
 namespace beamboy {
-namespace {
-
-// A slow-filling green sweep, one full cycle every kChargingSweepMs -- distinct
-// from every other animation's pace so charging is never mistaken for a game
-// or a menu having been left running.
-constexpr uint32_t kChargingSweepMs = 2600;
-
-}  // namespace
 
 void Engine::begin() {
   // Release the LED data pin's pad hold before anything tries to drive it.
@@ -127,27 +119,12 @@ void Engine::updatePower(uint32_t now_ms) {
   // including a game mid-play and the pause/exit gesture below -- there is no
   // gesture worth letting the user finish when the goal is to get dirty
   // writes onto flash before the hardware protection circuit cuts power out
-  // from under them.
+  // from under them. Not while on USB, though: then the cable is powering the
+  // console and there is no cutoff coming (see effectivePowerLevel()).
   if (!shutting_down_ && power_.available() &&
-      power_.level() == PowerLevel::kCritical) {
+      power_.alertLevel() == PowerLevel::kCritical) {
     beginCriticalShutdown();
   }
-}
-
-// A slow filling green sweep along the tube, distinct in both colour and pace
-// from every other animation here, so charging never reads as a game or a
-// menu accidentally left on screen.
-void Engine::renderChargingAnimation() {
-  display_.clear();
-  const float phase =
-      fmodf(static_cast<float>(millis() % kChargingSweepMs) /
-                static_cast<float>(kChargingSweepMs),
-            1.0f);
-  const float fill = power_.percent() >= 99.0f ? 1.0f : phase;
-  display_.span(0.0f, fill, colors::kGreen, 0.5f);
-  // A bright leading edge marks the front of the sweep, so it reads as fill
-  // progress rather than a static bar -- silent unless still filling.
-  if (fill < 1.0f) display_.point(fill, colors::kGreen, 1.0f);
 }
 
 // Subtle and non-disruptive on purpose: a single pulsing pixel at one end,
@@ -155,8 +132,9 @@ void Engine::renderChargingAnimation() {
 // during play without competing with it for attention. Only ever drawn for
 // kLow -- kCritical takes over the whole display via the shutdown sweep
 // instead, so this never has to fight that animation for the same pixels.
+// Hidden on USB, where a low battery is already being dealt with.
 void Engine::renderLowBatteryOverlay() {
-  if (!power_.available() || power_.level() != PowerLevel::kLow) return;
+  if (!power_.available() || power_.alertLevel() != PowerLevel::kLow) return;
   const float level = 0.3f + 0.3f * pulse(millis() / 1000.0f, 1.5f);
   display_.rawPixel(display_.pixelCount() - 1, colors::kRed.scaled(level));
 }
@@ -334,10 +312,18 @@ void Engine::tick() {
     // information the console has already superseded, which is exactly what
     // put a fully-charged device to sleep one second into a boot. The flush
     // that already happened is harmless to keep.
-    if (power_.available() && power_.level() != PowerLevel::kCritical) {
-      Serial.print("[power] battery back to ");
-      Serial.print(power_.percent(), 1);
-      Serial.println("% -- shutdown aborted, resuming");
+    //
+    // Plugging in USB mid-sweep aborts it the same way: the cable takes over
+    // powering the console, so there is no longer a cutoff to get ahead of.
+    if (power_.available() && power_.alertLevel() != PowerLevel::kCritical) {
+      if (power_.usbPowered()) {
+        Serial.println("[power] USB power connected -- shutdown aborted, "
+                       "resuming");
+      } else {
+        Serial.print("[power] battery back to ");
+        Serial.print(power_.percent(), 1);
+        Serial.println("% -- shutdown aborted, resuming");
+      }
       shutting_down_ = false;
       last_activity_ms_ = now_ms;
     } else {
@@ -359,24 +345,7 @@ void Engine::tick() {
   // exactly where the scene left off, since it was never ticked while idle.
   {
     const uint32_t idle_ms = now_ms - last_activity_ms_;
-    const bool charging = power_.available() && power_.charging();
-
-    // Idle *and* charging: stay awake and show the sweep rather than going
-    // dark, since sleeping saves nothing while USB is doing the powering
-    // anyway (see power_policy.h).
-    //
-    // This has to be its own check rather than a branch inside the one below:
-    // shouldEnterIdleSleep() deliberately returns false whenever charging, so
-    // testing `charging` *after* it passed would be unreachable by
-    // construction -- which is exactly the bug that kept this animation from
-    // ever appearing.
-    if (charging && idle_ms >= kIdleSleepMs) {
-      renderChargingAnimation();
-      display_.present();
-      return;
-    }
-
-    if (shouldEnterIdleSleep(idle_ms, charging)) {
+    if (shouldEnterIdleSleep(idle_ms)) {
       const uint32_t fade_elapsed = idle_ms - kIdleSleepMs;
       if (fade_elapsed >= kIdleFadeMs) {
         enterDeepSleep();  // noreturn: the chip resets on wake

@@ -86,35 +86,42 @@ void test_low_survives_dithering_around_the_entry_threshold() {
   TEST_ASSERT_TRUE(level == PowerLevel::kLow);
 }
 
-// --- isChargingRate ----------------------------------------------------
+// --- effectivePowerLevel -------------------------------------------------
 
-// A battery at rest still reports a small non-zero rate; that must not read
-// as charging.
-void test_resting_jitter_does_not_read_as_charging() {
-  TEST_ASSERT_FALSE(isChargingRate(0.0f));
-  TEST_ASSERT_FALSE(isChargingRate(0.4f));
-  TEST_ASSERT_FALSE(isChargingRate(-0.6f));
+// On battery the warnings act on the battery's own level, unchanged.
+void test_on_battery_the_alert_level_is_the_battery_level() {
+  TEST_ASSERT_TRUE(effectivePowerLevel(PowerLevel::kNormal, false) ==
+                   PowerLevel::kNormal);
+  TEST_ASSERT_TRUE(effectivePowerLevel(PowerLevel::kLow, false) ==
+                   PowerLevel::kLow);
+  TEST_ASSERT_TRUE(effectivePowerLevel(PowerLevel::kCritical, false) ==
+                   PowerLevel::kCritical);
 }
 
-// A real charge current clears the threshold plainly.
-void test_a_real_charge_current_reads_as_charging() {
-  TEST_ASSERT_TRUE(isChargingRate(1.0f));
-  TEST_ASSERT_TRUE(isChargingRate(12.0f));
+// On USB neither the low-battery pixel nor the safe shutdown applies: the
+// cable is running the console.
+void test_on_usb_low_and_critical_are_suppressed() {
+  TEST_ASSERT_TRUE(effectivePowerLevel(PowerLevel::kLow, true) ==
+                   PowerLevel::kNormal);
+  TEST_ASSERT_TRUE(effectivePowerLevel(PowerLevel::kCritical, true) ==
+                   PowerLevel::kNormal);
+}
+
+// Pulling the cable on a near-empty battery: the battery level was tracked
+// all along, so the shutdown comes straight back rather than waiting for the
+// percentage to cross a threshold again.
+void test_unplugging_a_critical_battery_brings_the_shutdown_back() {
+  const PowerLevel battery = classifyPowerLevel(3.0f, PowerLevel::kNormal);
+  TEST_ASSERT_TRUE(effectivePowerLevel(battery, true) == PowerLevel::kNormal);
+  TEST_ASSERT_TRUE(effectivePowerLevel(battery, false) ==
+                   PowerLevel::kCritical);
 }
 
 // --- shouldEnterIdleSleep ------------------------------------------------
 
-void test_idle_sleep_fires_after_the_timeout_when_not_charging() {
-  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs - 1, false));
-  TEST_ASSERT_TRUE(shouldEnterIdleSleep(kIdleSleepMs, false));
-}
-
-// The one case the whole function exists for: plugged in and idle should
-// never sleep, because sleeping saves nothing while USB is doing the powering
-// anyway, and it trades the charging animation for a dark tube.
-void test_idle_sleep_never_fires_while_charging() {
-  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs, true));
-  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs * 10, true));
+void test_idle_sleep_fires_after_the_timeout() {
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs - 1));
+  TEST_ASSERT_TRUE(shouldEnterIdleSleep(kIdleSleepMs));
 }
 
 // --- isPlausibleReading --------------------------------------------------
@@ -132,12 +139,28 @@ void test_a_normal_reading_is_accepted() {
   TEST_ASSERT_TRUE(isPlausibleReading(50.0f, 3.70f));
 }
 
-// A genuinely flat battery must still be believed -- this gate is about the
-// chip not being ready, and it must never swallow the one reading the
+// A nearly flat battery must still be believed -- this gate is about the
+// chip not being ready, and it must never swallow the readings the
 // critical-shutdown path exists to act on.
-void test_a_genuinely_empty_battery_is_still_believed() {
+void test_a_nearly_empty_battery_is_still_believed() {
+  TEST_ASSERT_TRUE(isPlausibleReading(kCriticalBatteryPercent, 3.40f));
   TEST_ASSERT_TRUE(isPlausibleReading(2.0f, 3.20f));
-  TEST_ASSERT_TRUE(isPlausibleReading(0.0f, 3.00f));
+  TEST_ASSERT_TRUE(isPlausibleReading(0.5f, 3.00f));
+}
+
+// Seen on hardware: shortly after boot the gauge reports 0 % while VCELL
+// already looks normal. Believing it would shut down a charged console, so an
+// exact 0 % is rejected whatever the voltage says.
+void test_a_zero_percent_reading_is_rejected_even_at_a_normal_voltage() {
+  TEST_ASSERT_FALSE(isPlausibleReading(0.0f, 3.90f));
+  TEST_ASSERT_FALSE(isPlausibleReading(0.0f, 3.00f));
+}
+
+// Rejecting 0 % is only safe because the critical shutdown fires well before
+// a draining battery could get there.
+void test_critical_fires_before_a_reading_would_be_rejected() {
+  TEST_ASSERT_TRUE(kCriticalBatteryPercent > kMinPlausiblePercent);
+  TEST_ASSERT_TRUE(isPlausibleReading(kCriticalBatteryPercent, 3.40f));
 }
 
 // A freshly-charged cell reads slightly over 100%; that is the gauge being
@@ -162,6 +185,88 @@ void test_the_cold_reading_would_have_been_critical_if_let_through() {
   TEST_ASSERT_FALSE(isPlausibleReading(0.0f, 0.0f));
 }
 
+// --- classifyChargeState ---------------------------------------------------
+
+void assertChargeState(ChargeState expected, ChargeState actual) {
+  TEST_ASSERT_EQUAL_STRING(chargeStateName(expected), chargeStateName(actual));
+}
+
+// No cable means no charging, whatever the cell says and whatever came before.
+void test_without_usb_it_is_always_on_battery() {
+  assertChargeState(ChargeState::kOnBattery,
+                    classifyChargeState(false, 3.7f, 50.0f,
+                                        ChargeState::kOnBattery));
+  assertChargeState(ChargeState::kOnBattery,
+                    classifyChargeState(false, 3.7f, 50.0f,
+                                        ChargeState::kCharging));
+  assertChargeState(ChargeState::kOnBattery,
+                    classifyChargeState(false, 4.2f, 100.0f,
+                                        ChargeState::kFull));
+}
+
+// The whole point of the USB-sense pin: charging the instant the cable goes
+// in.
+void test_plugging_in_a_part_charged_battery_is_charging_immediately() {
+  assertChargeState(ChargeState::kCharging,
+                    classifyChargeState(true, 3.8f, 40.0f,
+                                        ChargeState::kOnBattery));
+}
+
+// Constant-voltage phase: the cell is already at ~4.2 V but the gauge says
+// there is still a good chunk to go. Voltage alone would call this full.
+void test_reaching_cv_voltage_alone_is_not_full() {
+  assertChargeState(ChargeState::kCharging,
+                    classifyChargeState(true, 4.19f, 80.0f,
+                                        ChargeState::kCharging));
+}
+
+void test_high_voltage_and_high_percentage_is_full() {
+  assertChargeState(ChargeState::kFull,
+                    classifyChargeState(true, kFullVoltage, kFullPercent,
+                                        ChargeState::kCharging));
+  assertChargeState(ChargeState::kCharging,
+                    classifyChargeState(true, kFullVoltage - 0.01f, 99.0f,
+                                        ChargeState::kCharging));
+  assertChargeState(ChargeState::kCharging,
+                    classifyChargeState(true, kFullVoltage, kFullPercent - 0.5f,
+                                        ChargeState::kCharging));
+}
+
+// After termination the cell relaxes below kFullVoltage. Without the latch
+// that flips straight back to "charging" while no current flows at all.
+void test_full_is_latched_while_the_cell_relaxes() {
+  assertChargeState(ChargeState::kFull,
+                    classifyChargeState(true, 4.10f, 99.0f,
+                                        ChargeState::kFull));
+  assertChargeState(ChargeState::kFull,
+                    classifyChargeState(true, kRechargeVoltage, 96.0f,
+                                        ChargeState::kFull));
+}
+
+// Left on the cable long enough (or played on hard enough) that the charger
+// starts a new cycle: that genuinely is charging again.
+void test_full_releases_once_the_cell_reaches_recharge_voltage() {
+  assertChargeState(ChargeState::kCharging,
+                    classifyChargeState(true, kRechargeVoltage - 0.01f, 94.0f,
+                                        ChargeState::kFull));
+}
+
+// Plugging in an already-topped-up battery must not claim to be charging it.
+void test_plugging_in_a_full_battery_reads_full_straight_away() {
+  assertChargeState(ChargeState::kFull,
+                    classifyChargeState(true, 4.18f, 100.0f,
+                                        ChargeState::kOnBattery));
+}
+
+// Unplug while full, plug back in after a short game: the latch must not
+// survive the unplug, or a half-drained battery would be reported as full.
+void test_the_full_latch_does_not_survive_an_unplug() {
+  ChargeState state = ChargeState::kFull;
+  state = classifyChargeState(false, 4.05f, 92.0f, state);
+  state = classifyChargeState(true, 4.05f, 92.0f, state);
+  assertChargeState(ChargeState::kCharging, state);
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -173,15 +278,25 @@ int main(int, char**) {
   RUN_TEST(test_critical_recovers_into_low_not_normal);
   RUN_TEST(test_critical_can_recover_all_the_way_to_normal);
   RUN_TEST(test_low_survives_dithering_around_the_entry_threshold);
-  RUN_TEST(test_resting_jitter_does_not_read_as_charging);
-  RUN_TEST(test_a_real_charge_current_reads_as_charging);
-  RUN_TEST(test_idle_sleep_fires_after_the_timeout_when_not_charging);
-  RUN_TEST(test_idle_sleep_never_fires_while_charging);
+  RUN_TEST(test_on_battery_the_alert_level_is_the_battery_level);
+  RUN_TEST(test_on_usb_low_and_critical_are_suppressed);
+  RUN_TEST(test_unplugging_a_critical_battery_brings_the_shutdown_back);
+  RUN_TEST(test_idle_sleep_fires_after_the_timeout);
   RUN_TEST(test_the_gauges_cold_reading_is_rejected);
   RUN_TEST(test_a_normal_reading_is_accepted);
-  RUN_TEST(test_a_genuinely_empty_battery_is_still_believed);
+  RUN_TEST(test_a_nearly_empty_battery_is_still_believed);
+  RUN_TEST(test_a_zero_percent_reading_is_rejected_even_at_a_normal_voltage);
+  RUN_TEST(test_critical_fires_before_a_reading_would_be_rejected);
   RUN_TEST(test_slightly_over_full_is_accepted);
   RUN_TEST(test_readings_outside_the_physical_range_are_rejected);
   RUN_TEST(test_the_cold_reading_would_have_been_critical_if_let_through);
+  RUN_TEST(test_without_usb_it_is_always_on_battery);
+  RUN_TEST(test_plugging_in_a_part_charged_battery_is_charging_immediately);
+  RUN_TEST(test_reaching_cv_voltage_alone_is_not_full);
+  RUN_TEST(test_high_voltage_and_high_percentage_is_full);
+  RUN_TEST(test_full_is_latched_while_the_cell_relaxes);
+  RUN_TEST(test_full_releases_once_the_cell_reaches_recharge_voltage);
+  RUN_TEST(test_plugging_in_a_full_battery_reads_full_straight_away);
+  RUN_TEST(test_the_full_latch_does_not_survive_an_unplug);
   return UNITY_END();
 }

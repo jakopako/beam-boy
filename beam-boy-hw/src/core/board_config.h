@@ -78,6 +78,11 @@ constexpr uint8_t kPinStickY = 5;  // ADC1_CH4
 // feature, not to invent one for this board.
 constexpr bool kHasBatteryMonitor = false;
 
+// No charger, so nothing to sense. The pin is a placeholder that exists only
+// so shared code compiles; kHasUsbSense keeps it from ever being touched.
+constexpr bool kHasUsbSense = false;
+constexpr uint8_t kPinUsbSense = 0;
+
 #else
 
 // Provisional: confirm against the Feather ESP32-S3 pinout before wiring.
@@ -104,6 +109,28 @@ constexpr uint8_t kPinStickY = A3;  // ADC1 (GPIO2)
 // kPinStickSw/kPinStickX/kPinStickY above.
 constexpr bool kHasBatteryMonitor = true;
 
+// USB power sense: an external divider from the Feather's `USB` header pin
+// (raw VBUS, ~5 V while a cable is plugged in, 0 V on battery) down to GPIO12.
+// The board has no GPIO wired to VBUS of its own. See docs/phase-8-power.md
+// for the wiring.
+//
+//   USB pin --[R1]--+--[R2]-- GND
+//                   |
+//                 GPIO12     (5 V -> 3.0 V, a clean digital HIGH)
+//
+// Any R1:R2 = 2:3 pair from 10k/15k up to 100k/150k works; only the ratio sets
+// the voltage. Smaller values are stiffer against noise from the LED strip and
+// draw ~0.2 mA from USB (never from the battery: on battery the USB pin is at
+// 0 V). No internal pull is enabled -- R2 already is the pull-down, and the
+// ESP32's own (~45k) in parallel would drag the high-value pairs towards the
+// logic-HIGH threshold.
+//
+// GPIO12 is not a strapping pin, not on the PSRAM/flash bus, and the header
+// silkscreen labels it simply "12". A digital input is all this needs, so it
+// does not matter that it is on ADC2.
+constexpr bool kHasUsbSense = true;
+constexpr uint8_t kPinUsbSense = 12;
+
 #endif  // BEAMBOY_BOARD_S3_DEVKIT
 
 constexpr uint16_t kAdcMax = 4095;
@@ -129,6 +156,8 @@ constexpr uint8_t kPinStickY = 5;
 // and never compiled into a native test binary, so this exists only for
 // symmetry with the two ESP32 branches above.
 constexpr bool kHasBatteryMonitor = false;
+constexpr bool kHasUsbSense = false;
+constexpr uint8_t kPinUsbSense = 6;
 
 constexpr uint16_t kAdcMax = 1023;
 

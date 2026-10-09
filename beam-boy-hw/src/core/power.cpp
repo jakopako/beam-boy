@@ -14,11 +14,56 @@ bool Power::readGauge() {
 
   percent_ = percent;
   voltage_ = voltage;
-  charging_ = isChargingRate(gauge_.chargeRate());
   return true;
 }
 
+bool Power::sampleUsb(uint32_t now_ms) {
+  if (!board::kHasUsbSense) return false;
+
+  const bool raw = digitalRead(board::kPinUsbSense) == HIGH;
+  if (raw != usb_raw_) {
+    usb_raw_ = raw;
+    usb_raw_since_ms_ = now_ms;
+  }
+  if (usb_raw_ == usb_present_) return false;
+  if (now_ms - usb_raw_since_ms_ < kUsbDebounceMs) return false;
+
+  usb_present_ = usb_raw_;
+  return true;
+}
+
+void Power::updateChargeState() {
+  // Without a believable voltage there is nothing to classify against, and
+  // every consumer is already gated on available() anyway.
+  if (!ready_) return;
+
+  const ChargeState previous = charge_state_;
+  charge_state_ =
+      classifyChargeState(usb_present_, voltage_, percent_, previous);
+
+  if (charge_state_ == previous) return;
+  Serial.print("[power] ");
+  Serial.print(chargeStateName(previous));
+  Serial.print(" -> ");
+  Serial.print(chargeStateName(charge_state_));
+  Serial.print("  (");
+  Serial.print(percent_, 1);
+  Serial.print("%  ");
+  Serial.print(voltage_, 2);
+  Serial.println("V)");
+}
+
 bool Power::begin() {
+  // Set up before the gauge check: USB presence is a plain GPIO and does not
+  // depend on the gauge being there or answering.
+  if (board::kHasUsbSense) {
+    // Plain INPUT: the divider's lower leg is the pull-down (board_config.h).
+    pinMode(board::kPinUsbSense, INPUT);
+    usb_raw_ = digitalRead(board::kPinUsbSense) == HIGH;
+    usb_present_ = usb_raw_;
+    usb_raw_since_ms_ = millis();
+  }
+
   if (!board::kHasBatteryMonitor) {
     Serial.println("[power] no fuel gauge on this board -- power management "
                    "inert");
@@ -28,8 +73,8 @@ bool Power::begin() {
   Wire.begin();
   // The gauge is the only device on this bus and is rated for 400 kHz, so
   // there is no reason to sit at the Arduino default of 100 kHz. Wire is
-  // blocking, and update()'s three register reads land inside a frame: at
-  // 100 kHz that costs ~3.3 ms of the 16.7 ms budget once a second, which
+  // blocking, and update()'s register reads land inside a frame: at 100 kHz
+  // they cost milliseconds of the 16.7 ms budget once a second, which
   // dominates the worst-frame figure even though average frames are unaffected.
   Wire.setClock(400000);
   if (!gauge_.begin(&Wire)) {
@@ -69,23 +114,50 @@ bool Power::begin() {
   // that first real sample with kNormal as its "previous" level, applying the
   // wrong side of the hysteresis at exactly the moment it matters most.
   level_ = classifyPowerLevel(percent_, PowerLevel::kNormal);
+  // Seeded silently: the banner below already reports it, and a
+  // "on battery -> charging" line at boot would describe a transition that
+  // never happened.
+  charge_state_ = classifyChargeState(usb_present_, voltage_, percent_,
+                                      ChargeState::kOnBattery);
 
   Serial.print("[power] MAX17048 ready: ");
   Serial.print(percent_, 1);
   Serial.print("%  ");
   Serial.print(voltage_, 2);
   Serial.print("V  ");
-  Serial.println(powerLevelName(level_));
+  Serial.print(powerLevelName(level_));
+  Serial.print("  ");
+  Serial.println(chargeStateName(charge_state_));
   return true;
 }
 
 void Power::update(uint32_t now_ms) {
-  if (!gauge_present_) return;
-  if (now_ms - last_poll_ms_ < kPollIntervalMs) return;
-  last_poll_ms_ = now_ms;
+  const bool usb_changed = sampleUsb(now_ms);
+  if (usb_changed && !available()) {
+    // Normally the charge-state transition below is the log line for this;
+    // without a readable gauge there is none, so say it here instead.
+    Serial.println(usb_present_ ? "[power] USB power connected"
+                                : "[power] USB power disconnected");
+  }
 
+  if (!gauge_present_) return;
+
+  if (now_ms - last_poll_ms_ >= kPollIntervalMs) {
+    last_poll_ms_ = now_ms;
+    pollGauge();
+  } else if (!usb_changed) {
+    return;
+  }
+
+  // Re-derived on a USB edge too, not only after a fresh gauge reading: the
+  // cable is the fast signal, and waiting up to a second for the next poll
+  // to notice it would throw that away. The last good voltage is at most a
+  // second old, which is plenty for the full/charging split.
+  updateChargeState();
+}
+
+void Power::pollGauge() {
   const PowerLevel previous_level = level_;
-  const bool was_charging = charging_;
   const bool was_ready = ready_;
 
   if (!readGauge()) {
@@ -133,13 +205,6 @@ void Power::update(uint32_t now_ms) {
     Serial.print("%  ");
     Serial.print(voltage_, 2);
     Serial.println("V)");
-  }
-
-  if (charging_ != was_charging) {
-    Serial.print(charging_ ? "[power] charging detected at "
-                           : "[power] charging stopped at ");
-    Serial.print(percent_, 1);
-    Serial.println("%");
   }
 }
 

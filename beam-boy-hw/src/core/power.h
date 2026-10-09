@@ -11,7 +11,7 @@
 // ratio to get right and no discharge-curve lookup table to tune here.
 //
 // All of the actual *decisions* -- is this worth warning about, is it worth
-// shutting down for, is it worth staying awake for -- live in
+// shutting down for, is it charging or full -- live in
 // core/power_policy.h as free functions over plain floats, so they can run on
 // the host without an I2C bus. This class is the thin, untested-by-necessity
 // layer around the register reads; see power_policy.h's header comment for
@@ -19,8 +19,12 @@
 //
 // board::kHasBatteryMonitor gates everything here: on a board with no fuel
 // gauge (the DevKitC), begin() fails harmlessly and every other call answers
-// as if nothing changed -- no charging, no low/critical warning, and the
-// engine's idle timer behaves as though this class does not exist.
+// as if nothing changed -- no charging and no low/critical warning.
+//
+// Charging is decided from two signals: whether USB power is present (an
+// external divider on board::kPinUsbSense) and the gauge's voltage and
+// percentage -- see classifyChargeState(). A board without kHasUsbSense
+// always reports kOnBattery.
 
 #include <Adafruit_MAX1704X.h>
 #include <Arduino.h>
@@ -56,7 +60,9 @@ class Power {
 
   // Polls the gauge at most once every kPollIntervalMs, so callers can invoke
   // this every frame without hammering the I2C bus for a value that changes
-  // over minutes, not milliseconds.
+  // over minutes, not milliseconds. The USB-sense pin, by contrast, is a plain
+  // digitalRead and is sampled on every call, so plugging in or unplugging is
+  // reflected within a frame or two rather than on the next gauge poll.
   void update(uint32_t now_ms);
 
   // 0..100. Meaningless (and left at its last-known value) while !available().
@@ -66,9 +72,28 @@ class Power {
   // should read, since it is what the gauge has already linearised.
   float voltage() const { return voltage_; }
 
-  bool charging() const { return charging_; }
+  // Meaningless while !available(), like every other reading here.
+  ChargeState chargeState() const { return charge_state_; }
 
+  // Actively charging -- *not* "plugged in". A full battery on USB reads
+  // false here; ask usbPowered() for the cable.
+  bool charging() const { return charge_state_ == ChargeState::kCharging; }
+
+  // Whether USB power is present, straight from the debounced sense pin and
+  // independent of the gauge. Always false on a board without kHasUsbSense,
+  // which cannot tell.
+  bool usbPowered() const { return usb_present_; }
+
+  // The battery's own classification, for diagnostics. Warnings and shutdown
+  // must read alertLevel() instead.
   PowerLevel level() const { return level_; }
+
+  // level(), overridden to kNormal while USB is powering the console -- see
+  // effectivePowerLevel(). This is what the low-battery pixel and the
+  // critical shutdown act on.
+  PowerLevel alertLevel() const {
+    return effectivePowerLevel(level_, usb_present_);
+  }
 
  private:
   static constexpr uint32_t kPollIntervalMs = 1000;
@@ -80,10 +105,20 @@ class Power {
   static constexpr uint8_t kWarmupAttempts = 8;
   static constexpr uint32_t kWarmupDelayMs = 50;
 
-  // Reads all three registers and commits them to the members only if the
+  // Reads voltage and percentage and commits them to the members only if the
   // result is plausible. Returns false on a reading that must be discarded,
   // leaving the last known good values untouched.
   bool readGauge();
+
+  // Debounces the USB-sense pin. Returns true on the call that commits a new
+  // level to usb_present_.
+  bool sampleUsb(uint32_t now_ms);
+
+  // Re-derives charge_state_ from the latest USB level and gauge reading, and
+  // logs the transition if there was one.
+  void updateChargeState();
+
+  void pollGauge();
 
   Adafruit_MAX17048 gauge_;
   bool gauge_present_ = false;
@@ -91,11 +126,15 @@ class Power {
   bool last_read_rejected_ = false;
   uint32_t last_poll_ms_ = 0;
 
+  bool usb_present_ = false;
+  bool usb_raw_ = false;
+  uint32_t usb_raw_since_ms_ = 0;
+
   // 100% until proven otherwise: if anything goes wrong, the safe default is
   // the one that never triggers a warning or a shutdown.
   float percent_ = 100.0f;
   float voltage_ = 0.0f;
-  bool charging_ = false;
+  ChargeState charge_state_ = ChargeState::kOnBattery;
   PowerLevel level_ = PowerLevel::kNormal;
 };
 

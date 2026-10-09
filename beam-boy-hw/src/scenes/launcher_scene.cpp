@@ -287,20 +287,35 @@ void LauncherScene::renderBatteryGauge(Engine& engine) {
   }
 
   const float fraction = power.percent() / 100.0f;
-  const Color color = fraction > 0.5f
-                           ? colors::kGreen
-                           : (fraction > 0.2f ? colors::kAmber : colors::kRed);
-
   // A proportional bar rather than another binary readout: this is meant as
   // an instant, low-fidelity glance, and a bar reads faster than counting
   // bits for a number nobody needs to be precise about.
-  float level = 1.0f;
-  if (power.charging()) {
-    // Breathing signals "still filling up" -- there is no cable icon to draw
-    // on a one-dimensional display, so the bar itself pulses instead.
-    level = 0.55f + 0.45f * pulse(millis() / 1000.0f, 2.0f);
+  //
+  // On USB the bar is always green: the length already shows the level, and
+  // a red or amber bar would read as a warning at the one moment the battery
+  // is being looked after. Colour therefore means "where the power comes
+  // from" -- green on USB, green/amber/red by level on battery.
+  switch (power.chargeState()) {
+    case ChargeState::kCharging: {
+      // Breathing signals "still filling up" -- there is no cable icon to
+      // draw on a one-dimensional display, so the bar itself pulses instead.
+      const float level = 0.55f + 0.45f * pulse(millis() / 1000.0f, 2.0f);
+      display.span(0.0f, fraction, colors::kGreen, level);
+      return;
+    }
+    case ChargeState::kFull:
+      // Drawn at full length rather than at the gauge's percentage, which can
+      // still read in the high 90s once the charge has terminated.
+      display.span(0.0f, 1.0f, colors::kGreen, 1.0f);
+      return;
+    default: {
+      const Color color =
+          fraction > 0.5f ? colors::kGreen
+                          : (fraction > 0.2f ? colors::kAmber : colors::kRed);
+      display.span(0.0f, fraction, color, 1.0f);
+      return;
+    }
   }
-  display.span(0.0f, fraction, color, level);
 }
 
 void LauncherScene::render(Engine& engine) {

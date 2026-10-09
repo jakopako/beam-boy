@@ -65,7 +65,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 | Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                                                                                        |
 | Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                                                                                          |
 | Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                                                                             |
-| Power switch      | **SPST slide switch between Feather `EN` pin and `GND`**                                   | Pulling `EN` to GND disables the 3.3V LDO regulator (sub-microamp standby). **USB charging remains fully functional when switched off**, allowing true zero-power off while retaining single-port charging.                                                                                                    |
+| Power switch      | **SPST slide switch in series with the battery's + lead** (between the LiPo and the Feather's JST connector) | Off physically disconnects the cell: zero drain. The battery only charges while switched on; plugging in USB while off runs the console from USB alone. Pick one rated for at least 1 A to cover WiFi and full-brightness peaks. |
 | Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                                                                           |
 
 **Total: roughly €35–45** on top of what you own (Feather route), or €27–37 with the
@@ -108,18 +108,19 @@ constraint** — the cap exists to bound the worst case, not to ration the batte
 - Read battery state from the Feather's on-board **MAX17048 fuel gauge** over I2C (not an ADC pin
   — the Feather ESP32-S3 has none for battery sense; see Phase 8 below), which already linearises
   the LiPo discharge curve and reports 0–100% directly.
-- **Battery meter on demand:** in the launcher, hold A+B to render charge level as a bar along the tube, green → amber → red.
+- **Battery meter on demand:** in the launcher, hold A+B to render charge level as a bar along the tube, green → amber → red on battery.
 - **Low-battery warning:** below ~3.5 V, subtle, persistent/periodic red pixel indicator during play — visible but not disruptive.
 - **Critical cutoff:** below ~3.35–3.4 V, save state, show a red sweep, and deep-sleep before the
   hardware protection circuit cuts out mid-game (protects game data & flash storage).
-- **Charging indicator:** while charging, animate a slow filling green sweep along the tube;
-  solid green when full. The tube _is_ the status LED — no extra indicator needed, which
-  suits the minimalist brief.
-- **Idle sleep:** after ~2 minutes with no input, fade out and deep-sleep; wake on a button
-  press. This is the single biggest real-world battery win.
-- **Power cutoff & charging design:** A physical SPST switch connects the Feather's `EN` pin to `GND`.
-  When switched OFF, the 3.3V LDO is disabled (sub-microamp standby), while the battery charger remains
-  directly connected to USB-C and the LiPo cell — allowing safe charging over USB while completely powered off.
+- **Charging indicator:** shown only in the A+B battery meter — while charging the bar is green
+  and breathes, when full it is solid green at full length. The tube _is_ the status LED — no
+  extra indicator needed, which suits the minimalist brief.
+- **Idle sleep:** after ~2 minutes with no input, fade out and deep-sleep (plugged in or not);
+  wake on a button press. This is the single biggest real-world battery win.
+- **Power cutoff & charging design:** A physical SPST switch in series with the battery's + lead.
+  When switched OFF the cell is physically disconnected — zero drain. The trade-off: the battery
+  only charges while switched ON, and plugging in USB while OFF runs the console from USB alone
+  (with no meaningful battery reading, since there is no cell for the gauge to measure).
 
 ### Interim: what you can build on the NodeMCU today
 
@@ -161,6 +162,7 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 | Stick X       | 4             | ADC1 channel (ADC1_CH3) — usable while WiFi is active.                                         |
 | Stick Y       | 5             | ADC1 channel (ADC1_CH4) — usable while WiFi is active.                                         |
 | Battery sense | I2C (SDA/SCL) | MAX17048 fuel gauge (Feather only) — no dedicated GPIO; shares the STEMMA QT bus. See Phase 8. |
+| USB sense     | 12 (Feather)  | 2:3 divider from the Feather `USB` pin (e.g. 10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
 
 ⚠️ Keep every analog input on **ADC1**. ADC2 is shared with the WiFi radio and reads garbage
 whenever WiFi is on — a classic ESP32 trap that would silently break analog inputs in Phase 4.
@@ -368,7 +370,7 @@ a script in Phase 6 is mechanical.
    launcher has something to choose _between_.
 5. ⏸ **Power management** (needs the ESP32 Feather; moved to Phase 8): battery voltage sensing,
    battery gauge indicator, low-battery warning on the tube, critical shutdown with data protection,
-   charging sweep animation, and idle deep-sleep. _See Phase 8._
+   charging indicator, and idle deep-sleep. _See Phase 8._
 
 **Navigation via stick.** `Input` has `navDelta()`:
 discrete steps synthesized from horizontal joystick movement (threshold + hysteresis + auto-repeat).
@@ -566,31 +568,30 @@ it over the air is item 5.)_
 
 1. ✅ **Hardware & Sensing Layer (`src/core/power.*`):**
    - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
-   - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `charging()`, `level()`.
-   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it worth staying awake for — live in `src/core/power_policy.h` as plain, host-testable functions over floats (`classifyPowerLevel`, `isChargingRate`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. 17 native tests cover gauge-reading plausibility, hysteresis, charging, and idle-sleep decisions.
-   - Charging is detected via the gauge's own `chargeRate()` (%/hr), with a small positive threshold (not `> 0`) so resting jitter never reads as charging.
+   - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `chargeState()`, `charging()`, `usbPowered()`, `level()`.
+   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it charging — live in `src/core/power_policy.h` as plain, host-testable functions over floats (   `classifyPowerLevel`, `classifyChargeState`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. Native tests cover gauge-reading plausibility, hysteresis, charge-state classification, and idle-sleep decisions.
+      - Charging is detected from USB presence (a 2:3 divider, e.g. 10k/15k, from the Feather's `USB` pin to GPIO12) combined with the gauge's voltage and percentage: on battery / charging / full, with "full" latched until the cell sags to its recharge voltage. See [`docs/phase-8-power.md`](docs/phase-8-power.md#usb-power-sense) for the wiring.
 
 2. ✅ **Battery Gauge & Status — launcher only:**
-   - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar (green → amber → red), for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
+   - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar, for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
    - On a board with no fuel gauge (the DevKitC), the same gesture shows a dim, steady white pixel instead of a fake reading.
-   - While charging, the bar breathes rather than holding steady (no icon to draw on a 1D display).
+   - This is the **only charge-state indicator**. On battery the bar is steady green → amber → red by level; charging, it is green and breathes; full, it is steady green at full length. On USB it is always green, so a red bar never reads as a warning while the battery is being charged.
    - Adding a third gesture to two buttons that already had two turned the launcher's input handling into a small state machine, which is now arbitrated in one place (`src/scenes/launcher_gestures.h`) and covered by 17 native tests. It closes three ordering bugs, two of which destroyed user data: A pressed slightly before B launching a game instead of showing the gauge; releasing A first after the gauge deleting the selected cartridge; and holding B to exit a game (1.2 s) rolling straight on past the delete threshold (2.5 s). See [`docs/phase-8-power.md`](docs/phase-8-power.md#gesture-ordering).
 
 3. ✅ **Persistent Low-Battery Warning Overlay:**
    - Two-sided hysteresis, not a single threshold: `kLowBatteryPercent = 15` / recovers at `20`, `kCriticalBatteryPercent = 5` / recovers at `10` — so a percentage dithering right at a boundary can't flicker the indicator on and off.
-   - While `kLow`, a single pulsing red pixel at the last index is drawn every frame, in every scene (game, pause, launcher) — visible but not disruptive.
+   - While `kLow`, a single pulsing red pixel at the last index is drawn every frame, in every scene (game, pause, launcher) — visible but not disruptive. Hidden while USB is plugged in.
    - `kCritical` is not shown as an overlay at all; it immediately hands off to the shutdown sweep below instead.
 
 4. ✅ **Safe Shutdown & Data Protection:**
-   - The instant `updatePower()` classifies the level as `kCritical`, it pre-empts _everything_ — mid-game, mid-pause, mid-menu — before the pause/exit-gesture logic even runs.
+   - The instant `updatePower()` classifies the level as `kCritical`, it pre-empts _everything_ — mid-game, mid-pause, mid-menu — before the pause/exit-gesture logic even runs. Not while USB is plugged in: the cable then powers the console, so there is no cutoff to get ahead of, and plugging in mid-sweep aborts the shutdown (`effectivePowerLevel()` in `power_policy.h`).
    - `beginCriticalShutdown()` flushes storage (and the current game's score, if any) **before** a single frame of the shutdown animation plays, so the write is guaranteed to complete while power is still guaranteed, ahead of the hardware protection circuit's own abrupt cutoff.
    - A red sweep closing in from both ends plays for `kCriticalShutdownMs`, then the device configures `esp_sleep_enable_ext1_wakeup()` on the A/B/stick-press GPIOs (`ESP_EXT1_WAKEUP_ANY_LOW`, since they're `INPUT_PULLUP`) and calls `esp_deep_sleep_start()`.
 
-5. ✅ **Charging Animation & Idle Sleep:**
-   - **Charging visualizer**: while plugged in, a green sweep animates along the tube (`kChargingSweepMs` period) instead of the idle-sleep countdown — sleeping while charging would save nothing (USB is powering the device regardless) and only costs the feedback. Note that charging detection lags the board's own CHG LED by minutes: the MAX17048's charge-rate register is a filtered state-of-charge trend, not a current measurement. See [`docs/phase-8-power.md`](docs/phase-8-power.md) for why lowering the threshold to chase it is the wrong trade.
-   - **Idle sleep**: after `kIdleSleepMs` (2 minutes) with no button held and no stick deflection past a small deadzone, the framebuffer fades out over `kIdleFadeMs` and the device enters the same deep sleep as a critical shutdown, waking on any button press. This check is re-derived every frame from the time since the last activity rather than latched, so any input — or plugging in USB mid-fade — falls out of the idle path on the very next frame with no extra state to unwind.
+5. ✅ **Idle Sleep:**
+   - **Idle sleep**: after `kIdleSleepMs` (2 minutes) with no button held and no stick deflection past a small deadzone, the framebuffer fades out over `kIdleFadeMs` and the device enters the same deep sleep as a critical shutdown, waking on any button press. Being plugged in or charging does not keep it awake — the charge state is only shown on demand via A+B. This check is re-derived every frame from the time since the last activity rather than latched, so any input mid-fade falls out of the idle path on the very next frame with no extra state to unwind.
 
-✅ _Visible result: fully cordless operation with clear charge feedback, an on-demand battery gauge in the launcher, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
+✅ _Visible result: fully cordless operation, an on-demand battery and charge gauge in the launcher, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
 
 ### Phase 9 — Enclosure _(2–4 days, iterative)_
 
@@ -892,8 +893,8 @@ runtime changes in this slice; the steps below are future work.
 **4. Safe writing, responsiveness and engine coordination**
 - Before confirmation starts a write: on battery-equipped boards require a valid, fresh gauge
   sample >=30%; refuse stale/unavailable readings, low/critical power and unavailable storage.
-  USB-powered DevKitC has no battery check. The Feather's charge-rate signal is not USB presence
-  and must not be used to bypass the threshold.
+  USB-powered DevKitC has no battery check. USB presence or charge state must not be used to
+  bypass the threshold.
 - Flush pending saves and verify they are clean before writing; failed saves block installation.
   Never format/migrate LittleFS as part of an update. Save migrations must remain rollback-safe:
   additive/read-compatible until the new app is marked healthy, or use versioned backups.
@@ -1063,7 +1064,7 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Encoder + analog stick + 2 buttons.** Both input types, deliberately.
 - **Binary score display** as a signature engine feature.
 - **USB-C rechargeable**, via a board with integrated LiPo charging. No consumable batteries.
-- **Power switch on Feather `EN` pin to `GND`.** Pulling `EN` low completely disables the 3.3V LDO regulator (<1 µA quiescent current) while the battery charger remains connected to USB-C and the LiPo cell for charging while powered off.
+- **Power switch in series with the battery.** Off physically disconnects the LiPo (zero drain). The battery charges only while switched on.
 - **Button convention: A = primary/instant, B = hold-to-charge.** Established in Wormfight
   (Phase 2) after a push-back ability on B failed to justify occupying the only spare button.
   A quick stab of B should always do _something_ useful, so B is never a dead button. Games
