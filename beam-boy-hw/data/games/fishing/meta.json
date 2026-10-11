@@ -1,5 +1,6 @@
 {
   "id": "fishing",
   "title": "Fishing",
+  "description": "Keep the blue dot inside the moving green bar with the joystick. Survive to score points.",
   "color": "ffa000"
 }

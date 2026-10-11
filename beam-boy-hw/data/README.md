@@ -37,6 +37,7 @@ files will eventually arrive from the games repo as community submissions.
 |---|---|---|
 | `id` | no | Ignored; the folder name wins. Kept for readability. |
 | `title` | no | Launcher name. Falls back to the id, so a missing title never hides a game. |
+| `description` | no | One or two short sentences describing the game and its controls, for a future website game list. Keep it within 96 UTF-8 bytes to fit the metadata parser. The firmware ignores this field; it is not included in the device's store index or saved by Store installs. |
 | `color` | no | Accent as `rrggbb` or `#rrggbb`. Defaults to white. A malformed value rejects the cartridge, rather than showing black and looking like a launcher bug. |
 | `sha256` | no | The hash the Store verified `game.be` against at install time. Written automatically by the Store; a hand-authored or `uploadfs`-copied cartridge normally omits it. Not re-verified against `game.be` — used only so the Store can tell whether an installed cartridge matches what the index currently offers ("update available"). A malformed (present but not 64 hex digits) value rejects the cartridge, like `color`. |
 
@@ -53,10 +54,9 @@ consoles running older firmware.
   can install is bounded by flash rather than RAM.
 - Because the file is re-read on every launch, editing `game.be` and running
   `uploadfs` picks up the change without a firmware flash.
-- `games/fishing/` is a work-in-progress cartridge (a green bar drifts along
-  the tube; keep the blue dot inside it) that only exists here for now —
-  not yet published to `website/games/` / the store index while the design is
-  still being iterated on. See the game-ideas list in `PLAN.md`.
+- `games/fishing/` is the Fishing cartridge: use the joystick's X axis to keep
+  the blue dot inside the moving green bar. It is also published in
+  `website/games/fishing/` and listed in the store index.
 
 ## Store index
 

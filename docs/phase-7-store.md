@@ -3,6 +3,22 @@
 Goal: download script cartridges from the internet into `/games/<id>/` so they
 appear in the launcher without a firmware flash.
 
+## Published games
+
+- **Reflex** — the original scripted timing game.
+- **Fishing** — use the joystick's X axis to keep the blue dot inside the
+  moving green bar. Staying inside earns points, with a bonus for precision.
+  Leaving it for 1.2 seconds costs one of three lives; the bar gets faster and
+  more erratic over 45 seconds. Press A after game over to restart.
+
+Published cartridge files live in `website/games/`. After changing them, run
+`python tools\build_store_index.py` and `python tools\build_store_index.py --check`
+to regenerate and verify the exact script sizes and hashes.
+
+Each published `meta.json` also has a short `description` for a future website
+game list. It stays in the published metadata rather than the device's store
+index; existing firmware ignores it when sideloaded.
+
 ## First slice implemented
 
 - **Store scene:** `../beam-boy-hw/src/scenes/store_scene.h`/`.cpp`, reached

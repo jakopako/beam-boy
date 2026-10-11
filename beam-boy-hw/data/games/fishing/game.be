@@ -1,7 +1,6 @@
 # Fishing -- a green bar drifts along the tube; keep the blue dot inside it
 # for as long as possible. The bar gets faster and more erratic the longer
-# you survive. Local-only cartridge for now (see PLAN.md's game-ideas list)
-# -- not yet published to the store while the design settles.
+# you survive.
 
 var kStartingLives = 3
 

@@ -1,6 +1,14 @@
 {
   "games": [
     {
+      "id": "fishing",
+      "title": "Fishing",
+      "color": "ffa000",
+      "url": "https://beamboy.ch/games/fishing/game.be",
+      "sha256": "23ce32611ad3caf9eb56ffb89dc79a5b115ed60a9de74fd31c512d89d3b5e390",
+      "size": "8266"
+    },
+    {
       "id": "reflex",
       "title": "Reflex",
       "color": "ff00aa",

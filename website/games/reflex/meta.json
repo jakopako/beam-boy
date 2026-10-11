@@ -1,5 +1,6 @@
 {
   "id": "reflex",
   "title": "Reflex",
+  "description": "Press A to stop the moving dot inside the green zone. Each round gets faster and harder.",
   "color": "ff00aa"
 }
