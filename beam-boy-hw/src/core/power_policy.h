@@ -195,14 +195,19 @@ constexpr bool isPlausibleReading(float percent, float voltage) {
          percent >= kMinPlausiblePercent && percent <= kMaxPlausiblePercent;
 }
 
-// How long the console sits idle before it sleeps.
+// V1 has no switched tube supply: deep sleep leaves its standby draw intact.
+// Use the physical power switch instead; critical-battery shutdown stays active.
+constexpr bool kIdleSleepEnabled = false;
+
+// How long the console sits idle before it sleeps, when enabled.
 constexpr uint32_t kIdleSleepMs = 120000;  // 2 minutes
 
 // Whether the idle timer should sleep the device now. Deliberately ignores
 // USB and charging: a plugged-in console sleeps exactly like one on battery,
 // and the charge state is only shown on demand (A+B in the launcher).
-constexpr bool shouldEnterIdleSleep(uint32_t idle_ms) {
-  return idle_ms >= kIdleSleepMs;
+constexpr bool shouldEnterIdleSleep(uint32_t idle_ms,
+                                    bool enabled = kIdleSleepEnabled) {
+  return enabled && idle_ms >= kIdleSleepMs;
 }
 
 // For logs only. Kept next to the enum so a new level cannot be added without

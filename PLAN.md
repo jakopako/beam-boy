@@ -115,12 +115,14 @@ constraint** — the cap exists to bound the worst case, not to ration the batte
 - **Charging indicator:** shown only in the A+B battery meter — while charging the bar is green
   and breathes, when full it is solid green at full length. The tube _is_ the status LED — no
   extra indicator needed, which suits the minimalist brief.
-- **Idle sleep:** after ~2 minutes with no input, fade out and deep-sleep (plugged in or not);
-  wake on a button press. This is the single biggest real-world battery win.
-- **Power cutoff & charging design:** A physical SPST switch in series with the battery's + lead.
-  When switched OFF the cell is physically disconnected — zero drain. The trade-off: the battery
-  only charges while switched ON, and plugging in USB while OFF runs the console from USB alone
-  (with no meaningful battery reading, since there is no cell for the gauge to measure).
+- **Idle sleep:** disabled for v1 (`kIdleSleepEnabled = false`), since the BAT-powered tube
+  still draws ~20 mA while black. The retained two-minute fade/sleep path can be re-enabled
+  when a GPIO-controlled tube supply is added. Critical-battery shutdown remains active.
+- **Power cutoff & charging design:** A physical DPDT switch uses independent poles to connect
+  EN to GND while OFF and disconnect BAT from the tube's positive supply. The battery remains
+  connected to the charger, allowing charging while OFF, but battery-side standby draw remains.
+  Use a protected LiPo and switch off/recharge after critical shutdown: firmware sleep alone
+  cannot stop the tube's standby draw. See `docs/phase-8-power.md` for wiring details.
 
 ### Interim: what you can build on the NodeMCU today
 
@@ -588,8 +590,9 @@ it over the air is item 5.)_
    - `beginCriticalShutdown()` flushes storage (and the current game's score, if any) **before** a single frame of the shutdown animation plays, so the write is guaranteed to complete while power is still guaranteed, ahead of the hardware protection circuit's own abrupt cutoff.
    - A red sweep closing in from both ends plays for `kCriticalShutdownMs`, then the device configures `esp_sleep_enable_ext1_wakeup()` on the A/B/stick-press GPIOs (`ESP_EXT1_WAKEUP_ANY_LOW`, since they're `INPUT_PULLUP`) and calls `esp_deep_sleep_start()`.
 
-5. ✅ **Idle Sleep:**
-   - **Idle sleep**: after `kIdleSleepMs` (2 minutes) with no button held and no stick deflection past a small deadzone, the framebuffer fades out over `kIdleFadeMs` and the device enters the same deep sleep as a critical shutdown, waking on any button press. Being plugged in or charging does not keep it awake — the charge state is only shown on demand via A+B. This check is re-derived every frame from the time since the last activity rather than latched, so any input mid-fade falls out of the idle path on the very next frame with no extra state to unwind.
+5. ✅ **Idle Sleep (disabled for v1):**
+   - `kIdleSleepEnabled = false` gates the idle-sleep policy while keeping critical-battery shutdown active. The physical DPDT switch disables the Feather regulator and disconnects the tube supply; firmware deep sleep cannot eliminate the tube's ~20 mA standby draw.
+   - If re-enabled after adding a switched tube supply, idle sleep still fades after `kIdleSleepMs` (2 minutes) with no button held or stick deflection, then deep-sleeps after `kIdleFadeMs`. Any input mid-fade cancels it; USB does not inhibit it.
 
 ✅ _Visible result: fully cordless operation, an on-demand battery and charge gauge in the launcher, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
 

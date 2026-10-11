@@ -44,9 +44,9 @@ divider — see [USB power sense](#usb-power-sense) below.
     latched until the cell sags below `kRechargeVoltage` (4.0 V) or USB is
     unplugged, so the post-charge relaxation doesn't flip it back to
     "charging".
-  - `shouldEnterIdleSleep(idle_ms)` — true once idle for `kIdleSleepMs`,
-    regardless of USB or charge state: a plugged-in console sleeps like any
-    other.
+  - `shouldEnterIdleSleep(idle_ms)` — gated by `kIdleSleepEnabled`, which is
+    **false for v1**. If enabled, true once idle for `kIdleSleepMs`,
+    regardless of USB or charge state.
   - `effectivePowerLevel(battery_level, usb_present)` — the level warnings and
     shutdown act on: `kNormal` while on USB, the battery's own level
     otherwise. The battery level keeps being classified underneath, so
@@ -97,8 +97,12 @@ divider — see [USB power sense](#usb-power-sense) below.
     every remaining render path (paused and normal) — visible but not
     disruptive. `kCritical` is not shown as an overlay; it hands off to the
     shutdown sweep instead.
-  - **Idle sleep** is a *derived, stateless-per-frame* check, not a latched
-    state machine: every frame, `now_ms - last_activity_ms_` is compared
+  - **Idle sleep is disabled for v1** (`kIdleSleepEnabled = false`): the tube
+    remains powered from BAT during deep sleep and draws about 20 mA even
+    when displaying black. Use the physical power switch instead. The
+    critical-battery shutdown above remains active.
+    The retained idle-sleep implementation is a *derived, stateless-per-frame*
+    check, not a latched state machine: every frame, `now_ms - last_activity_ms_` is compared
     against `kIdleSleepMs`. Activity is any button held or stick deflection
     past a small deadzone (`held()`, not `pressed()` — a control physically
     held down still counts, so a game left running with the stick pushed to
@@ -268,6 +272,7 @@ and a deliberate one produce an identical boot.
 | --- | --- | --- |
 | `kLowBatteryPercent` / recover | 15 / 20 | `power_policy.h` |
 | `kCriticalBatteryPercent` / recover | 5 / 10 | `power_policy.h` |
+| `kIdleSleepEnabled` | false (v1) | `power_policy.h` |
 | `kIdleSleepMs` | 120000 (2 min) | `power_policy.h` |
 | `kIdleFadeMs` | 1000 | `engine.h` |
 | `kCriticalShutdownMs` | 1500 | `engine.h` |
@@ -290,9 +295,9 @@ and a deliberate one produce an identical boot.
 - **Critical shutdown sweep**: a red sweep closing in from both ends, played
   once after storage is already safely flushed, immediately before deep sleep.
   Never on USB; plugging in mid-sweep cancels it.
-- **Idle fade + sleep**: after two minutes with no input, plugged in or not,
-  the display fades out and the device deep-sleeps; any of A, B or the stick
-  press wakes it.
+- **Idle fade + sleep (disabled for v1)**: if enabled, after two minutes with
+  no input, plugged in or not, the display fades out and the device
+  deep-sleeps; any of A, B or the stick press wakes it.
 
 ## USB power sense
 
@@ -325,16 +330,30 @@ the console will randomly believe it is plugged in.
 
 ## Power switch
 
-The power switch sits **in series with the battery's + lead**, between the
-LiPo and the Feather's JST connector. Off means the cell is physically
-disconnected: zero drain, not just a low-current standby. Consequences:
+V1 uses a **DPDT switch with two electrically independent poles**:
 
-- **The battery only charges while switched on.** Off, it is disconnected from
-  the charger as well as from the load.
-- **Plugging in USB while switched off still runs the console**, from USB
-  alone. In that state there is no cell for the MAX17048 to measure: it reads
-  the charger's output instead, so the battery percentage and charge state are
-  meaningless until the switch is turned on.
+- In the off position, one pole connects **EN to GND**, disabling the
+  Feather's 3.3 V regulator. In the on position, EN is left unconnected so
+  its onboard pull-up enables the regulator.
+- The other pole connects **BAT to the tube's positive supply** only in the
+  on position. Tube ground remains connected.
+
+Do not electrically join the two poles. The tube-supply pole must be rated
+for the tube's maximum DC current.
+
+The battery remains connected to the Feather's JST connector, so it can
+charge over USB while switched off. This is not a complete battery
+disconnect: the charger, fuel gauge and other battery-side circuitry can
+still draw standby current. EN stays low while off even if USB is connected.
+
+Use a **protected LiPo pack**. Critical-battery shutdown saves data and puts
+the ESP32 to sleep, but cannot disconnect the BAT-powered tube: its measured
+20 mA standby draw continues until the physical switch is turned off or the
+pack's undervoltage protection trips. Firmware shutdown is not a substitute
+for battery protection; switch off and recharge after a critical shutdown.
+
+A hard switch-off cannot flush pending scores/settings. Exit the game or
+setting normally to save before switching off.
 
 ## Current limitations / follow-up tuning
 
@@ -342,9 +361,11 @@ disconnected: zero drain, not just a low-current standby. Consequences:
   exposed either, so `kFull` is inferred from voltage + state-of-charge, which
   tends to read slightly early (the last few percent of the CV taper).
   `kFullPercent` is the knob if it proves too eager.
-- **Hardware validation is complete.** The Feather finds the MAX17048 and
-  reports plausible percentage/voltage values; idle deep sleep remains asleep
-  until an actual button press, and the ext1 wake mask identifies the pressed
-  button correctly. The only remaining follow-up is subjective threshold
-  tuning after a full discharge cycle: the current 15% warning and 5% critical
-  shutdown values are safe defaults, not unfinished functionality.
+- **Gauge and deep-sleep hardware were previously validated.** The Feather
+  finds the MAX17048 and reports plausible percentage/voltage values;
+  deep sleep remains asleep until an actual button press, and the ext1 wake
+  mask identifies the pressed button correctly. Idle sleep is now disabled
+  for v1. Validate the DPDT wiring and measure off-state current once fitted.
+  Threshold tuning after a full discharge cycle remains a follow-up: the
+  current 15% warning and 5% critical shutdown values are defaults, not a
+  substitute for the pack's undervoltage protection.

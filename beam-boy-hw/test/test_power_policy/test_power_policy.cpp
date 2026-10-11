@@ -119,9 +119,21 @@ void test_unplugging_a_critical_battery_brings_the_shutdown_back() {
 
 // --- shouldEnterIdleSleep ------------------------------------------------
 
-void test_idle_sleep_fires_after_the_timeout() {
+void test_v1_idle_sleep_is_disabled_even_after_the_timeout() {
+  TEST_ASSERT_FALSE(kIdleSleepEnabled);
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(0));
   TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs - 1));
-  TEST_ASSERT_TRUE(shouldEnterIdleSleep(kIdleSleepMs));
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs));
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs + 1));
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(UINT32_MAX));
+}
+
+void test_enabled_idle_sleep_fires_after_the_timeout() {
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(0, true));
+  TEST_ASSERT_FALSE(shouldEnterIdleSleep(kIdleSleepMs - 1, true));
+  TEST_ASSERT_TRUE(shouldEnterIdleSleep(kIdleSleepMs, true));
+  TEST_ASSERT_TRUE(shouldEnterIdleSleep(kIdleSleepMs + 1, true));
+  TEST_ASSERT_TRUE(shouldEnterIdleSleep(UINT32_MAX, true));
 }
 
 // --- isPlausibleReading --------------------------------------------------
@@ -281,7 +293,8 @@ int main(int, char**) {
   RUN_TEST(test_on_battery_the_alert_level_is_the_battery_level);
   RUN_TEST(test_on_usb_low_and_critical_are_suppressed);
   RUN_TEST(test_unplugging_a_critical_battery_brings_the_shutdown_back);
-  RUN_TEST(test_idle_sleep_fires_after_the_timeout);
+  RUN_TEST(test_v1_idle_sleep_is_disabled_even_after_the_timeout);
+  RUN_TEST(test_enabled_idle_sleep_fires_after_the_timeout);
   RUN_TEST(test_the_gauges_cold_reading_is_rejected);
   RUN_TEST(test_a_normal_reading_is_accepted);
   RUN_TEST(test_a_nearly_empty_battery_is_still_believed);
