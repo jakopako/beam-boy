@@ -57,8 +57,8 @@ var kRetargetChancePerFrameHi = 0.01
 
 # Points per second spent inside the bar at the bar's edge, and the extra
 # awarded per second at dead centre -- rewards precision, not just presence.
-var kScoreBaseRate = 9.0
-var kScoreBonusRate = 6.0
+var kScoreBaseRate = 3.0
+var kScoreBonusRate = 2.0
 
 var MODE_HOLD = 0
 var MODE_DRIFT = 1

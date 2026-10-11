@@ -7,7 +7,8 @@ appear in the launcher without a firmware flash.
 
 - **Reflex** — the original scripted timing game.
 - **Fishing** — use the joystick's X axis to keep the blue dot inside the
-  moving green bar. Staying inside earns points, with a bonus for precision.
+  moving green bar. Staying inside earns 3 points per second at the edge,
+  increasing linearly to 5 at the centre; outside the bar earns no points.
   Leaving it for 1.2 seconds costs one of three lives; the bar gets faster and
   more erratic over 45 seconds. Press A after game over to restart.
 
