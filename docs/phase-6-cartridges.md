@@ -103,7 +103,8 @@ beam.score(add)                           -- accumulate; engine files it on exit
 beam.reset_score()                        -- preserve highscore in RAM, reset run to zero
 beam.highscore()                          -- NEW: read this cartridge's own highscore
 beam.show_score(elapsed_ms)               -- the engine-drawn binary reveal
-beam.raw_pixel(index, color, intensity)   -- NEW: bypass normalised coords, for UI chrome (life dots)
+beam.show_lives(lives)                    -- shared green life dots at the far end
+beam.raw_pixel(index, color, intensity)   -- bypass normalised coords for custom UI
 beam.exit()                               -- return to launcher
 
 beam.log(msg)                             -- Serial, for cartridge development
@@ -116,6 +117,18 @@ on every retry. It never erases highscores. If the record cannot be retained,
 the reset raises a script error rather than discarding the score.
 This API requires the updated firmware; update the engine before installing
 the revised Reflex cartridge. Fishing uses the same reset in its local cartridge.
+
+Call `beam.show_lives(lives)` after drawing the playfield in `render()`. It
+draws one pure-green LED per remaining life at 35% intensity, anchored at the
+logical far end and mirrored by display reversal. Zero draws nothing; it does
+not clear the playfield, so games should clear/redraw each frame. Counts must
+be non-negative integers; invalid arguments raise a script error. Counts beyond
+the pixel capacity are clipped with a serial warning. Games own their life
+count and may omit the indicators during game-over score reveals.
+
+**Firmware compatibility:** updated Reflex, Fishing and local Obstacles now
+require `beam.show_lives()`. Flash the updated firmware before installing these
+cartridges. Older cartridges using `raw_pixel()` remain supported.
 
 **Colours cross the boundary as one packed `0xRRGGBB` int**, not three
 separate r/g/b arguments. This matches how a script author would actually

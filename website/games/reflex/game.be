@@ -14,7 +14,6 @@ var kDotColor = 0xFFFFFF
 var kZoneColor = 0x00FF28
 var kHitColor = 0x8CFF8C
 var kMissColor = 0xFF281E
-var kLifeColor = 0x00FF5A
 
 # STATE_* mirror the native ReflexScene::State enum, kept as plain ints since
 # Berry has no enum type worth the ceremony for four values used only here.
@@ -181,9 +180,5 @@ def render()
     beam.pixel(stopped_at, color, fade)
   end
 
-  var i = 0
-  while i < lives
-    beam.raw_pixel(beam.pixel_count() - 1 - i, kLifeColor, 0.35)
-    i += 1
-  end
+  beam.show_lives(lives)
 end

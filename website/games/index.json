@@ -5,16 +5,16 @@
       "title": "Fishing",
       "color": "ffa000",
       "url": "https://beamboy.ch/games/fishing/game.be",
-      "sha256": "d9179760c92b1975a5e13fd236f8afbf867a36406aaaa4f6a37ef34d1ebcff37",
-      "size": "8266"
+      "sha256": "596b26ce7195625b22b4a66431ede4720e85c13d54cee2bcde55d0a54cd1f543",
+      "size": "8117"
     },
     {
       "id": "reflex",
       "title": "Reflex",
       "color": "ff00aa",
       "url": "https://beamboy.ch/games/reflex/game.be",
-      "sha256": "cb90240ea900a16f60c6e47c77433064840c02aada3ff4c6c0fd3df16e75c537",
-      "size": "4403"
+      "sha256": "762e603057a1606c42973ebd1625e7b72fb5bd8dcb0c9075d0d44165734cd8c9",
+      "size": "4290"
     }
   ]
 }

@@ -143,6 +143,55 @@ void test_reversal_mirrors_the_spaced_readout(void) {
   for (uint16_t i = 0; i < 50; i += 2) assertBlack(engine.display(), i);
 }
 
+void test_lives_are_green_at_far_end_and_preserve_playfield(void) {
+  Engine engine;
+  Display& display = engine.display();
+  display.setBrightness(128);
+  display.clear();
+  display.rawPixel(4, colors::kWhite);
+  engine.renderLives(3);
+  display.present();
+  assertWhite(display, 4, 128);
+  for (uint16_t i = 47; i < 50; ++i) {
+    TEST_ASSERT_EQUAL_UINT8(0, display.shownPixel(i).R);
+    TEST_ASSERT_EQUAL_UINT8(44, display.shownPixel(i).G);
+    TEST_ASSERT_EQUAL_UINT8(0, display.shownPixel(i).B);
+  }
+  assertBlack(display, 46);
+  display.clear();
+  engine.renderLives(1);
+  display.present();
+  assertBlack(display, 48);
+  TEST_ASSERT_EQUAL_UINT8(44, display.shownPixel(49).G);
+  display.clear();
+  engine.renderLives(0);
+  display.present();
+  for (uint16_t i = 0; i < 50; ++i) assertBlack(display, i);
+}
+
+void test_lives_reverse_and_respect_brightness_and_capacity(void) {
+  Engine engine;
+  Display& display = engine.display();
+  display.setReversed(true);
+  display.setShake(0.5f);
+  for (uint8_t level : {uint8_t{8}, uint8_t{64}, uint8_t{128}}) {
+    display.setBrightness(level);
+    display.clear();
+    engine.renderLives(2);
+    display.present();
+    const uint8_t expected = (88 * level + 127) / 255;
+    TEST_ASSERT_EQUAL_UINT8(expected, display.shownPixel(0).G);
+    TEST_ASSERT_EQUAL_UINT8(expected, display.shownPixel(1).G);
+    assertBlack(display, 2);
+    assertBlack(display, 49);
+  }
+  engine.renderLives(UINT32_MAX);
+  display.present();
+  for (uint16_t i = 0; i < 50; ++i) {
+    TEST_ASSERT_EQUAL_UINT8(44, display.shownPixel(i).G);
+  }
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_five_is_colored_white_colored_with_dark_spacers);
@@ -151,5 +200,7 @@ int main(int, char**) {
   RUN_TEST(test_every_one_bit_is_colored_and_nibbles_stay_grouped);
   RUN_TEST(test_overflow_alternates_instead_of_truncating_and_recovers);
   RUN_TEST(test_reversal_mirrors_the_spaced_readout);
+  RUN_TEST(test_lives_are_green_at_far_end_and_preserve_playfield);
+  RUN_TEST(test_lives_reverse_and_respect_brightness_and_capacity);
   return UNITY_END();
 }

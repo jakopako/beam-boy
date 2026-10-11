@@ -28,6 +28,18 @@ float __attribute__((noinline)) bitIntensity(uint16_t bit, uint32_t revealed,
 
 }  // namespace
 
+void Engine::renderLives(uint32_t lives) {
+  const uint16_t pixels = display_.pixelCount();
+  if (lives > pixels) {
+    Serial.println("[lives] count exceeds display capacity; clipping indicators");
+    lives = pixels;
+  }
+  const Color color = colors::kGreen.scaled(0.35f);
+  for (uint16_t i = 0; i < lives; ++i) {
+    display_.rawPixel(pixels - 1 - i, color);
+  }
+}
+
 void Engine::renderScore(uint32_t score, uint32_t elapsed_ms, bool instant) {
   // Own the entire readout, including dark spacers and unrevealed slots.
   display_.clear();

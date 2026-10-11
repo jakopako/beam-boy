@@ -252,11 +252,16 @@ int beam_show_score(bvm* vm) {
   be_return_nil(vm);
 }
 
-// Bypasses the normalised coordinate space to address one pixel by index --
-// used for small engine-style chrome like life indicators, matching
-// Display::rawPixel's own "not for games, but for UI" framing. Exposed to
-// scripts anyway (unlike rawPixel's C++ comment suggests) since a scripted
-// cartridge has no other way to draw fixed UI at the far end of the strip.
+int beam_show_lives(bvm* vm) {
+  if (be_top(vm) != 1 || !be_isint(vm, 1) || be_toint(vm, 1) < 0) {
+    be_raise(vm, "value_error", "beam.show_lives() requires a non-negative integer");
+  }
+  engine().renderLives(static_cast<uint32_t>(be_toint(vm, 1)));
+  be_return_nil(vm);
+}
+
+// Bypasses normalised coordinates for custom UI. Standard life indicators
+// should use show_lives() instead.
 int beam_raw_pixel(bvm* vm) {
   const uint16_t index = static_cast<uint16_t>(argInt(vm, 1, 0));
   const Color color = colorFromPacked(argInt(vm, 2));
@@ -360,6 +365,10 @@ void bindBeamApi(bvm* vm) {
 
   be_pushntvfunction(vm, beam_raw_pixel);
   be_setmember(vm, -2, "raw_pixel");
+  be_pop(vm, 1);
+
+  be_pushntvfunction(vm, beam_show_lives);
+  be_setmember(vm, -2, "show_lives");
   be_pop(vm, 1);
 
   be_pushntvfunction(vm, beam_log);

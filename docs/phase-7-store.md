@@ -5,6 +5,10 @@ appear in the launcher without a firmware flash.
 
 ## Published games
 
+The current Reflex and Fishing cartridges require firmware with
+`beam.show_lives()`. Flash the updated engine before installing/updating them;
+the store does not negotiate API versions.
+
 - **Reflex** — the original scripted timing game.
 - **Fishing** — use the joystick's X axis to keep the blue dot inside the
   moving green bar. Staying inside earns 3 points per second at the edge,

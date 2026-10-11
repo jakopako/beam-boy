@@ -54,9 +54,62 @@ consoles running older firmware.
   can install is bounded by flash rather than RAM.
 - Because the file is re-read on every launch, editing `game.be` and running
   `uploadfs` picks up the change without a firmware flash.
-- `games/fishing/` is the Fishing cartridge: use the joystick's X axis to keep
-  the blue dot inside the moving green bar. It is also published in
-  `website/games/fishing/` and listed in the store index.
+- Fishing is available from the store in `website/games/fishing/`; it is no
+  longer bundled in this local filesystem image.
+- `games/obstacles/` is a **local-only prototype**, not yet in the store.
+  The white player stays near the controller end. Press **A** for a timed
+  jump over **orange** obstacles; hold **B** to duck **cyan** obstacles.
+  The player stays the same size and position: white at 25% intensity when
+  standing, orange at full intensity while jumping, and cyan at 10% while
+  ducking. These intensities remain subject to the device's brightness cap.
+  Jump takes priority if both buttons are pressed.
+  Life indicators use the shared `beam.show_lives()` API: green at 35%
+  intensity at the far end. Flash the updated firmware before uploading these
+  cartridges; older firmware does not provide this API.
+  Three lives, one point per obstacle cleared; speed increases with clears.
+  Up to four obstacles can approach together, entering gradually from beyond
+  the far end rather than appearing all at once. Orange obstacles vary in length
+  but take at most 0.28 seconds to pass, within the 0.65-second jump. Cyan
+  obstacles can be longer; hold B until their trailing edge clears the player.
+  Points are awarded only after the entire obstacle passes. Gaps allow time
+  to land, recover and switch actions even as the game speeds up.
+  A restarts after game over. The stick's normal pause/exit controls still apply.
+
+To test Obstacles on the Feather, run from `beam-boy-hw`:
+
+```powershell
+pio run -e adafruit_feather_esp32s3_nopsram -t uploadfs
+```
+
+**This replaces the whole LittleFS data image**, not just Obstacles: back up
+anything you need first. Store-installed games and saved settings/highscores
+not included in this folder will be overwritten. Reset the board afterwards
+so the launcher rescans the cartridges.
+
+### Obstacles host tests
+
+The tests execute the actual cartridge in the vendored Berry VM, with mocked
+input and drawing. They cover both obstacle types, full-length collisions,
+jump timing, duck release, scoring, lives, restart, queue spacing and 30,000
+frames, including successful play through the full speed ramp.
+From the repository root, with GCC on PATH:
+
+```powershell
+$sources = Get-ChildItem beam-boy-hw\lib\berry\src\*.c |
+    Where-Object { $_.Name -ne 'be_filelib.c' } |
+    ForEach-Object { $_.FullName }
+$runner = Join-Path $env:TEMP (([System.IO.Path]::GetRandomFileName()) + '.exe')
+try {
+    gcc -std=c99 -O2 -DCOMPILE_BERRY_LIB `
+        -Ibeam-boy-hw\lib\berry\generate -Ibeam-boy-hw\lib\berry\src `
+        $sources tools\test_cartridge.c -o $runner
+    if ($LASTEXITCODE -ne 0) { throw 'Cartridge test build failed' }
+    & $runner tools\obstacles_test.be beam-boy-hw\data\games\obstacles\game.be
+    if ($LASTEXITCODE -ne 0) { throw 'Cartridge tests failed' }
+} finally {
+    if (Test-Path -LiteralPath $runner) { Remove-Item -LiteralPath $runner }
+}
+```
 
 ## Store index
 

@@ -7,7 +7,6 @@ var kStartingLives = 3
 var kBarColor = 0x00FF28
 var kDotColor = 0x1E90FF
 var kDangerColor = 0xFF281E
-var kLifeColor = 0x00FF5A
 
 # Half the bar's width in normalised units; kept constant -- the challenge
 # comes from the bar's movement getting faster and more erratic, not from a
@@ -296,12 +295,6 @@ def update(dt)
   end
 end
 
-def render_lives()
-  var i = 0
-  while i < lives
-    beam.raw_pixel(beam.pixel_count() - 1 - i, kLifeColor, 0.35)
-    i += 1
-  end
 end
 
 def render()
@@ -335,5 +328,5 @@ def render()
     beam.pixel(dot_pos, color, 1.0)
   end
 
-  render_lives()
+  beam.show_lives(lives)
 end
