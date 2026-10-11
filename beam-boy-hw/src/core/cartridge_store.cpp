@@ -157,20 +157,9 @@ bool CartridgeStore::loadMeta(const char* dir_name, Cartridge& out) {
     return false;
   }
 
-  // Uniqueness among folders is not enough: nothing stops a cartridge folder
-  // being named "wormfight" and colliding with a *built-in* game's id, or
-  // "store"/"network" and colliding with a fixed utility entry. Since
-  // highscores are keyed by id string, that would let a downloaded cartridge
-  // read and overwrite a built-in's record, or shadow a launcher-critical
-  // utility scene. Refuse the id rather than let content from the games repo
-  // shadow anything shipped in the firmware.
-  for (uint8_t i = 0; i < games::kGameCount; i++) {
-    if (strcmp(dir_name, games::kGames[i].id) == 0) {
-      Serial.print("[games] id collides with a built-in game, skipping: ");
-      Serial.println(dir_name);
-      return false;
-    }
-  }
+  // A cartridge must not shadow a fixed utility scene. Since highscores are
+  // keyed by id string, refuse the id rather than let downloaded content
+  // collide with a launcher-critical scene.
   for (uint8_t i = 0; i < games::kUtilityCount; i++) {
     if (strcmp(dir_name, games::kUtilities[i].id) == 0) {
       Serial.print("[games] id collides with a utility entry, skipping: ");
@@ -225,7 +214,7 @@ bool CartridgeStore::loadMeta(const char* dir_name, Cartridge& out) {
 
 void CartridgeStore::scan() {
   count_ = 0;
-  const uint8_t installed_limit = maxInstalledGames(games::kGameCount);
+  const uint8_t installed_limit = kMaxCartridges;
 
   File dir = LittleFS.open(kGamesDir, "r");
   if (!dir || !dir.isDirectory()) {
@@ -267,17 +256,6 @@ void GameList::build(CartridgeStore& store) {
   count_ = 0;
   game_count_ = 0;
 
-  // Built-ins first, in their existing order, so their physical launcher
-  // positions never move. Storage now resolves the last played game by id;
-  // the legacy index exists only as a migration fallback.
-  for (uint8_t i = 0;
-       i < games::kGameCount && game_count_ < kMaxGames &&
-       count_ < kMaxEntries;
-       i++) {
-    entries_[count_++] = games::kGames[i];
-    game_count_++;
-  }
-
   for (uint8_t i = 0;
        i < store.count() && game_count_ < kMaxGames && count_ < kMaxEntries;
        i++) {
@@ -299,18 +277,16 @@ void GameList::build(CartridgeStore& store) {
     // must own the pause/exit gesture for them, so a downloaded game can never
     // trap the player.
     entry.is_game = true;
-    // Marks this entry as deletable via the launcher's hold-B gesture; a
-    // built-in or utility entry never carries this flag.
+    // Marks this entry as deletable via the launcher's hold-B gesture; utility
+    // entries never carry this flag.
     entry.is_installed = true;
 
     entries_[count_++] = entry;
     game_count_++;
   }
 
-  // Store and Network always come last, in that order, after every built-in
-  // and installed cartridge -- see game_registry.h. Appended here rather than
-  // folded into kGames, precisely so the loop above can insert cartridges
-  // between the two groups.
+  // Utilities follow all installed games. Only Settings is exposed directly
+  // by the launcher; the other utilities are reached through it.
   for (uint8_t i = 0; i < games::kUtilityCount && count_ < kMaxEntries; i++) {
     entries_[count_++] = games::kUtilities[i];
   }

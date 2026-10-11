@@ -43,12 +43,13 @@ appear in the launcher without a firmware flash.
 - **Immediate availability:** after a successful install, `CartridgeStore` is
   rescanned and `gameList()` is rebuilt, so the new cartridge is available in
   the launcher without rebooting.
-- **Nine-game capacity:** built-in and installed games share nine physical
-  launcher slots. A new install is rejected before any download/write when
-  all nine are occupied, with nine amber capacity markers and a precise serial
-  message; after the short indication the Store returns to browsing, so
-  updates remain installable at capacity. Updating an existing id never
-  consumes another slot. Valid sideloaded overflow is logged and ignored.
+- **Nine-game capacity:** installed script games share nine physical launcher
+  slots; there are no built-in games. A new install is rejected before any
+  download/write when all nine are occupied, with nine amber capacity markers
+  and a precise serial message; after the short indication the Store returns
+  to browsing, so updates remain installable at capacity. Updating an existing
+  id never consumes another slot. Valid sideloaded overflow is logged and
+  ignored.
 - **Update indicator:** each installed cartridge's `meta.json` now also records
   the `sha256` verified at install time. After every index fetch and every
   install, the Store recomputes, per index entry, whether it is not installed,

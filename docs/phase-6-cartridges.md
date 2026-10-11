@@ -1,5 +1,9 @@
 # Phase 6 — Games as scripts
 
+Current product state: there are no firmware-built games. Wormfight's native
+scene has been removed; its scripted version is deferred. All playable games
+are installed cartridges, while the firmware registry contains utility scenes.
+
 Goal: prove the cartridge model end to end -- a game written in Berry, running
 through a bound `beam` API, indistinguishable in play from its native
 equivalent. Reflex was the target: small enough to port completely in one
@@ -19,19 +23,16 @@ in docs/phase-5-vm-bakeoff.md).
   it exactly the way `Engine` calls a native `Scene`. One scene class, reused
   for every scripted game -- adding a second cartridge means adding a second
   `ScriptScene` instance with different source, not a new C++ class.
-- **`src/scenes/reflex_script.cpp`** -- Reflex, ported line-for-line from
-  `scenes/reflex_scene.cpp`. Registered in the launcher as **"Reflex (VM)"**,
-  a separate entry (and highscore id) from the native "Reflex", so the two can
-  be played side by side rather than one replacing the other.
+- **Reflex cartridge** -- the Berry source and metadata live in
+  `beam-boy-hw/data/games/reflex/` and are installed from LittleFS like any
+  other game. There is no native Reflex launcher entry.
 - **`src/core/cartridge_store.h`/`.cpp`** -- scans `/games/` on LittleFS at
-  boot and merges what it finds with the built-in registry into one list
-  (`gameList()`). This is what makes an installed game *data*: the launcher,
-  the engine's score filing and `beam.highscore()` all read the merged list and
-  none of them know which entries came from flash.
+  boot and builds the game list (`gameList()`). All games are script
+  cartridges; only utility scenes are compiled into the firmware. The
+  launcher, engine score filing and `beam.highscore()` all use this same list.
 - **`src/core/json_lite.h`/`.cpp`** -- a deliberately strict reader for
   `meta.json`. See "Parsing metadata" below for why it is hand-rolled.
-- **`data/games/reflex/`** -- the same Reflex script as an actual installed
-  cartridge, to exercise the filesystem path alongside the baked-in one.
+- **`data/games/reflex/`** -- the Reflex script as an installed cartridge.
 
 ## Cartridges on the filesystem
 
@@ -49,23 +50,19 @@ choice:
   already makes folder names unique, so ids are unique for free. Trusting the
   file would let two cartridges claim one id and silently share a highscore
   slot. The `id` field is kept in the file for readability and ignored.
-- **A cartridge may not take a built-in's id.** Folder uniqueness only stops
-  two *cartridges* colliding -- nothing stopped a downloaded folder called
-  `reflex` from shadowing the built-in and reading/overwriting its highscore.
-  `loadMeta()` rejects those explicitly. This mattered enough to catch in
-  review: once `/games/` is fed from the internet, it is an untrusted-content
-  bug, not a hypothetical.
-- **Built-ins come first in the launcher, cartridges after.** `Storage` keeps
-  the last-played *index*, so a stable ordering keeps the console reopening on
-  the game you actually last played after an install.
+- **A cartridge may not take a utility's id.** `loadMeta()` rejects folder
+  names such as `store` or `network` so a downloaded game cannot shadow a
+  launcher-critical utility.
+- **Cartridges fill the launcher game positions.** Persisted selection resolves
+  by stable id, so installing or deleting a cartridge cannot redirect it to an
+  unrelated entry.
 - **Script source is not held resident.** `game.be` is read on launch and freed
   on exit; only metadata stays in RAM. So the number of installed games is
   bounded by flash, not RAM, and editing a script + `uploadfs` picks up the
   change with no firmware flash.
-- **`Storage::kMaxScores` had to grow from 12 to 24.** Built-ins and cartridges
-  compete for one score table; 6 built-ins + 12 cartridges could exceed 12
-  distinct ids, and the 13th game's first record would have been silently
-  dropped. This bumps the save version, so existing highscores reset once.
+- **`Storage::kMaxScores` is bounded independently of the launcher.** The
+  score table has room for more ids than the nine simultaneously visible game
+  slots, while remaining within the fixed storage format.
 
 ### Parsing metadata
 

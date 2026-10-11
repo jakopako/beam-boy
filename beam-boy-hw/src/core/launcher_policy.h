@@ -18,10 +18,6 @@ constexpr bool canInstallGame(uint8_t game_count, bool already_installed) {
   return already_installed || game_count < kMaxGames;
 }
 
-constexpr uint8_t maxInstalledGames(uint8_t built_in_count) {
-  return built_in_count < kMaxGames ? kMaxGames - built_in_count : 0;
-}
-
 // Launcher selection is dense (games followed immediately by Settings), while
 // its physical representation deliberately is not: Settings stays at slot 9
 // and any positions between it and the last game remain dark.

@@ -2,12 +2,9 @@
 
 // Beam Boy — installed cartridges on the filesystem.
 //
-// This is the step that makes an installed game *data* rather than code. The
-// launcher's built-in table is fixed at build time; this scans `/games/` at
-// boot and turns every valid folder found there into another launcher entry.
-// Nothing above this layer knows the difference -- which is the whole point,
-// because Phase 7's downloader then only has to write files into `/games/` for
-// a game to appear.
+// Games are script cartridges; this scans `/games/` at boot and turns every
+// valid folder found there into a launcher entry. Only utility scenes are
+// compiled into the firmware.
 //
 // Layout, one folder per game:
 //
@@ -16,8 +13,8 @@
 //
 // The folder name is authoritative for the id, not meta.json's `id` field --
 // see CartridgeStore::scan(). Two cartridges cannot collide, because two
-// folders cannot share a name; a cartridge colliding with a *built-in* game's
-// id is rejected explicitly in loadMeta().
+// folders cannot share a name; a cartridge colliding with a utility id is
+// rejected explicitly in loadMeta().
 //
 // Deliberate limits, since this runs on a device with a fixed RAM budget and
 // will eventually be fed by files from the internet:
@@ -33,14 +30,13 @@
 #include <Arduino.h>
 
 #include "core/game_registry.h"
+#include "core/launcher_policy.h"
 #include "vm/script_scene.h"
 
 namespace beamboy {
 
-// Physical storage for cartridge metadata. The effective scan/install limit is
-// lower whenever built-in games occupy some of the launcher's kMaxGames slots.
-// Keeping the array at kMaxGames avoids coupling its compile-time size to
-// kGameCount, which is defined in another translation unit.
+// Physical storage for cartridge metadata matches the launcher's nine game
+// slots.
 constexpr uint8_t kMaxCartridges = kMaxGames;
 
 // Longest cartridge id, including the NUL. Must not exceed Storage's
@@ -102,17 +98,16 @@ class CartridgeStore {
   uint8_t count_ = 0;
 };
 
-// The registry the launcher actually reads: the built-in kGames table followed
-// by everything CartridgeStore found, flattened into one list.
+// The registry the launcher actually reads: cartridges found by
+// CartridgeStore followed by the utility scenes, flattened into one list.
 //
 // A single list rather than the launcher merging two is what keeps every
 // existing consumer -- launcher, engine score filing, beam.highscore() -- from
 // having to learn that filesystem games exist.
 class GameList {
  public:
-  // Builds the merged list. Built-ins come first so their launcher positions
-  // stay fixed; persisted selection resolves by stable id, so installing or
-  // deleting a cartridge cannot redirect it to an unrelated entry.
+  // Builds the list. Persisted selection resolves by stable id, so installing
+  // or deleting a cartridge cannot redirect it to an unrelated entry.
   void build(CartridgeStore& store);
 
   uint8_t count() const { return count_; }

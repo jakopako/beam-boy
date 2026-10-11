@@ -17,7 +17,6 @@
 #include <Arduino.h>
 
 #include "display.h"
-#include "launcher_policy.h"
 
 namespace beamboy {
 
@@ -44,21 +43,14 @@ struct GameEntry {
   // entry sets the flag explicitly, so a default would be unused anyway.
   bool is_game;
 
-  // True only for entries GameList::build() copied in from CartridgeStore --
-  // never for a built-in or a utility scene. The launcher uses this to decide
-  // whether holding B long enough may delete the entry: a built-in game or
-  // Store/Network itself must never be removable this way. Also given no
+  // True only for entries GameList::build() copied in from CartridgeStore.
+  // The launcher uses this to decide whether holding B long enough may delete
+  // the entry; utility scenes must never be removable this way. Also given no
   // default initializer, for the same reason as is_game above.
   bool is_installed;
 };
 
 namespace games {
-
-// All games built into the firmware. These come first in the launcher; games
-// installed on the filesystem are appended after them (see cartridge_store.h),
-// so installing or deleting a cartridge never renumbers a built-in.
-extern const GameEntry kGames[];
-extern const uint8_t kGameCount;
 
 // Utilities are kept in the registry so the engine can apply its common
 // hold-B return gesture, but only Settings is exposed by the launcher. Store

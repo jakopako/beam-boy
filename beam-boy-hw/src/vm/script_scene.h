@@ -18,9 +18,7 @@
 // is what makes an installed game data rather than code -- see
 // core/cartridge_store.h.
 //
-// Anything a script needs to persist across calls is its own global state --
-// Berry has no per-scene instance here, matching how Wormfight/Reflex keep
-// their own member fields today.
+// Anything a script needs to persist across calls is its own global state.
 //
 //   Nav button / B    handled by the engine (pause, exit) exactly as for a
 //                      native game -- ScriptScene does not see them unless

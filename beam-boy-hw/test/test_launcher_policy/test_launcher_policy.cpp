@@ -38,12 +38,6 @@ void test_new_installs_stop_at_nine_but_updates_continue(void) {
   TEST_ASSERT_TRUE(canInstallGame(9, true));
 }
 
-void test_built_in_games_reduce_available_cartridge_slots(void) {
-  TEST_ASSERT_EQUAL_UINT8(8, maxInstalledGames(1));
-  TEST_ASSERT_EQUAL_UINT8(0, maxInstalledGames(9));
-  TEST_ASSERT_EQUAL_UINT8(0, maxInstalledGames(10));
-}
-
 void test_navigation_steps_directly_between_last_game_and_settings(void) {
   TEST_ASSERT_EQUAL_UINT8(3, moveLauncherSelection(2, 3, 1));
   TEST_ASSERT_EQUAL_UINT8(2, moveLauncherSelection(3, 3, -1));
@@ -67,7 +61,6 @@ int main(int, char**) {
   RUN_TEST(test_settings_is_always_at_the_final_slot);
   RUN_TEST(test_empty_slots_between_games_and_settings_have_pixel_ranges);
   RUN_TEST(test_new_installs_stop_at_nine_but_updates_continue);
-  RUN_TEST(test_built_in_games_reduce_available_cartridge_slots);
   RUN_TEST(test_navigation_steps_directly_between_last_game_and_settings);
   RUN_TEST(test_rebuild_keeps_settings_selected_at_its_new_dense_index);
   RUN_TEST(test_rebuild_clamps_a_removed_last_game_to_the_previous_game);

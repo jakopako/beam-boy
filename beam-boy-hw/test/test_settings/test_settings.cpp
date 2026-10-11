@@ -37,7 +37,7 @@ void test_placeholder_preserves_preferences_and_credentials(void) {
   engine.input().begin();
   engine.storage().begin();
   engine.storage().setBrightness(128);
-  engine.storage().submitScore("wormfight", 42);
+  engine.storage().submitScore("testgame", 42);
   engine.storage().commit();
   beamboy_host::files()["/net.cfg"] = "test-network\ntest-password\n";
   const auto saved_files = beamboy_host::files();

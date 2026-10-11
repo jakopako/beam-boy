@@ -1,9 +1,8 @@
 // Beam Boy — firmware entry point.
 //
 // main.cpp does nothing but wire the pieces together and pump the frame loop;
-// all behaviour lives in scenes. Games come from two places, merged into one
-// list: the built-in registry, and script cartridges installed under /games/
-// on the filesystem (see core/cartridge_store.h).
+// all behaviour lives in scenes. Games are script cartridges installed under
+// /games/ on the filesystem (see core/cartridge_store.h).
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -113,21 +112,10 @@ void setup() {
   }
   Serial.print("Games:      ");
   Serial.print(beamboy::gameList().gameCount());
-  Serial.print(" (");
-  Serial.print(beamboy::games::kGameCount);
-  Serial.print(" built in, ");
-  Serial.print(cartridge_store.count());
-  Serial.println(" installed)");
+  Serial.println(" installed");
   for (uint8_t i = 0; i < beamboy::gameList().gameCount(); i++) {
     const beamboy::GameEntry& game = beamboy::gameList().at(i);
-    // Mark which entries came off the filesystem, so a cartridge that failed
-    // to load is obvious here rather than only in the [games] lines above.
-    // Installed cartridges sit after the built-ins; utilities are hidden
-    // behind the fixed Settings endpoint.
-    const bool installed = i >= beamboy::games::kGameCount &&
-                            i < beamboy::games::kGameCount +
-                                    cartridge_store.count();
-    Serial.print(installed ? "  * " : "  - ");
+    Serial.print("  * ");
     Serial.print(game.title);
     Serial.print("  (best ");
     Serial.print(engine.storage().highscore(game.id));

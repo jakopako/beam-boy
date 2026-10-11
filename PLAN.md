@@ -479,8 +479,10 @@ design. See [`docs/phase-4-wifi.md`](docs/phase-4-wifi.md)._
    Wormfight itself is not yet ported.
 3. ✅ Launcher enumerates `/games/*/meta.json` — installed games are now _data_, not code.
    `src/core/cartridge_store.*` scans the filesystem at boot and merges what it
-   finds with the built-in registry into one list, so the launcher, score filing
-   and `beam.highscore()` are unchanged. Format is documented in
+   finds with the utility registry into one list, so the launcher, score filing
+   and `beam.highscore()` use the same cartridge interface. There are no
+   firmware-built games; Wormfight's native implementation has been removed,
+   with a scripted version deferred. Format is documented in
    `beam-boy-hw/data/README.md`; `data/games/reflex/` is a working example.
 4. ✅ **Sandboxing:** a per-call time budget (8 ms, half the 60 fps frame budget) and a VM memory
    ceiling (64 KB) so a buggy game can't hang the console or exhaust RAM — on overrun, the
@@ -596,21 +598,13 @@ it over the air is item 5.)_
 
 ✅ _Visible result: fully cordless operation, an on-demand battery and charge gauge in the launcher, low-battery warning during play, and zero risk of flash corruption when the battery runs out._
 
-### Phase 9 — Enclosure _(2–4 days, iterative)_
+### Phase 9 — Enclosure ✅ _(2–4 days, iterative)_
 
 > _Goal: a real object._
 
-1. Design a handle/grip that holds the MCU, LiPo and controls, with the tube exiting
-   through a strain-relieved gland. Consider a spine or channel supporting the 1 m tube.
-2. **The USB-C port must be reachable without opening the case** — it is both the charge port
-   and the recovery/flashing port. Model a chamfered cutout aligned to the board's connector;
-   this is the single most common thing to get wrong on the first print.
-3. Give the LiPo a snug pocket with no sharp edges or screw bosses against the pouch, and
-   route wires so the cell is never compressed or flexed. Do not glue it in — it should be
-   replaceable after a few hundred cycles.
-4. Place the power slide switch so it can't be knocked accidentally in a bag.
-5. Print, test the feel, iterate. Expect **three revisions** — mainly on button and stick placement
-   and USB port alignment.
+The current enclosure is accepted for **Beam Boy v1**. The case is good enough for this
+version; further fit-and-finish changes or enclosure revisions can be considered after v1
+and are not release blockers.
 
 ✅ _Visible result: Beam Boy v1._
 
@@ -626,9 +620,8 @@ it over the air is item 5.)_
    - slots **0–8** are games, left-aligned in registry order;
    - slot **9** is always **Settings**, anchored at the physical end of the tube;
    - unused slots between the last game and Settings remain completely dark.
-2. ✅ The nine-game limit counts **all playable games together**: built-in games plus installed
-   cartridges. With one built-in game, for example, at most eight additional cartridges fit.
-   Store, WiFi and firmware update are utilities and do not consume game slots.
+2. ✅ The nine-game limit counts all installed script cartridges. There are no
+   built-in games; Store, WiFi and firmware update do not consume game slots.
 3. ✅ Remove Store and Network from the launcher-facing list. Settings becomes the only
    launcher utility entry and owns access to all non-game flows. Store and Network remain hidden
    engine registry entries so the shared utility exit path can identify them, but they are never
@@ -990,7 +983,7 @@ beam-boy/
 | 6 Script games      | 2–3 d  | 14½ d      |
 | 7 Store             | 2 d    | 16½ d      |
 | 8 Power & Battery   | 1–2 d  | 18 d       |
-| 9 Enclosure         | 2–4 d  | 21 d       |
+| 9 Enclosure ✅      | 2–4 d  | 21 d       |
 | 10 Polish & Settings UX | TBD | TBD      |
 | 11 Firmware updates | TBD    | TBD        |
 

@@ -22,8 +22,8 @@ struct Fixture {
     engine.display().begin();
     engine.storage().begin();
     engine.storage().setBrightness(stored);
-    engine.storage().submitScore("wormfight", 42);
-    engine.storage().setLastGameId("wormfight");
+    engine.storage().submitScore("testgame", 42);
+    engine.storage().setLastGameId("testgame");
     engine.storage().commit();
     engine.display().setBrightness(brightness::fromStored(stored));
     scene.enter(engine);
@@ -203,8 +203,8 @@ void test_adjustments_stay_in_ram_until_a_confirms(void) {
   TEST_ASSERT_TRUE(reloaded.begin());
   TEST_ASSERT_EQUAL_UINT8(brightness::kDefault - 2 * brightness::kStep,
                          brightness::fromStored(reloaded.brightness()));
-  TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("wormfight"));
-  TEST_ASSERT_EQUAL_STRING("wormfight", reloaded.lastGameId());
+  TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("testgame"));
+  TEST_ASSERT_EQUAL_STRING("testgame", reloaded.lastGameId());
   f.engine.display().present();
   TEST_ASSERT_EQUAL_UINT8(0, f.engine.display().shownPixel(0).R);
   TEST_ASSERT_TRUE(f.engine.display().shownPixel(0).G > 0);
@@ -246,7 +246,7 @@ void test_stick_click_restores_default_without_erasing_other_data(void) {
   reloaded.begin();
   TEST_ASSERT_EQUAL_UINT8(brightness::kDefault,
                          brightness::fromStored(reloaded.brightness()));
-  TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("testgame"));
 }
 
 void test_failed_save_keeps_pending_preference_and_shows_red(void) {

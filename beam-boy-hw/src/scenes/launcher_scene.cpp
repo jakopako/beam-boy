@@ -151,8 +151,8 @@ void LauncherScene::update(Engine& engine, float dt) {
   // the hold clears the threshold, so render() knows to show it.
   nav_hold_exceeded_ = input.heldFor(Input::kNavButton, kHighscoreHoldMs);
 
-  // Deleting only applies to installed cartridges -- a built-in or a utility
-  // scene (Store, Network) must never disappear from the launcher this way.
+  // Deleting only applies to installed cartridges; utility scenes must never
+  // disappear from the launcher this way.
   if (!deleting_ && selected_ < gameList().gameCount() &&
       selectedEntry().is_installed &&
       delete_hold_ms_ >= kDeleteHoldMs) {

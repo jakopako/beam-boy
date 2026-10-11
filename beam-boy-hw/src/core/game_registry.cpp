@@ -5,14 +5,12 @@
 #include "scenes/settings_scene.h"
 #include "scenes/store_scene.h"
 #include "scenes/update_firmware_scene.h"
-#include "scenes/wormfight_scene.h"
 
 namespace beamboy {
 namespace {
 
-// Static instances rather than heap allocation: the whole set of games is known
-// at build time, and a fixed layout keeps RAM usage predictable.
-WormfightScene wormfight;
+// Static instances rather than heap allocation keep utility scene storage
+// predictable.
 NetworkScene network;
 StoreScene store;
 BrightnessScene brightness;
@@ -22,19 +20,6 @@ UpdateFirmwareScene update_firmware;
 }  // namespace
 
 namespace games {
-
-const GameEntry kGames[] = {
-    // ids are storage keys for highscores -- never rename one.
-    // Accent colours are spread deliberately around the hue wheel (not chosen
-    // ad hoc) so adjacent launcher entries never share a colour family --
-    // easy to do by accident with blue, since it is the "default" tech colour.
-    {"wormfight", "Wormfight", Color(255, 40, 30), &wormfight, true,
-     false},  // red
-};
-
-const uint8_t kGameCount = sizeof(kGames) / sizeof(kGames[0]);
-static_assert(kGameCount <= kMaxGames,
-              "built-in games exceed the nine-game launcher capacity");
 
 // Utilities remain addressable by GameList so the engine can provide its
 // common hold-B return gesture. Only Settings is rendered by the launcher;

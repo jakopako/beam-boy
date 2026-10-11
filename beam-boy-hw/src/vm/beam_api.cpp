@@ -23,8 +23,8 @@ BeamApiContext* g_ctx = nullptr;
 // catching a runaway well before it becomes visible as a hang.
 constexpr uint32_t kMaxCallMicros = 8000;
 
-// VM memory ceiling. Generous relative to what Reflex/Wormfight actually use
-// (a script's own state is a handful of numbers), but tight enough that a
+// VM memory ceiling. Generous for normal games (a script's own state is a
+// handful of numbers), but tight enough that a
 // cartridge cannot quietly grow without bound (e.g. an accidentally unbounded
 // list) and starve the rest of the device of heap.
 constexpr size_t kMaxVmBytes = 64 * 1024;

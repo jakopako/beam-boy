@@ -404,10 +404,9 @@ void Engine::tick() {
   }
 
   if (current_game_ >= 0 && launcher_ != nullptr && is_game) {
-    // Exit is deliberately only available *while paused*. Games legitimately
-    // use long holds during play -- Wormfight charges on B for up to 1.1 s --
-    // so a bare hold-to-exit would fight the game's own controls. Requiring the
-    // pause first makes the two unambiguous.
+    // Exit is deliberately only available *while paused*. Games may use long
+    // holds during play, so a bare hold-to-exit would fight their own controls.
+    // Requiring the pause first makes the two unambiguous.
     if (input_.pressed(Input::kNavButton)) {
       paused_ = !paused_;
       exit_gesture_progress_ = 0.0f;
@@ -417,9 +416,7 @@ void Engine::tick() {
     if (paused_) {
       // The exit gesture must be *armed* by seeing B released after the pause
       // began. Without this, holdDuration() would report time accrued before
-      // the pause: pausing while mid-charge in Wormfight (B already held for
-      // ~1.1 s) would trip the 1.2 s exit on the very first paused frame and
-      // dump the player to the launcher without any gesture at all.
+      // the pause and could trip the exit gesture on the first paused frame.
       if (!exit_armed_) {
         if (!input_.held(Button::kB)) exit_armed_ = true;
         exit_gesture_progress_ = 0.0f;

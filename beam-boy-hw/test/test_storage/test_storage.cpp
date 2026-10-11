@@ -51,44 +51,44 @@ void tearDown(void) {}
 
 void test_erase_score_forgets_a_known_game(void) {
   Storage storage = freshStorage();
-  TEST_ASSERT_TRUE(storage.submitScore("wormfight", 42));
-  TEST_ASSERT_EQUAL_UINT32(42, storage.highscore("wormfight"));
+  TEST_ASSERT_TRUE(storage.submitScore("testgame", 42));
+  TEST_ASSERT_EQUAL_UINT32(42, storage.highscore("testgame"));
 
-  storage.eraseScore("wormfight");
+  storage.eraseScore("testgame");
 
-  TEST_ASSERT_EQUAL_UINT32(0, storage.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(0, storage.highscore("testgame"));
 }
 
 void test_erase_score_survives_a_save_reload(void) {
   Storage storage = freshStorage();
-  TEST_ASSERT_TRUE(storage.submitScore("wormfight", 42));
-  storage.eraseScore("wormfight");
+  TEST_ASSERT_TRUE(storage.submitScore("testgame", 42));
+  storage.eraseScore("testgame");
   storage.commit();
 
   Storage reloaded;
   reloaded.begin();
-  TEST_ASSERT_EQUAL_UINT32(0, reloaded.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(0, reloaded.highscore("testgame"));
 }
 
 void test_erase_score_does_not_disturb_other_games(void) {
   Storage storage = freshStorage();
-  TEST_ASSERT_TRUE(storage.submitScore("wormfight", 42));
+  TEST_ASSERT_TRUE(storage.submitScore("testgame", 42));
   TEST_ASSERT_TRUE(storage.submitScore("reflexfs", 7));
 
-  storage.eraseScore("wormfight");
+  storage.eraseScore("testgame");
 
-  TEST_ASSERT_EQUAL_UINT32(0, storage.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(0, storage.highscore("testgame"));
   TEST_ASSERT_EQUAL_UINT32(7, storage.highscore("reflexfs"));
 }
 
 void test_erase_score_on_an_unknown_game_is_a_harmless_no_op(void) {
   Storage storage = freshStorage();
-  TEST_ASSERT_TRUE(storage.submitScore("wormfight", 42));
+  TEST_ASSERT_TRUE(storage.submitScore("testgame", 42));
   storage.commit();
 
   storage.eraseScore("no-such-game");
 
-  TEST_ASSERT_EQUAL_UINT32(42, storage.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(42, storage.highscore("testgame"));
   TEST_ASSERT_FALSE(storage.dirty());
 }
 
@@ -97,8 +97,8 @@ void test_erase_score_on_an_unknown_game_is_a_harmless_no_op(void) {
 // of the "used" slots hold nothing.
 void test_erase_score_frees_its_slot_for_reuse(void) {
   Storage storage = freshStorage();
-  TEST_ASSERT_TRUE(storage.submitScore("wormfight", 42));
-  storage.eraseScore("wormfight");
+  TEST_ASSERT_TRUE(storage.submitScore("testgame", 42));
+  storage.eraseScore("testgame");
 
   TEST_ASSERT_TRUE(storage.submitScore("newgame", 1));
   TEST_ASSERT_EQUAL_UINT32(1, storage.highscore("newgame"));
@@ -123,7 +123,7 @@ void test_v2_save_migrates_without_losing_settings_or_scores(void) {
   legacy.brightness = 37;
   legacy.last_game = 2;
   legacy.score_count = 1;
-  strcpy(legacy.scores[0].game_id, "wormfight");
+  strcpy(legacy.scores[0].game_id, "testgame");
   legacy.scores[0].score = 81;
   const uint32_t sum = legacyChecksum(legacy);
 
@@ -136,14 +136,14 @@ void test_v2_save_migrates_without_losing_settings_or_scores(void) {
   TEST_ASSERT_EQUAL_UINT8(37, migrated.brightness());
   TEST_ASSERT_EQUAL_UINT8(2, migrated.lastGame());
   TEST_ASSERT_EQUAL_STRING("", migrated.lastGameId());
-  TEST_ASSERT_EQUAL_UINT32(81, migrated.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(81, migrated.highscore("testgame"));
   TEST_ASSERT_TRUE(migrated.dirty());
 
   migrated.commit();
   Storage reloaded;
   TEST_ASSERT_TRUE(reloaded.begin());
   TEST_ASSERT_EQUAL_UINT8(37, reloaded.brightness());
-  TEST_ASSERT_EQUAL_UINT32(81, reloaded.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(81, reloaded.highscore("testgame"));
   TEST_ASSERT_FALSE(reloaded.dirty());
 }
 

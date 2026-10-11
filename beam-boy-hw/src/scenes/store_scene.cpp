@@ -175,10 +175,7 @@ bool shaMatches(const uint8_t* digest, const char* expected_hex) {
   return true;
 }
 
-bool collidesWithBuiltIn(const char* id) {
-  for (uint8_t i = 0; i < games::kGameCount; i++) {
-    if (strcmp(id, games::kGames[i].id) == 0) return true;
-  }
+bool collidesWithUtility(const char* id) {
   for (uint8_t i = 0; i < games::kUtilityCount; i++) {
     if (strcmp(id, games::kUtilities[i].id) == 0) return true;
   }
@@ -198,7 +195,7 @@ bool shaTextEqual(const char* a, const char* b) {
 }
 
 bool installedGameVisible(const char* id) {
-  for (uint8_t i = games::kGameCount; i < gameList().gameCount(); i++) {
+  for (uint8_t i = 0; i < gameList().gameCount(); i++) {
     if (strcmp(gameList().at(i).id, id) == 0) return true;
   }
   return false;
@@ -479,8 +476,8 @@ bool StoreScene::installSelected(Engine& engine) {
   Serial.print(F("[store] installing "));
   Serial.println(entry.id);
 
-  if (collidesWithBuiltIn(entry.id)) {
-    fail("id collides with built-in");
+  if (collidesWithUtility(entry.id)) {
+    fail("id reserved for utility");
     return false;
   }
 

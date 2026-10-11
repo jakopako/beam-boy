@@ -12,7 +12,7 @@ void test_restart_clears_run_and_preserves_best_score_for_exit_commit(void) {
   Storage storage;
   TEST_ASSERT_TRUE(storage.begin());
   storage.setBrightness(128);
-  storage.submitScore("wormfight", 42);
+  storage.submitScore("testgame", 42);
   storage.commit();
   const auto saved_files = beamboy_host::files();
 
@@ -32,7 +32,7 @@ void test_restart_clears_run_and_preserves_best_score_for_exit_commit(void) {
   Storage reloaded;
   TEST_ASSERT_TRUE(reloaded.begin());
   TEST_ASSERT_EQUAL_UINT32(17, reloaded.highscore("reflex"));
-  TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("wormfight"));
+  TEST_ASSERT_EQUAL_UINT32(42, reloaded.highscore("testgame"));
   TEST_ASSERT_EQUAL_UINT8(128, reloaded.brightness());
 }
 
