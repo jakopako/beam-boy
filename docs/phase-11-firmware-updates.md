@@ -197,10 +197,10 @@ Measured on the Feather (2026-10-16, test build without WiFi or engine):
 
 | Measurement | Value |
 |---|---|
-| All signature tests | 6/6 pass |
+| All signature tests | 7/7 pass |
 | One P-256 verify | ~292 ms |
 | Peak extra heap during verify | ~5.2 KB (min free heap 337,588 → 332,276 bytes) |
-| Heap kept after the first verify | 444 bytes, likely one-time initialisation; `test_repeated_verifies_do_not_leak` checks that later calls keep nothing |
+| Heap kept after the first verify | 444 bytes, kept once: 10 further verifies left free heap unchanged (342,340 → 342,340), so there is no per-call leak |
 
 The verify cost is paid once per `check()`, which already blocks for a TLS
 handshake, so it needs no special handling.
