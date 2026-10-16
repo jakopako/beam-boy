@@ -18,8 +18,8 @@ constexpr float kZeroBitIntensity = 0.25f;
 // Keep float literals out of the render loop: inlining this triggered an
 // Xtensa GCC postreload internal compiler error on the ESP32 toolchain.
 float __attribute__((noinline)) bitIntensity(uint16_t bit, uint32_t revealed,
-                                            uint32_t elapsed_ms,
-                                            uint32_t per_bit_ms) {
+                                             uint32_t elapsed_ms,
+                                             uint32_t per_bit_ms) {
   if (bit != revealed || per_bit_ms == 0) return 1.0f;
   const float progress = static_cast<float>(elapsed_ms % per_bit_ms) /
                          static_cast<float>(per_bit_ms);
@@ -31,10 +31,11 @@ float __attribute__((noinline)) bitIntensity(uint16_t bit, uint32_t revealed,
 void Engine::renderLives(uint32_t lives) {
   const uint16_t pixels = display_.pixelCount();
   if (lives > pixels) {
-    Serial.println("[lives] count exceeds display capacity; clipping indicators");
+    Serial.println(
+        "[lives] count exceeds display capacity; clipping indicators");
     lives = pixels;
   }
-  const Color color = colors::kGreen.scaled(0.35f);
+  const Color color = colors::kTurquoise.scaled(0.4f);
   for (uint16_t i = 0; i < lives; ++i) {
     display_.rawPixel(pixels - 1 - i, color);
   }
@@ -82,8 +83,7 @@ void Engine::renderScore(uint32_t score, uint32_t elapsed_ms, bool instant) {
 void Engine::drawScoreBit(uint16_t bit, bool set, float intensity) {
   const Color color =
       set ? kNibbleColors[(bit / 4) % kNibbleColorCount] : colors::kWhite;
-  display_.rawPixel(bit * 2,
-                    color.scaled(set ? intensity : kZeroBitIntensity));
+  display_.rawPixel(bit * 2, color.scaled(set ? intensity : kZeroBitIntensity));
 }
 
 }  // namespace beamboy

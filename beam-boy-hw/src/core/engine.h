@@ -130,7 +130,7 @@ class Engine {
   // the dramatic reveal of a score just earned.
   void renderScore(uint32_t score, uint32_t elapsed_ms, bool instant = false);
   // Draw after the playfield: one green LED per life at the logical far end,
-  // at 35% intensity. Does not clear the playfield; zero draws nothing.
+  // at 40% intensity. Does not clear the playfield; zero draws nothing.
   void renderLives(uint32_t lives);
   void renderPauseOverlay();
 

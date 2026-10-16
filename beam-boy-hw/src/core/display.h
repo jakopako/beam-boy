@@ -60,6 +60,7 @@ constexpr Color kRed(255, 0, 0);
 constexpr Color kGreen(0, 255, 0);
 constexpr Color kBlue(0, 150, 255);
 constexpr Color kAmber(255, 140, 0);
+constexpr Color kTurquoise(64, 224, 208);
 }  // namespace colors
 
 // Sine for animation, safe to call with a phase that grows without bound.
@@ -156,8 +157,8 @@ class Display {
   // --- Brightness ----------------------------------------------------------
 
   void setBrightness(uint8_t brightness) {
-    brightness_ = brightness > board::kBrightnessCap ? board::kBrightnessCap
-                                                    : brightness;
+    brightness_ =
+        brightness > board::kBrightnessCap ? board::kBrightnessCap : brightness;
   }
   uint8_t brightness() const { return brightness_; }
 
