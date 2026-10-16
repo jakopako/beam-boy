@@ -63,7 +63,7 @@ consoles running older firmware.
   standing, orange at full intensity while jumping, and cyan at 10% while
   ducking. These intensities remain subject to the device's brightness cap.
   Jump takes priority if both buttons are pressed.
-  Life indicators use the shared `beam.show_lives()` API: green at 35%
+  Life indicators use the shared `beam.show_lives()` API: turquoise at 40%
   intensity at the far end. Flash the updated firmware before uploading these
   cartridges; older firmware does not provide this API.
   Three lives, one point per obstacle cleared; speed increases with clears.
