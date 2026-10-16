@@ -14,6 +14,8 @@ bool Power::readGauge() {
 
   percent_ = percent;
   voltage_ = voltage;
+  last_good_reading_ms_ = millis();
+  has_good_reading_ = true;
   return true;
 }
 

@@ -157,17 +157,17 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 
 The source of truth is `src/core/board_config.h`. Feather header labels are in quotes.
 
-| Signal        | Feather (target)        | DevKitC (dev) | Notes                                                                                     |
-| ------------- | ----------------------- | ------------- | ----------------------------------------------------------------------------------------- |
-| LED data      | GPIO5 ("5")             | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                                 |
-| Button A      | GPIO6 ("6")             | 15            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
-| Button B      | GPIO9 ("9")             | 16            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
-| Stick push    | GPIO15 ("A3")           | 18            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.          |
-| Stick X       | GPIO8 ("A5")            | 4             | ADC1 — usable while WiFi is active.                                                       |
-| Stick Y       | GPIO10 ("10")           | 5             | ADC1 — usable while WiFi is active.                                                       |
-| Stick VCC     | "3V"                    | 3V3           | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V.      |
-| Battery sense | I2C (GPIO3/4, SDA/SCL)  | —             | MAX17048 fuel gauge (Feather only); shares the STEMMA QT bus. See Phase 8.                |
-| USB sense     | GPIO12 ("12")           | —             | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
+| Signal        | Feather                 | Notes                                                                                     |
+| ------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
+| LED data      | GPIO5 ("5")             | RMT-capable WS2812B data line. Via 330 Ω.                                                 |
+| Button A      | GPIO6 ("6")             | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
+| Button B      | GPIO9 ("9")             | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
+| Stick push    | GPIO15 ("A3")           | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.          |
+| Stick X       | GPIO8 ("A5")            | ADC1 — usable while WiFi is active.                                                       |
+| Stick Y       | GPIO10 ("10")           | ADC1 — usable while WiFi is active.                                                       |
+| Stick VCC     | "3V"                    | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V.      |
+| Battery sense | I2C (GPIO3/4, SDA/SCL)  | MAX17048 fuel gauge; shares the STEMMA QT bus. See Phase 8.                               |
+| USB sense     | GPIO12 ("12")           | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
 
 ⚠️ Keep every analog input on **ADC1** (GPIO1–10 on the S3). ADC2 (GPIO11–20) is shared with
 the WiFi radio, and the Store and Network scenes read the stick while WiFi is on. Beware the
@@ -577,14 +577,14 @@ it over the air is item 5.)_
 > to tune. The sections below describe what was actually built.
 
 1. ✅ **Hardware & Sensing Layer (`src/core/power.*`):**
-   - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
+   - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `true` on the Feather, `false` in native host builds (no chip, no I2C traffic attempted).
    - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `chargeState()`, `charging()`, `usbPowered()`, `level()`.
    - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it charging — live in `src/core/power_policy.h` as plain, host-testable functions over floats (   `classifyPowerLevel`, `classifyChargeState`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. Native tests cover gauge-reading plausibility, hysteresis, charge-state classification, and idle-sleep decisions.
       - Charging is detected from USB presence (a 2:3 divider, e.g. 10k/15k, from the Feather's `USB` pin to GPIO12) combined with the gauge's voltage and percentage: on battery / charging / full, with "full" latched until the cell sags to its recharge voltage. See [`docs/phase-8-power.md`](docs/phase-8-power.md#usb-power-sense) for the wiring.
 
 2. ✅ **Battery Gauge & Status — launcher only:**
    - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar, for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
-   - On a board with no fuel gauge (the DevKitC), the same gesture shows a dim, steady white pixel instead of a fake reading.
+   - With no usable fuel-gauge reading, the same gesture shows a dim, steady white pixel instead of a fake reading.
    - This is the **only charge-state indicator**. On battery the bar is steady green → amber → red by level; charging, it is green and breathes; full, it is steady green at full length. On USB it is always green, so a red bar never reads as a warning while the battery is being charged.
    - Adding a third gesture to two buttons that already had two turned the launcher's input handling into a small state machine, which is now arbitrated in one place (`src/scenes/launcher_gestures.h`) and covered by 17 native tests. It closes three ordering bugs, two of which destroyed user data: A pressed slightly before B launching a game instead of showing the gauge; releasing A first after the gauge deleting the selected cartridge; and holding B to exit a game (1.2 s) rolling straight on past the delete threshold (2.5 s). See [`docs/phase-8-power.md`](docs/phase-8-power.md#gesture-ordering).
 
@@ -651,8 +651,8 @@ and are not release blockers.
    the legacy numeric index remains only as a fallback for old saves. Rebuilds resolve by id and
    clamp safely after deletion; Settings remains selected across a Store-driven list rebuild.
 
-> **Implemented Settings layout:** the four children are WiFi, Update firmware (unavailable
-> placeholder), Store and Brightness. Only Settings appears in the launcher; hold B returns
+> **Implemented Settings layout:** the four children are WiFi, Update firmware, Store and
+> Brightness. Only Settings appears in the launcher; hold B returns
 > from each child to Settings. WiFi no longer contains the prototype OTA action.
 
 ✅ _Visible result: the launcher is always readable as one fixed 1D layout — up to nine games
@@ -673,9 +673,9 @@ separate scene/menu model so settings utilities never masquerade as games.
      Forget with a three-second expiry/disarm on navigation, connection result animations,
      tap-B cancellation and radio shutdown on exit. The registry keeps the stable `network`
      id but displays WiFi. Connected A no longer checks, installs or reboots firmware.
-2. **Update firmware -- placeholder only**
-   - Reserve the second menu position; current placeholder behaviour and all implementation
-     requirements are owned by [Phase 11](#phase-11--firmware-updates).
+2. ✅ **Update firmware**
+   - Second menu position. Phase 10 shipped a placeholder; the real check/install/restart
+     screen and all its requirements are owned by [Phase 11](#phase-11--firmware-updates).
 3. ✅ **Store**
    - Move the existing cartridge store here unchanged in capability: connect, fetch the index,
      show install/update status, verify SHA-256, install, rebuild the game list without rebooting.
@@ -790,16 +790,26 @@ downloads into B, verifies, then flips a pointer and reboots into B. An interrup
 or corrupt download leaves A untouched and the console boots normally. This is why
 the BOM specifies 8 MB flash — two complete copies must fit.
 
-Both supported ESP32-S3 environments already have two application slots: 2 MiB per slot on
-the Feather and `0x640000` bytes per slot on the DevKitC. Release images must fit their
-board's layout; the obsolete ESP8266 layout is not an update target.
+The Feather's layout already has two 2 MiB application slots. Release images must fit it; the
+Feather is the only update target.
 
 #### Current status and retained lesson
 
-The old Network-scene OTA action was removed in Phase 10. Settings now exposes a separate
-Update firmware placeholder: two separated amber bars indicate unavailable, A logs that no
-update was started, and hold B returns to Settings. It never connects, writes or reboots.
-The unused `Ota` component is retained for replacement, not as a release-ready updater.
+The old Network-scene OTA action was removed in Phase 10, which left Settings > Update firmware
+as a placeholder. That placeholder is now replaced.
+
+Steps 1–4 of the implementation order below are in place (see
+[docs/phase-11-firmware-updates.md](docs/phase-11-firmware-updates.md)):
+- the release contract and identities;
+- the offline signing/release tool, and release key `bb-release-1` trusted by the firmware;
+- the strict manifest parser and update policy, with host tests;
+- the rewritten `Ota` service, which streams, verifies and selects the inactive slot;
+- the real Update firmware screen (host-tested state machine and rendering), plus the engine's
+  sleep inhibit and abort-before-critical-shutdown hook.
+
+Step 4 is build-checked but has not yet run end-to-end on a Feather; the phase doc has the
+hardware checklist. Step 5 (health-checked first boot, rollback, recovery proof) remains, so a
+new image that crashes is not yet rolled back automatically.
 
 - Reuse the existing `Network` connection component and replace the unsafe internals of `Ota`,
   rather than duplicating connectivity or coupling the WiFi and update menu items again.
@@ -810,63 +820,74 @@ The unused `Ota` component is retained for replacement, not as a release-ready u
 - **An operation that _stages_ a change is not finished until the change is applied.** A
   successful OTA that never reboots reports success, changes nothing, and offers itself again.
 
-#### Implementation plan (not implemented)
+#### Implementation plan (steps 1–4 implemented; 5 pending)
 
 **Confirmed scope and choices:** firmware updates are a separate opt-in flow, never a side
 effect of WiFi connection, Store access or boot. Use GitHub Releases for immutable, versioned,
 board-specific application binaries and GitHub Pages for the small discovery manifest, alongside
 the game store. Battery updates are allowed with a valid reading of at least 30%; recommend
-plugging in USB. The dummy scene and removal of the old WiFi action are the only updater-related
-runtime changes in this slice; the steps below are future work.
+plugging in USB. Manifests are signed with ECDSA P-256 / SHA-256 (raw r||s) by a key held
+offline by the maintainer; CI never signs.
 
-**Current gaps -- do not treat the prototype as production-ready:**
-- `Ota` uses `https://beamboy.example/firmware/manifest.json`, a hard-coded `0.4.0`, insecure TLS,
-  a two-field substring parser, and installs any different version (including older versions).
-- Checking and installing currently block; `progress()` is not connected to download callbacks.
-  A static pre-painted frame is not genuine progress feedback or responsive cancellation.
+**Gaps closed by steps 1–3, kept for context.** The prototype `Ota` had:
+- a placeholder URL;
+- a hard-coded `0.4.0`;
+- insecure TLS;
+- a substring parser;
+- installs of any different version, including downgrades;
+- blocking installs with no real progress.
+
+It now:
+- derives identity from the build;
+- authenticates a signed, strictly parsed manifest;
+- offers only higher sequences;
+- streams in bounded chunks with real progress and cancellation between chunks.
+
+**Remaining gaps:**
 - A complete image in an inactive slot prevents partial-image boot, but does not alone recover
   from a valid image that crashes. The installed ESP32-S3 SDK enables rollback, while Arduino's
   weak `verifyOta()` defaults to true and normally marks the image valid during startup.
   Its `verifyRollbackLater()` hook must be evaluated and exercised on the actual bootloader;
   do not claim health-checked rollback until the hardware tests pass.
-- Native signed-app verification is not enabled in the current SDK configuration. The older
-  assertion that Arduino Update automatically authenticates our images is not a guarantee
-  for this ESP32-S3 build. Implement and test authenticity explicitly before selecting a slot.
+- Native signed-app verification is not enabled in the current SDK configuration. The updater
+  therefore checks authenticity itself (signed manifest plus image SHA-256) before selecting a
+  slot. The on-device test vector must still pass on the Feather.
 
 **1. Release contract and publishing**
 - Derive a displayed SemVer, monotonically increasing release sequence, board id and layout id
   from the release build, not an independently edited string in `ota.cpp`.
-- Publish separate `firmware.bin` assets for `adafruit_feather_esp32s3_nopsram` and
-  `esp32-s3-devkitc-1-n16r8`; never offer one board's GPIO/flash configuration to the other.
+- Publish a `firmware.bin` asset for `adafruit_feather_esp32s3_nopsram`, tagged with its board
+  and layout ids; never offer an image built for a different board or layout.
   OTA delivers only the app image, never a merged flash image, partition table, bootloader
   or LittleFS image. Keep saves, brightness, credentials, highscores and cartridges intact.
-- The Feather currently has two 2 MiB app slots and the DevKitC two `0x640000`-byte slots.
-  CI must check each exact image size against its environment's inactive-slot capacity.
+- The Feather has two 2 MiB app slots.
+  CI must check the exact image size against the inactive-slot capacity.
   Runtime repeats that check using the actual partition, and rejects incompatible layout ids.
   Layout changes require a separate USB migration, not an ordinary OTA.
 - Discovery URL: `https://beamboy.ch/firmware/stable.json`.
   Publish a versioned signed manifest with each release as well; update the stable pointer
   only after all binaries, signatures and smoke tests succeed. Never overwrite release assets.
-- Proposed manifest envelope: `schema`, `key_id`, base64 `payload`, base64 `signature`.
+- Manifest envelope: `schema`, `key_id`, base64 `payload`, base64 `signature`.
   The signature covers the exact decoded payload bytes (no ambiguous JSON reserialization).
   Payload contains channel, SemVer, release sequence and per-board entries with board/layout id,
   minimum compatible updater/save/API versions, image HTTPS URL, exact size and SHA-256.
-  Define bounded field lengths, a 16 KiB envelope cap, strict types, unique board entries,
-  duplicate-field rejection and rejection of unsupported schemas before implementation.
+  Bounded field lengths, a 16 KiB envelope cap, strict types, unique board entries,
+  duplicate-field rejection and rejection of unsupported schemas are specified in `fw_manifest.h`.
 
 **2. Trust, version selection and release keys**
-- Authenticate discovery and binary transport with the existing CA bundle; establish bounded
-  network time before TLS validation where required. Never fall back to `setInsecure()`.
+- Authenticate discovery and binary transport with the existing CA bundle. This mbedTLS build
+  does not check certificate dates (`MBEDTLS_HAVE_TIME_DATE` off), so no network time is needed.
+  Never fall back to `setInsecure()`.
   GitHub asset redirects need a bounded hop count and HTTPS-only allowed destinations, including
   the actual GitHub release-asset hosts; test those URLs on the device, not just on a PC.
 - Independently verify the manifest signature with a firmware-embedded public key, then match
   the downloaded image to the signed size and SHA-256 before changing the boot target.
-  Proposed algorithm: RSA-PSS/SHA-256 with a 3072-bit key through ESP32's mbedTLS; measure
-  heap/flash cost and verify a release-tool/device test vector before adopting the format.
+  Algorithm: ECDSA P-256/SHA-256 through ESP32's mbedTLS; the on-device test vector measures
+  heap and time and must pass on the Feather before real release keys are created.
   This is updater-level authenticity, not Secure Boot; do not burn eFuses in this work.
-- Keep private keys outside the repository and device. Signing uses a protected release
-  environment/manual approval; fork/PR builds cannot access keys or publish a stable pointer.
-  Plan key rotation with key ids and an overlap release that trusts old and new public keys.
+- Keep private keys outside the repository, GitHub and devices: the maintainer signs offline
+  with `tools/firmware/fwrelease.py`; CI and fork/PR builds cannot sign or publish a stable
+  pointer. Plan key rotation with key ids and an overlap release that trusts old and new keys.
 - Equal release sequence means up to date; only higher compatible stable sequences are offered.
   Do not auto-install prereleases or downgrades. A bad release is replaced by a higher-sequence
   corrective release; local boot rollback to the last working slot is still allowed.
@@ -893,10 +914,10 @@ runtime changes in this slice; the steps below are future work.
   completed pending image must be detected, not overwritten without acknowledgement.
 
 **4. Safe writing, responsiveness and engine coordination**
-- Before confirmation starts a write: on battery-equipped boards require a valid, fresh gauge
-  sample >=30%; refuse stale/unavailable readings, low/critical power and unavailable storage.
-  USB-powered DevKitC has no battery check. USB presence or charge state must not be used to
-  bypass the threshold.
+- Before confirmation starts a write, require a valid, fresh gauge sample >=30%; refuse
+  stale/unavailable readings, low/critical power and unavailable storage. A missing gauge
+  reading blocks the update. USB presence or charge state must not be used to bypass the
+  threshold.
 - Flush pending saves and verify they are clean before writing; failed saves block installation.
   Never format/migrate LittleFS as part of an update. Save migrations must remain rollback-safe:
   additive/read-compatible until the new app is marked healthy, or use versioned backups.
@@ -909,7 +930,7 @@ runtime changes in this slice; the steps below are future work.
   at safe chunk boundaries. Abort and clean up before exiting, disconnecting or critical shutdown.
   Clear the operation guard on every terminal path; no early return may leave sleep disabled.
 - Preserve single ownership of display/input; do not introduce a second task that races the engine.
-  Retain idle servicing for WiFi. Measure flash-write latency and RMT display safety on both boards:
+  Retain idle servicing for WiFi. Measure flash-write latency and RMT display safety on the Feather:
   use safe inter-chunk progress updates, not an assumption that LEDs must always freeze.
   If a synchronous library cannot satisfy cancellation/progress, replace that path rather than
   advertising it as responsive. Every stall has an inactivity and total-operation deadline.
@@ -923,14 +944,14 @@ runtime changes in this slice; the steps below are future work.
   test intentional crash, failed mount and interrupted first boot. A malformed cartridge should
   be isolated/skipped as today, not treated as an unhealthy firmware boot.
 - Record/reset update diagnostics without erasing user content. Keep rollback-compatible storage
-  until acknowledgement, and keep a USB recovery recipe (Feather ROM/TinyUF2 where applicable,
-  DevKitC ROM flashing). An application OTA must not change partition/recovery images.
-- Confirm the first updater-capable firmware and its bootloader via USB on both boards before
-  enabling remote discovery. The existing placeholder is not a bootstrap update transport.
+  until acknowledgement, and keep a USB recovery recipe (Feather ROM bootloader / TinyUF2).
+  An application OTA must not change partition/recovery images.
+- Confirm the first updater-capable firmware and its bootloader via USB on the Feather before
+  enabling remote discovery. Firmware from before the updater cannot fetch updates itself.
 
 **6. Implementation order and acceptance gates**
 1. Lock schema, board/layout identities, signature test vectors and publishing/signing tooling.
-   Build both environments and fail publishing on oversize or missing/wrong-board assets.
+   Build the Feather firmware and fail publishing on oversize or missing/wrong-board assets.
 2. Extract host-testable strict parsing, version/compatibility, power and confirmation policy.
    Test same/new/old release, wrong board/layout, bad signatures, malformed/oversize manifests,
    missing credentials, stale power, tap/held-A carried across entry and early-release cancellation.
@@ -941,14 +962,15 @@ runtime changes in this slice; the steps below are future work.
    Verify hold-B from every state, radio off after every exit/result, normal sleep after errors,
    and brightness/highscores/credentials/cartridges unchanged across success and failure.
 5. Prove target first-boot rollback and USB recovery before declaring release readiness.
-   On both boards install release A -> B -> C across both slots; inject power loss during download,
+   On the Feather install release A -> B -> C across both slots; inject power loss during download,
    verification, slot selection and first boot, plus a deliberately crashing signed image.
    Verify the booted version, prior working slot, actual progress and restored user data.
 
-**Remaining design gate:** the signing-tool/key-management implementation and exact signature
-format above are proposals, not already implemented guarantees. Approve them and pass device
-test vectors before creating release keys or enabling an official update endpoint. Battery
-threshold, hosting and the separation from WiFi are confirmed.
+**Remaining design gate:** the signature format (ECDSA P-256) and offline key management are
+approved and implemented in the tooling. The on-device test vector passed on the Feather
+(about 292 ms and 5 KB of heap per verify; see the Phase 11 doc), and release key
+`bb-release-1` was created offline and is trusted by the firmware. Battery threshold, hosting
+and the separation from WiFi are confirmed.
 
 Visible result when complete: install a compatible authenticated engine release deliberately,
 see real progress, reboot into it, and recover safely if its first boot fails.

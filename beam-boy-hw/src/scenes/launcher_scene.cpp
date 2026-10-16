@@ -279,9 +279,9 @@ void LauncherScene::renderBatteryGauge(Engine& engine) {
   Power& power = engine.power();
 
   if (!power.available()) {
-    // No fuel gauge on this board (the DevKitC has none) -- a dim, steady
-    // white pixel says "nothing to show" rather than looking like a bug or,
-    // worse, an empty (0%) battery.
+    // No usable fuel-gauge reading (not found, or not answering) -- a dim,
+    // steady white pixel says "nothing to show" rather than looking like a bug
+    // or, worse, an empty (0%) battery.
     display.point(0.5f, Color(40, 40, 40), 1.0f);
     return;
   }

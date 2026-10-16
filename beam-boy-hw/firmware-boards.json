@@ -1,0 +1,10 @@
+{
+  "_comment": "Firmware update identities. Read by scripts/firmware_identity.py (bakes them into each build) and tools/firmware/fwrelease.py (checks release images). A layout id names an exact partition table; change it, and never reuse an old one, whenever the table changes -- that is a USB migration, not an OTA.",
+  "boards": {
+    "adafruit_feather_esp32s3_nopsram": {
+      "layout": "feather-s3-8mb-ota2048k-v1",
+      "partitions": "partitions-8MB-littlefs.csv",
+      "slot_size": 2097152
+    }
+  }
+}

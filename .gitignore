@@ -1,0 +1,4 @@
+# Python bytecode from tools/
+__pycache__/
+# Staged firmware release assets (tools/firmware/fwrelease.py prepare)
+/dist/

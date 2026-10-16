@@ -1,0 +1,6 @@
+{
+  "comment": "Throwaway P-256 key; private half discarded. Never trust it in firmware.",
+  "key_id": "bb-test-vector",
+  "public_key": "043a6123aebce86d4ad15b6de4c1c523c4076587319ea9a23490fa7122ce5741c97a965461a6f9f095de35a7f1de970b3acd48ae3830ecb24fe30681519cd133ce",
+  "envelope": "{\"schema\":\"beamboy-fw-envelope/1\",\"key_id\":\"bb-test-vector\",\"payload\":\"eyJzY2hlbWEiOiJiZWFtYm95LWZ3LW1hbmlmZXN0LzEiLCJjaGFubmVsIjoic3RhYmxlIiwidmVyc2lvbiI6IjEuMi4zIiwic2VxdWVuY2UiOjcsImJvYXJkcyI6W3siYm9hcmQiOiJhZGFmcnVpdF9mZWF0aGVyX2VzcDMyczNfbm9wc3JhbSIsImxheW91dCI6ImZlYXRoZXItczMtOG1iLW90YTIwNDhrLXYxIiwibWluX3VwZGF0ZXIiOjEsIm1pbl9zYXZlIjozLCJtaW5fYXBpIjoxLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vamFrb3Bha28vYmVhbS1ib3kvcmVsZWFzZXMvZG93bmxvYWQvZnctdjEuMi4zL2JlYW1ib3ktZnctMS4yLjMtYWRhZnJ1aXRfZmVhdGhlcl9lc3AzMnMzX25vcHNyYW0uYmluIiwic2l6ZSI6MTIzNDU2Nywic2hhMjU2IjoiMTY5MDUzYjcxMjI0ZjZkMDMxMmFjOTU0MWE3NmJiNTI2MzA0ZjI4MzhmZTlmZTFkMDQ3NTMwZGFiMzY5MGQzNiJ9XX0=\",\"signature\":\"4RUZLXVKOGFREedfNDQz7bz03O9c0KLrqxN/flrAxK3Dxqr1NfczoOZxOcEHX5RFFF7DqvOdrqiW9FtmEthLPQ==\"}"
+}

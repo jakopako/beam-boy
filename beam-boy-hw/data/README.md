@@ -4,7 +4,7 @@ Everything under this folder is written to the LittleFS data partition and is
 **data, not firmware**. Uploading it is a separate step from flashing:
 
 ```
-pio run -e esp32-s3-devkitc-1-n16r8 -t uploadfs
+pio run -e adafruit_feather_esp32s3_nopsram -t uploadfs
 ```
 
 ## Layout
