@@ -799,7 +799,16 @@ board's layout; the obsolete ESP8266 layout is not an update target.
 The old Network-scene OTA action was removed in Phase 10. Settings now exposes a separate
 Update firmware placeholder: two separated amber bars indicate unavailable, A logs that no
 update was started, and hold B returns to Settings. It never connects, writes or reboots.
-The unused `Ota` component is retained for replacement, not as a release-ready updater.
+
+Steps 1–3 of the implementation order below are now in place (see
+[docs/phase-11-firmware-updates.md](docs/phase-11-firmware-updates.md)):
+- the release contract and identities;
+- the offline signing/release tool;
+- the strict manifest parser and update policy, with host tests;
+- the rewritten `Ota` service, which streams, verifies and selects the inactive slot.
+
+`Ota` is build-checked but has no caller and no trusted release key yet, so no console can
+update. Steps 4–5 (scene, engine guard, rollback, hardware proof) remain.
 
 - Reuse the existing `Network` connection component and replace the unsafe internals of `Ota`,
   rather than duplicating connectivity or coupling the WiFi and update menu items again.
@@ -810,28 +819,38 @@ The unused `Ota` component is retained for replacement, not as a release-ready u
 - **An operation that _stages_ a change is not finished until the change is applied.** A
   successful OTA that never reboots reports success, changes nothing, and offers itself again.
 
-#### Implementation plan (not implemented)
+#### Implementation plan (steps 1–3 implemented; 4–5 pending)
 
 **Confirmed scope and choices:** firmware updates are a separate opt-in flow, never a side
 effect of WiFi connection, Store access or boot. Use GitHub Releases for immutable, versioned,
 board-specific application binaries and GitHub Pages for the small discovery manifest, alongside
 the game store. Battery updates are allowed with a valid reading of at least 30%; recommend
-plugging in USB. The dummy scene and removal of the old WiFi action are the only updater-related
-runtime changes in this slice; the steps below are future work.
+plugging in USB. Manifests are signed with ECDSA P-256 / SHA-256 (raw r||s) by a key held
+offline by the maintainer; CI never signs.
 
-**Current gaps -- do not treat the prototype as production-ready:**
-- `Ota` uses `https://beamboy.example/firmware/manifest.json`, a hard-coded `0.4.0`, insecure TLS,
-  a two-field substring parser, and installs any different version (including older versions).
-- Checking and installing currently block; `progress()` is not connected to download callbacks.
-  A static pre-painted frame is not genuine progress feedback or responsive cancellation.
+**Gaps closed by steps 1–3, kept for context.** The prototype `Ota` had:
+- a placeholder URL;
+- a hard-coded `0.4.0`;
+- insecure TLS;
+- a substring parser;
+- installs of any different version, including downgrades;
+- blocking installs with no real progress.
+
+It now:
+- derives identity from the build;
+- authenticates a signed, strictly parsed manifest;
+- offers only higher sequences;
+- streams in bounded chunks with real progress and cancellation between chunks.
+
+**Remaining gaps:**
 - A complete image in an inactive slot prevents partial-image boot, but does not alone recover
   from a valid image that crashes. The installed ESP32-S3 SDK enables rollback, while Arduino's
   weak `verifyOta()` defaults to true and normally marks the image valid during startup.
   Its `verifyRollbackLater()` hook must be evaluated and exercised on the actual bootloader;
   do not claim health-checked rollback until the hardware tests pass.
-- Native signed-app verification is not enabled in the current SDK configuration. The older
-  assertion that Arduino Update automatically authenticates our images is not a guarantee
-  for this ESP32-S3 build. Implement and test authenticity explicitly before selecting a slot.
+- Native signed-app verification is not enabled in the current SDK configuration. The updater
+  therefore checks authenticity itself (signed manifest plus image SHA-256) before selecting a
+  slot. The on-device test vector must still pass on both boards.
 
 **1. Release contract and publishing**
 - Derive a displayed SemVer, monotonically increasing release sequence, board id and layout id
@@ -847,26 +866,27 @@ runtime changes in this slice; the steps below are future work.
 - Discovery URL: `https://beamboy.ch/firmware/stable.json`.
   Publish a versioned signed manifest with each release as well; update the stable pointer
   only after all binaries, signatures and smoke tests succeed. Never overwrite release assets.
-- Proposed manifest envelope: `schema`, `key_id`, base64 `payload`, base64 `signature`.
+- Manifest envelope: `schema`, `key_id`, base64 `payload`, base64 `signature`.
   The signature covers the exact decoded payload bytes (no ambiguous JSON reserialization).
   Payload contains channel, SemVer, release sequence and per-board entries with board/layout id,
   minimum compatible updater/save/API versions, image HTTPS URL, exact size and SHA-256.
-  Define bounded field lengths, a 16 KiB envelope cap, strict types, unique board entries,
-  duplicate-field rejection and rejection of unsupported schemas before implementation.
+  Bounded field lengths, a 16 KiB envelope cap, strict types, unique board entries,
+  duplicate-field rejection and rejection of unsupported schemas are specified in `fw_manifest.h`.
 
 **2. Trust, version selection and release keys**
-- Authenticate discovery and binary transport with the existing CA bundle; establish bounded
-  network time before TLS validation where required. Never fall back to `setInsecure()`.
+- Authenticate discovery and binary transport with the existing CA bundle. This mbedTLS build
+  does not check certificate dates (`MBEDTLS_HAVE_TIME_DATE` off), so no network time is needed.
+  Never fall back to `setInsecure()`.
   GitHub asset redirects need a bounded hop count and HTTPS-only allowed destinations, including
   the actual GitHub release-asset hosts; test those URLs on the device, not just on a PC.
 - Independently verify the manifest signature with a firmware-embedded public key, then match
   the downloaded image to the signed size and SHA-256 before changing the boot target.
-  Proposed algorithm: RSA-PSS/SHA-256 with a 3072-bit key through ESP32's mbedTLS; measure
-  heap/flash cost and verify a release-tool/device test vector before adopting the format.
+  Algorithm: ECDSA P-256/SHA-256 through ESP32's mbedTLS; the on-device test vector measures
+  heap and time and must pass on both boards before real release keys are created.
   This is updater-level authenticity, not Secure Boot; do not burn eFuses in this work.
-- Keep private keys outside the repository and device. Signing uses a protected release
-  environment/manual approval; fork/PR builds cannot access keys or publish a stable pointer.
-  Plan key rotation with key ids and an overlap release that trusts old and new public keys.
+- Keep private keys outside the repository, GitHub and devices: the maintainer signs offline
+  with `tools/firmware/fwrelease.py`; CI and fork/PR builds cannot sign or publish a stable
+  pointer. Plan key rotation with key ids and an overlap release that trusts old and new keys.
 - Equal release sequence means up to date; only higher compatible stable sequences are offered.
   Do not auto-install prereleases or downgrades. A bad release is replaced by a higher-sequence
   corrective release; local boot rollback to the last working slot is still allowed.
@@ -945,10 +965,10 @@ runtime changes in this slice; the steps below are future work.
    verification, slot selection and first boot, plus a deliberately crashing signed image.
    Verify the booted version, prior working slot, actual progress and restored user data.
 
-**Remaining design gate:** the signing-tool/key-management implementation and exact signature
-format above are proposals, not already implemented guarantees. Approve them and pass device
-test vectors before creating release keys or enabling an official update endpoint. Battery
-threshold, hosting and the separation from WiFi are confirmed.
+**Remaining design gate:** the signature format (ECDSA P-256) and offline key management are
+approved and implemented in the tooling. Pass the on-device test vector on both boards before
+creating release keys or publishing `stable.json`. Battery threshold, hosting and the
+separation from WiFi are confirmed.
 
 Visible result when complete: install a compatible authenticated engine release deliberately,
 see real progress, reboot into it, and recover safely if its first boot fails.

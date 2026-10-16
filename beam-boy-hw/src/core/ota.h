@@ -11,70 +11,129 @@
 //                 launcher, network code. Requires a reboot. A bad one bricks
 //                 the console.
 //
-// Because the downside is bricking, the mechanism is deliberately conservative.
-// Flash is divided into two application slots. The device runs from slot A and
-// writes the download into slot B, which is not executable until it is complete
-// and verified. Only then is the boot pointer flipped. If the download stalls,
-// the checksum fails, or the power drops halfway, slot A is untouched and the
-// console boots exactly as before. There is no state in which a partial
-// download can run.
+// Flash has two application slots. The console runs from one and streams the
+// download into the other, which is not bootable until every byte has been
+// checked. Only then is the boot pointer flipped. A stalled, short, long,
+// tampered or cancelled download aborts the write and leaves the boot target
+// untouched.
 //
-// The Arduino Update library implements the slot handling; what this class adds
-// is the frame-loop-friendly shape (never block the tube), progress reporting,
-// and a version check so the device does not reinstall what it already runs.
+// Trust does not come from the transport. check() fetches a small envelope
+// (https://beamboy.ch/firmware/stable.json), verifies its ECDSA P-256 signature
+// against a key compiled into this build (ota_keys.cpp), and only then reads
+// the signed payload: which board/layout image exists, its exact size and its
+// SHA-256. The image itself may come from GitHub's release hosts; it is
+// accepted only if it matches the signed size and hash. TLS (CA bundle, never
+// setInsecure()) still authenticates both hosts, but a forged image is caught
+// even if TLS were bypassed. Certificate dates are not checked by this
+// mbedTLS build (MBEDTLS_HAVE_TIME_DATE is off), so no network time is needed.
+//
+// Responsiveness: check() blocks for a bounded few seconds (one small HTTPS
+// GET), like the Store's index fetch. The install is *pumped*: beginInstall()
+// opens the stream, then poll() moves one bounded chunk per call so the caller
+// can keep drawing real progress and honour a cancel between chunks.
+//
+// What this does not do yet (PLAN.md Phase 11 steps 4-5): wire a scene, guard
+// engine idle sleep during a write, or defer Arduino's automatic "app valid"
+// acknowledgement for health-checked rollback.
 
 #include <Arduino.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <esp_ota_ops.h>
+#include <mbedtls/sha256.h>
+
+#include "core/fw_manifest.h"
+#include "core/ota_policy.h"
 
 namespace beamboy {
 
 enum class OtaState : uint8_t {
   kIdle,
-  kChecking,     // Fetching the version manifest.
-  kAvailable,    // Manifest names a different version; ready to install.
-  kUpToDate,     // Manifest says we already run the newest build.
-  kDownloading,  // Streaming the image into the spare slot.
-  kSuccess,      // Written and verified; awaiting reboot.
+  kChecking,
+  kAvailable,     // A newer compatible signed release exists; nothing written.
+  kUpToDate,      // Nothing newer is published.
+  kIncompatible,  // Newer release exists but cannot be installed here.
+  kStaged,        // An image is already installed and boots on next restart.
+  kDownloading,   // Streaming into the inactive slot.
+  kVerifying,     // All bytes received; checking hash and image.
+  kSuccess,       // Verified and selected; reboot to run it.
   kFailed,
+};
+
+// Checked by the caller immediately before confirming an install.
+struct InstallPreconditions {
+  ota::PowerGate power;
+  // Pending saves were committed and storage reports clean.
+  bool saves_clean;
 };
 
 class Ota {
  public:
-  // Asks the update server what the current version is. Requires an active
-  // network connection; returns false immediately if there is none.
-  bool checkForUpdate();
+  // Forgets everything from a previous visit. Never touches flash or network.
+  // Aborts an in-progress install.
+  void reset();
 
-  // Downloads and installs the image discovered by checkForUpdate().
-  //
-  // NOTE: unlike the rest of the engine this call blocks for the duration of
-  // the download -- typically several seconds. It is safe here, and only here,
-  // because the tube cannot animate during a flash write anyway: writing to
-  // flash disables interrupts in bursts, which corrupts the WS2812 signal. The
-  // scene therefore paints a static "working" pattern before calling this, and
-  // the watchdog is fed by the Update library's internal yields.
-  bool install();
+  // Fetches and authenticates the manifest. Requires an active WiFi
+  // connection. Never writes flash.
+  OtaState check();
+
+  // Starts streaming the release found by check() into the inactive slot.
+  // Refuses unless the state is kAvailable and the preconditions hold.
+  bool beginInstall(const InstallPreconditions& preconditions);
+
+  // Advances an install by at most one bounded step. Call every frame while
+  // busy(); returns the new state.
+  OtaState poll();
+
+  // Abandons an install between chunks. The boot target is never changed.
+  void cancel();
+
+  // A write is in flight; the engine must not sleep, disconnect or reboot.
+  bool busy() const {
+    return state_ == OtaState::kDownloading || state_ == OtaState::kVerifying;
+  }
 
   OtaState state() const { return state_; }
 
-  // 0..1 while downloading, for the progress bar on the tube.
-  float progress() const { return progress_; }
+  // 0..1 of verified bytes written during an install.
+  float progress() const { return check_.progress(); }
 
-  // Human-readable reason for kFailed, printed to serial. The tube can only say
-  // "it failed", so this is where the detail lives.
+  // Reason for kFailed/kIncompatible, for serial. The tube cannot spell.
   const char* error() const { return error_; }
 
-  const char* availableVersion() const { return available_; }
+  const char* availableVersion() const { return available_version_; }
 
-  // The version this firmware was built as. Compared against the manifest.
+  // True if a different, already-written slot is selected for the next boot.
+  static bool rebootPending();
+
   static const char* currentVersion();
 
  private:
   void fail(const char* reason);
+  void releaseInstall();
+  bool openImageStream();
+  void pumpDownload();
+  void finishInstall();
 
   OtaState state_ = OtaState::kIdle;
-  float progress_ = 0.0f;
   const char* error_ = "";
-  char available_[24] = {0};
-  char image_url_[160] = {0};
+  char available_version_[fw::kMaxVersionLength + 1] = {0};
+  fw::BoardImage image_ = {};
+  bool image_valid_ = false;
+
+  // Install-time resources, live only between beginInstall() and the end of
+  // the install (success, failure or cancel).
+  WiFiClientSecure client_;
+  HTTPClient http_;
+  bool http_open_ = false;
+  const esp_partition_t* target_ = nullptr;
+  esp_ota_handle_t handle_ = 0;
+  bool handle_open_ = false;
+  mbedtls_sha256_context sha_;
+  bool sha_open_ = false;
+  ota::ImageCheck check_;
+  uint32_t install_start_ms_ = 0;
+  uint32_t last_data_ms_ = 0;
 };
 
 }  // namespace beamboy
