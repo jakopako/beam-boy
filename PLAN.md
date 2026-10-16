@@ -65,7 +65,7 @@ the most deliberate design — which is exactly what this plan front-loads.
 | Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                                                                                        |
 | Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                                                                                          |
 | Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                                                                             |
-| Power switch      | **SPST slide switch in series with the battery's + lead** (between the LiPo and the Feather's JST connector) | Off physically disconnects the cell: zero drain. The battery only charges while switched on; plugging in USB while off runs the console from USB alone. Pick one rated for at least 1 A to cover WiFi and full-brightness peaks. |
+| Power switch      | **DPDT slide switch, two independent poles**: one pole ties **EN to GND** when off; the other connects **BAT to the tube's +** only when on | The battery stays on the Feather's JST connector, so it charges over USB while switched off. Off is not zero drain: the charger and fuel gauge still draw standby current. Rate the tube pole for the tube's peak current (~1 A full white at cap 128; pick ≥ 2 A). See [`docs/phase-8-power.md`](docs/phase-8-power.md#power-switch). |
 | Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                                                                           |
 
 **Total: roughly €35–45** on top of what you own (Feather route), or €27–37 with the
@@ -153,21 +153,27 @@ Two ESP8266 limitations to be aware of: it has **only one ADC pin**, so the 2-ax
 can't be tested until the S3 arrives (add stick support on real S3 hardware), and it is short on usable GPIOs — you may need to drop
 a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for the ESP32.
 
-### Pin map (ESP32-S3, starting point)
+### Pin map (ESP32-S3)
 
-| Signal        | GPIO          | Notes                                                                                          |
-| ------------- | ------------- | ---------------------------------------------------------------------------------------------- |
-| LED data      | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                                      |
-| Button A      | 15            | `INPUT_PULLUP`                                                                                 |
-| Button B      | 16            | `INPUT_PULLUP`                                                                                 |
-| Stick push    | 18            | `INPUT_PULLUP`                                                                                 |
-| Stick X       | 4             | ADC1 channel (ADC1_CH3) — usable while WiFi is active.                                         |
-| Stick Y       | 5             | ADC1 channel (ADC1_CH4) — usable while WiFi is active.                                         |
-| Battery sense | I2C (SDA/SCL) | MAX17048 fuel gauge (Feather only) — no dedicated GPIO; shares the STEMMA QT bus. See Phase 8. |
-| USB sense     | 12 (Feather)  | 2:3 divider from the Feather `USB` pin (e.g. 10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
+The source of truth is `src/core/board_config.h`. Feather header labels are in quotes.
 
-⚠️ Keep every analog input on **ADC1**. ADC2 is shared with the WiFi radio and reads garbage
-whenever WiFi is on — a classic ESP32 trap that would silently break analog inputs in Phase 4.
+| Signal        | Feather (target)        | DevKitC (dev) | Notes                                                                                     |
+| ------------- | ----------------------- | ------------- | ----------------------------------------------------------------------------------------- |
+| LED data      | GPIO5 ("5")             | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                                 |
+| Button A      | GPIO6 ("6")             | 15            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
+| Button B      | GPIO9 ("9")             | 16            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
+| Stick push    | GPIO15 ("A3")           | 18            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.          |
+| Stick X       | GPIO8 ("A5")            | 4             | ADC1 — usable while WiFi is active.                                                       |
+| Stick Y       | GPIO10 ("10")           | 5             | ADC1 — usable while WiFi is active.                                                       |
+| Stick VCC     | "3V"                    | 3V3           | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V.      |
+| Battery sense | I2C (GPIO3/4, SDA/SCL)  | —             | MAX17048 fuel gauge (Feather only); shares the STEMMA QT bus. See Phase 8.                |
+| USB sense     | GPIO12 ("12")           | —             | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
+
+⚠️ Keep every analog input on **ADC1** (GPIO1–10 on the S3). ADC2 (GPIO11–20) is shared with
+the WiFi radio, and the Store and Network scenes read the stick while WiFi is on. Beware the
+Feather's labels: **A0–A4 are all ADC2** (GPIO18/17/16/15/14) despite their "A" names; the only
+free ADC1 header pins are A5 and 5/6/9/10. That labelling is how an earlier provisional Feather
+map ended up with the stick on A2/A3.
 
 ### The minimalist control scheme
 
@@ -1060,7 +1066,7 @@ Since you want to accept community games eventually, two things move from "nice"
 - **Encoder + analog stick + 2 buttons.** Both input types, deliberately.
 - **Binary score display** as a signature engine feature.
 - **USB-C rechargeable**, via a board with integrated LiPo charging. No consumable batteries.
-- **Power switch in series with the battery.** Off physically disconnects the LiPo (zero drain). The battery charges only while switched on.
+- **DPDT power switch.** Off ties EN to GND (Feather regulator disabled) and disconnects BAT from the tube. The LiPo stays connected to the charger, so it charges while switched off; off is low drain, not zero.
 - **Button convention: A = primary/instant, B = hold-to-charge.** Established in Wormfight
   (Phase 2) after a push-back ability on B failed to justify occupying the only spare button.
   A quick stab of B should always do _something_ useful, so B is never a dead button. Games

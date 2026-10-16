@@ -85,15 +85,23 @@ constexpr uint8_t kPinUsbSense = 0;
 
 #else
 
-// Provisional: confirm against the Feather ESP32-S3 pinout before wiring.
-// Analog inputs (thumbstick, battery sense) must land on ADC1, since ADC2 is
-// unusable while WiFi is active.
+// Adafruit Feather ESP32-S3 (No PSRAM), checked against the Arduino core's
+// variants/adafruit_feather_esp32s3_nopsram/pins_arduino.h.
+//
+// The thumbstick axes must be on ADC1 (GPIO1-10 on the S3). ADC2 (GPIO11-20)
+// is shared with the WiFi radio, and the Store and Network scenes navigate
+// with the stick while WiFi is on. The Feather's A0-A4 labels are all ADC2
+// (GPIO18/17/16/15/14), so they are unsuitable despite their "A" names. The
+// only ADC1 pins on the headers are A5 (GPIO8) and D5/D6/D9/D10; SDA/SCL
+// (GPIO3/4) are also ADC1 but belong to the fuel gauge.
+//
+// Every button stays within GPIO0-21, the range ext1 deep-sleep wake supports.
 constexpr uint8_t kPinLedData = 5;
 constexpr uint8_t kPinButtonA = 6;
 constexpr uint8_t kPinButtonB = 9;
-constexpr uint8_t kPinStickSw = 10;
-constexpr uint8_t kPinStickX = A2;  // ADC1 (GPIO1)
-constexpr uint8_t kPinStickY = A3;  // ADC1 (GPIO2)
+constexpr uint8_t kPinStickSw = 15;  // header "A3"; digital only
+constexpr uint8_t kPinStickX = 8;    // header "A5", ADC1_CH7
+constexpr uint8_t kPinStickY = 10;   // header "10", ADC1_CH9
 
 // The Feather has no battery-sense *pin* at all -- Adafruit's own docs are
 // explicit about this ("There is no pin on the Feather ESP32-S3 that returns

@@ -45,9 +45,9 @@ Same as above, except the data line moves to a normal GPIO (see `kPinLedData` in
 [`board_config.h`](../beam-boy-hw/src/core/board_config.h)), because the ESP32's RMT
 peripheral can drive any pin.
 
-⚠️ Confirm the pin numbers in `board_config.h` against Adafruit's published Feather pinout
-before wiring — they are provisional. In particular, keep every analog input on **ADC1**;
-ADC2 returns garbage whenever WiFi is active.
+The Feather pin map is confirmed against the Arduino core's Feather variant; see the pin map in
+`PLAN.md` §2. Keep every analog input on **ADC1**; ADC2 is shared with WiFi. On the Feather,
+A0–A4 are ADC2 pins despite their labels, so the stick uses A5 and 10.
 
 ---
 
