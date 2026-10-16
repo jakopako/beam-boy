@@ -1,11 +1,11 @@
 # Phase 11 — Firmware updates
 
-> **Status: steps 1–3 of PLAN.md's implementation order are implemented; steps 4–5 are not.**
-> The release contract, offline signing tool, strict manifest parser, update
-> policy and the `Ota` streaming/verifying service exist and are tested on the
-> host. The Settings > Update firmware scene is still the unavailable
-> placeholder: nothing calls `Ota`, so no console can update yet. No release key
-> has been created, so even a wired-up `Ota` would refuse every manifest.
+> **Status: steps 1–4 of PLAN.md's implementation order are implemented; step 5
+> (health-checked first boot and rollback) is not.** Settings > Update firmware
+> now checks, installs and restarts, and the firmware trusts release key
+> `bb-release-1`. Step 4 is build-checked and host-tested, but has not yet been
+> run end-to-end on a Feather: see "Hardware checklist for step 4". Until step 5,
+> a new image that crashes is not rolled back automatically.
 
 ## What exists
 
@@ -15,8 +15,12 @@
 | Build identity (board, layout, version, sequence, slot size) | `scripts/firmware_identity.py` → `src/core/firmware_identity.h` | release tool `check-image` |
 | Manifest format + strict parser | `src/core/fw_manifest.{h,cpp}` | `test_ota_manifest` (host) |
 | Release selection, URL allowlist, power gate, hold-to-confirm, image accounting | `src/core/ota_policy.{h,cpp}` | `test_ota_policy` (host) |
-| ECDSA P-256 verification (mbedTLS) + trusted keys | `src/core/ota_signature.{h,cpp}`, `src/core/ota_keys.cpp` | `test_device_ota_signature` (on target; build-checked in CI) |
+| ECDSA P-256 verification (mbedTLS) + trusted keys | `src/core/ota_signature.{h,cpp}`, `src/core/ota_keys.cpp` | `test_device_ota_signature` (passed on a Feather) |
 | Check / stream / verify / select | `src/core/ota.{h,cpp}` | build only; needs hardware |
+| Update screen: state machine | `src/scenes/update_flow.{h,cpp}` | `test_update_flow` (host) |
+| Update screen: tube rendering | `src/scenes/update_firmware_view.{h,cpp}` | `test_update_flow` (host) |
+| Update screen: wiring to Network/Ota/Power/Storage | `src/scenes/update_firmware_scene.{h,cpp}` | build only; needs hardware |
+| Engine guard: sleep inhibit, abort before critical shutdown | `Engine::setSleepInhibited()`, `Scene::abortForShutdown()` | build only |
 | Release tool | `tools/firmware/fwrelease.py` | `tools/firmware/test_fwrelease.py` |
 | CI | `.github/workflows/firmware.yml`, Pages workflow | — |
 
@@ -127,6 +131,82 @@ all of that does `esp_ota_set_boot_partition()` select the new image.
 `cancel()` and every failure call `esp_ota_abort()`, so the boot target never
 changes.
 
+## The update screen (Settings > Update firmware)
+
+Entering turns the radio on and checks; it never writes flash on its own.
+
+| Tube | Meaning | Controls |
+|---|---|---|
+| Two amber bars, double pulse | No WiFi credentials; set them up in Settings > WiFi (the portal is never opened from here) | hold B leaves |
+| Blue comet sweeping | Connecting | hold B leaves |
+| Dim steady blue | Checking (blocks a few seconds) | — |
+| Steady blue after one white sweep | Up to date | hold B leaves |
+| Steady turquoise | Update available | hold A 1.2 s to install (white fills from the start; releasing early cancels); hold B leaves |
+| Blue bar filling | Downloading: the fill is the real verified byte count | hold B cancels and leaves |
+| White points sweeping inward | Verifying | — |
+| Green fills from both ends, white centre heartbeat | Installed (or already installed earlier, awaiting restart) | release A, then press A to restart; hold B leaves without restarting |
+| Red, 1 / 2 / 3 / 4 pulses | Failed: connection / check (manifest, TLS, signature) / incompatible release / install | A retries; hold B leaves |
+| Red, slow breathing | Battery below 30%, stale or unreadable | A retries; hold B leaves |
+
+Serial logs every stage change with the detailed reason (`[update] ...`).
+
+Behaviour that is easy to miss:
+
+- **A press carried into the screen never confirms.** A must be released before
+  a hold can start, including after a retry.
+- **The confirming hold never also restarts.** After success A must be
+  released and pressed again.
+- **The radio is on only while working towards a result.** Up to date,
+  installed and every failure switch it off; a retry reconnects.
+- **An installed image runs at the next restart, whatever happens.** Leaving
+  with hold B, sleeping or switching off does not undo it. Re-entering the
+  screen reports it (green) instead of downloading again.
+- **Before writing,** saves are committed and must be clean, and the battery
+  must have a reading of at least 30% that is at most 5 s old.
+- **While writing,** the scene holds off idle sleep through
+  `Engine::setSleepInhibited()`. The engine clears it on every scene change.
+  A critical battery calls `Scene::abortForShutdown()` first, which cancels the
+  write and turns the radio off before the shutdown flush.
+- **Responsiveness:** `Ota::poll()` runs once per frame (at most 4 × 4 KiB,
+  about 25 ms). Expect a lower frame rate while downloading, not a frozen tube.
+  The manifest check, opening the image stream and the final
+  `esp_ota_end()` validation each block for a moment behind a static frame.
+
+### Hardware checklist for step 4
+
+None of this has run on a Feather yet. To test end-to-end you need a signed
+release newer than the firmware on the console:
+
+1. Flash the console over USB with a release-identity build. In PowerShell:
+   ```powershell
+   cd beam-boy-hw
+   $env:BEAMBOY_FW_VERSION="0.9.0"; $env:BEAMBOY_FW_SEQUENCE="1"
+   pio run -e adafruit_feather_esp32s3_nopsram -t upload
+   ```
+2. Build sequence 2, then `prepare`, `sign`, upload the `.bin` and manifest to
+   GitHub release `fw-v0.9.1`, and `promote` (see Release procedure).
+   Publishing `stable.json` is harmless before this firmware ships: older
+   firmware has no updater.
+3. On the console, check each of these:
+   - Settings > Update firmware shows available (turquoise) and serial names
+     `0.9.0 -> 0.9.1`.
+   - The download fill moves smoothly enough, and the LEDs do not glitch while
+     flash is written. Note the frame rate in the `[PERF]` log.
+   - Hold B mid-download cancels, the radio goes off, and re-entering offers
+     the update again.
+   - A full install shows the green result; A restarts into 0.9.1 (check the
+     boot banner `beamboy-fw:...;0.9.1;2`).
+   - Re-entering after an install without restarting shows the staged (green)
+     result rather than downloading again.
+   - Brightness, highscores, WiFi credentials and installed games are
+     unchanged after a successful and after a cancelled update.
+   - Below 30% battery (or with the gauge unplugged), the install is refused
+     with the slow red breath.
+   - With no credentials, the two amber bars appear and nothing connects.
+
+Keep a USB cable ready. Until step 5, an image that boots but crashes is not
+rolled back on its own; reflash over USB.
+
 ## Release procedure
 
 Version and sequence are inputs to the build, not edits to a source file.
@@ -174,13 +254,14 @@ To rotate keys:
 2. Sign the following releases with the new key.
 3. Then drop the old id.
 
-A firmware that trusts no key refuses every manifest. That is the current
-state, deliberately.
+Trusted ids live in `src/core/ota_keys.cpp`. The firmware currently trusts
+`bb-release-1` (created 2026-10-16; private key held offline by the
+maintainer).
 
 ## Testing
 
 ```sh
-cd beam-boy-hw && pio test -e native -f "test_ota_*"           # parser + policy
+cd beam-boy-hw && pio test -e native -f "test_ota_*" -f test_update_flow   # parser, policy, update screen
 python -m unittest discover -s tools/firmware -p "test_*.py"   # release tool
 python tools/firmware/fwrelease.py test-vector                 # vector + header in sync
 pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature   # on a Feather
@@ -205,22 +286,14 @@ Measured on the Feather (2026-10-16, test build without WiFi or engine):
 The verify cost is paid once per `check()`, which already blocks for a TLS
 handshake, so it needs no special handling.
 
-## Not done yet (PLAN.md steps 4–5)
+## Not done yet
 
-- **Scene and engine guard (step 4):**
-  - Wire `UpdateFirmwareScene` to `Network` + `Ota`, with the confirm overlay,
-    real progress, distinct pulse rhythms and a deliberate reboot after
-    success.
-  - Suspend idle sleep while `Ota::busy()`, and abort on critical power.
-  - Measure flash-write latency against RMT LED output.
-  - `Power` also needs to expose the age of its last good reading for the power
-    gate.
+- **Run the step 4 hardware checklist** (above), including the LED behaviour
+  during flash writes and the frame rate while downloading.
 - **First boot and rollback (step 5):**
   - Override Arduino's `verifyRollbackLater()` and acknowledge the new image
     only after a healthy launcher has run for 5 s.
   - Prove rollback on the Feather: interrupted downloads, a crashing signed
     image, and power loss at every stage.
-- **Create the first release key.** The on-device signature test passed on the
-  Feather (see Testing).
-- **Ship the first updater-capable firmware over USB** before publishing
-  `stable.json`.
+- **Ship the first updater-capable firmware over USB** before publishing a
+  real `stable.json`.

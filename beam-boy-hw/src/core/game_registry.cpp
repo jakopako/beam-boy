@@ -32,7 +32,7 @@ const GameEntry kUtilities[] = {
     {"settings", "Settings", Color(150, 110, 255), &settings, false,
      false},  // violet
     {"update", "Update firmware", Color(255, 140, 0), &update_firmware, false,
-     false},  // amber, unavailable placeholder
+     false},  // amber
 };
 
 static_assert(sizeof(kUtilities) / sizeof(kUtilities[0]) == kUtilityCount,

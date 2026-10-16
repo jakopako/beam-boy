@@ -32,9 +32,10 @@
 // opens the stream, then poll() moves one bounded chunk per call so the caller
 // can keep drawing real progress and honour a cancel between chunks.
 //
-// What this does not do yet (PLAN.md Phase 11 steps 4-5): wire a scene, guard
-// engine idle sleep during a write, or defer Arduino's automatic "app valid"
-// acknowledgement for health-checked rollback.
+// Used by UpdateFirmwareScene, which supplies the preconditions, holds off
+// engine idle sleep while busy() and cancels on exit or critical battery.
+// Not done yet (PLAN.md Phase 11 step 5): deferring Arduino's automatic "app
+// valid" acknowledgement for health-checked rollback.
 
 #include <Arduino.h>
 #include <HTTPClient.h>

@@ -651,8 +651,8 @@ and are not release blockers.
    the legacy numeric index remains only as a fallback for old saves. Rebuilds resolve by id and
    clamp safely after deletion; Settings remains selected across a Store-driven list rebuild.
 
-> **Implemented Settings layout:** the four children are WiFi, Update firmware (unavailable
-> placeholder), Store and Brightness. Only Settings appears in the launcher; hold B returns
+> **Implemented Settings layout:** the four children are WiFi, Update firmware, Store and
+> Brightness. Only Settings appears in the launcher; hold B returns
 > from each child to Settings. WiFi no longer contains the prototype OTA action.
 
 ✅ _Visible result: the launcher is always readable as one fixed 1D layout — up to nine games
@@ -673,9 +673,9 @@ separate scene/menu model so settings utilities never masquerade as games.
      Forget with a three-second expiry/disarm on navigation, connection result animations,
      tap-B cancellation and radio shutdown on exit. The registry keeps the stable `network`
      id but displays WiFi. Connected A no longer checks, installs or reboots firmware.
-2. **Update firmware -- placeholder only**
-   - Reserve the second menu position; current placeholder behaviour and all implementation
-     requirements are owned by [Phase 11](#phase-11--firmware-updates).
+2. ✅ **Update firmware**
+   - Second menu position. Phase 10 shipped a placeholder; the real check/install/restart
+     screen and all its requirements are owned by [Phase 11](#phase-11--firmware-updates).
 3. ✅ **Store**
    - Move the existing cartridge store here unchanged in capability: connect, fetch the index,
      show install/update status, verify SHA-256, install, rebuild the game list without rebooting.
@@ -795,19 +795,21 @@ Feather is the only update target.
 
 #### Current status and retained lesson
 
-The old Network-scene OTA action was removed in Phase 10. Settings now exposes a separate
-Update firmware placeholder: two separated amber bars indicate unavailable, A logs that no
-update was started, and hold B returns to Settings. It never connects, writes or reboots.
+The old Network-scene OTA action was removed in Phase 10, which left Settings > Update firmware
+as a placeholder. That placeholder is now replaced.
 
-Steps 1–3 of the implementation order below are now in place (see
+Steps 1–4 of the implementation order below are in place (see
 [docs/phase-11-firmware-updates.md](docs/phase-11-firmware-updates.md)):
 - the release contract and identities;
-- the offline signing/release tool;
+- the offline signing/release tool, and release key `bb-release-1` trusted by the firmware;
 - the strict manifest parser and update policy, with host tests;
-- the rewritten `Ota` service, which streams, verifies and selects the inactive slot.
+- the rewritten `Ota` service, which streams, verifies and selects the inactive slot;
+- the real Update firmware screen (host-tested state machine and rendering), plus the engine's
+  sleep inhibit and abort-before-critical-shutdown hook.
 
-`Ota` is build-checked but has no caller and no trusted release key yet, so no console can
-update. Steps 4–5 (scene, engine guard, rollback, hardware proof) remain.
+Step 4 is build-checked but has not yet run end-to-end on a Feather; the phase doc has the
+hardware checklist. Step 5 (health-checked first boot, rollback, recovery proof) remains, so a
+new image that crashes is not yet rolled back automatically.
 
 - Reuse the existing `Network` connection component and replace the unsafe internals of `Ota`,
   rather than duplicating connectivity or coupling the WiFi and update menu items again.
@@ -818,7 +820,7 @@ update. Steps 4–5 (scene, engine guard, rollback, hardware proof) remain.
 - **An operation that _stages_ a change is not finished until the change is applied.** A
   successful OTA that never reboots reports success, changes nothing, and offers itself again.
 
-#### Implementation plan (steps 1–3 implemented; 4–5 pending)
+#### Implementation plan (steps 1–4 implemented; 5 pending)
 
 **Confirmed scope and choices:** firmware updates are a separate opt-in flow, never a side
 effect of WiFi connection, Store access or boot. Use GitHub Releases for immutable, versioned,
@@ -945,7 +947,7 @@ It now:
   until acknowledgement, and keep a USB recovery recipe (Feather ROM bootloader / TinyUF2).
   An application OTA must not change partition/recovery images.
 - Confirm the first updater-capable firmware and its bootloader via USB on the Feather before
-  enabling remote discovery. The existing placeholder is not a bootstrap update transport.
+  enabling remote discovery. Firmware from before the updater cannot fetch updates itself.
 
 **6. Implementation order and acceptance gates**
 1. Lock schema, board/layout identities, signature test vectors and publishing/signing tooling.
@@ -966,8 +968,9 @@ It now:
 
 **Remaining design gate:** the signature format (ECDSA P-256) and offline key management are
 approved and implemented in the tooling. The on-device test vector passed on the Feather
-(about 292 ms and 5 KB of heap per verify; see the Phase 11 doc), so release keys may now be
-created. Battery threshold, hosting and the separation from WiFi are confirmed.
+(about 292 ms and 5 KB of heap per verify; see the Phase 11 doc), and release key
+`bb-release-1` was created offline and is trusted by the firmware. Battery threshold, hosting
+and the separation from WiFi are confirmed.
 
 Visible result when complete: install a compatible authenticated engine release deliberately,
 see real progress, reboot into it, and recover safely if its first boot fails.
