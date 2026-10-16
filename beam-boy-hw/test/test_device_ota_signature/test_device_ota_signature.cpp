@@ -81,6 +81,32 @@ void test_envelope_verifies_through_the_trusted_key_table() {
                     verifyEnvelope(envelope, payload, payload_length));
 }
 
+// The first verify keeps a few hundred bytes (measured: 444) that could be
+// one-time crypto initialisation or a per-call leak. Repeated calls tell them
+// apart: a leak of that size would cost several KB over ten verifies.
+void test_repeated_verifies_do_not_leak() {
+  TEST_ASSERT_EQUAL(SignatureResult::kOk,
+                    verifySignature(payload, payload_length,
+                                    envelope.signature,
+                                    ota_test_vector::kPublicKey));
+  const uint32_t heap_before = ESP.getFreeHeap();
+  for (int i = 0; i < 10; i++) {
+    TEST_ASSERT_EQUAL(SignatureResult::kOk,
+                      verifySignature(payload, payload_length,
+                                      envelope.signature,
+                                      ota_test_vector::kPublicKey));
+  }
+  const uint32_t heap_after = ESP.getFreeHeap();
+
+  char line[96];
+  snprintf(line, sizeof(line), "10 more verifies: heap %lu -> %lu",
+           static_cast<unsigned long>(heap_before),
+           static_cast<unsigned long>(heap_after));
+  TEST_MESSAGE(line);
+  // Small slack for unrelated background allocations (USB CDC).
+  TEST_ASSERT_UINT32_WITHIN(256, heap_before, heap_after);
+}
+
 void test_any_payload_change_is_rejected() {
   for (size_t i = 0; i < payload_length; i += 37) {
     payload[i] ^= 0x01;
@@ -138,6 +164,7 @@ void setup() {
   UNITY_BEGIN();
   RUN_TEST(test_vector_verifies);
   RUN_TEST(test_envelope_verifies_through_the_trusted_key_table);
+  RUN_TEST(test_repeated_verifies_do_not_leak);
   RUN_TEST(test_any_payload_change_is_rejected);
   RUN_TEST(test_any_signature_change_is_rejected);
   RUN_TEST(test_unknown_and_malformed_keys_are_rejected);
