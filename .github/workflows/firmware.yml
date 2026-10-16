@@ -53,9 +53,8 @@ jobs:
           path: ~/.platformio
           key: pio-${{ runner.os }}-${{ hashFiles('beam-boy-hw/platformio.ini') }}
       - run: pip install platformio cryptography
-      # Only the update suites for now; the full native suite is run locally.
-      - name: Update host tests
-        run: pio test -e native -f "test_ota_*" -f test_update_flow
+      - name: Host tests
+        run: pio test -e native
       - name: Build the Feather
         run: pio run -e adafruit_feather_esp32s3_nopsram
       - name: Image fits its slot and carries the right identity
