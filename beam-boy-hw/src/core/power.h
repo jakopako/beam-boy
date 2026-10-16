@@ -68,6 +68,14 @@ class Power {
   // 0..100. Meaningless (and left at its last-known value) while !available().
   float percent() const { return percent_; }
 
+  // How old the last accepted gauge reading is. A gauge that stops answering
+  // keeps its last value in percent(); callers that must not act on a stale
+  // value (the firmware updater's battery check) look here. UINT32_MAX if
+  // there has never been a good reading.
+  uint32_t readingAgeMs(uint32_t now_ms) const {
+    return has_good_reading_ ? now_ms - last_good_reading_ms_ : UINT32_MAX;
+  }
+
   // Cell voltage, for diagnostics only -- percent() is what everything else
   // should read, since it is what the gauge has already linearised.
   float voltage() const { return voltage_; }
@@ -125,6 +133,8 @@ class Power {
   bool ready_ = false;
   bool last_read_rejected_ = false;
   uint32_t last_poll_ms_ = 0;
+  uint32_t last_good_reading_ms_ = 0;
+  bool has_good_reading_ = false;
 
   bool usb_present_ = false;
   bool usb_raw_ = false;

@@ -74,7 +74,9 @@ constexpr uint16_t kScriptApiVersion = 1;
 
 // One searchable line identifying the build. Printed at boot, and located in
 // the .bin by tools/firmware/fwrelease.py to prove an image really is the
-// board/layout/version a manifest entry claims.
+// board/layout/version a manifest entry claims. Use it only in main.cpp: each
+// file that references it embeds its own copy, and the release tool requires
+// exactly one.
 constexpr char kBuildTag[] = "beamboy-fw:" BEAMBOY_FW_BOARD ";" BEAMBOY_FW_LAYOUT
                              ";" BEAMBOY_FW_VERSION ";" BEAMBOY_FW_STRINGIFY(
                                  BEAMBOY_FW_SEQUENCE);

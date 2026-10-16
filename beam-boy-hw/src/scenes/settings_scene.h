@@ -1,6 +1,6 @@
 #pragma once
 
-// Settings root: WiFi, Update firmware (placeholder), Store and Brightness.
+// Settings root: WiFi, Update firmware, Store and Brightness.
 
 #include "core/engine.h"
 
