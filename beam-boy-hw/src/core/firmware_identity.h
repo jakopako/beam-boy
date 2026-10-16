@@ -74,8 +74,7 @@ constexpr uint16_t kScriptApiVersion = 1;
 
 // One searchable line identifying the build. Printed at boot, and located in
 // the .bin by tools/firmware/fwrelease.py to prove an image really is the
-// board/version a manifest entry claims -- a Feather image published under the
-// DevKitC entry would otherwise only be discovered by the person it bricked.
+// board/layout/version a manifest entry claims.
 constexpr char kBuildTag[] = "beamboy-fw:" BEAMBOY_FW_BOARD ";" BEAMBOY_FW_LAYOUT
                              ";" BEAMBOY_FW_VERSION ";" BEAMBOY_FW_STRINGIFY(
                                  BEAMBOY_FW_SEQUENCE);

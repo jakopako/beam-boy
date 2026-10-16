@@ -98,26 +98,23 @@ void test_the_release_tool_vector_round_trips() {
   TEST_ASSERT_EQUAL_STRING("stable", release.channel);
   TEST_ASSERT_EQUAL_STRING("1.2.3", release.version);
   TEST_ASSERT_EQUAL_UINT32(7, release.sequence);
-  TEST_ASSERT_EQUAL_UINT8(2, release.board_count);
+  TEST_ASSERT_EQUAL_UINT8(1, release.board_count);
   TEST_ASSERT_EQUAL_STRING("adafruit_feather_esp32s3_nopsram",
                            release.boards[0].board);
   TEST_ASSERT_EQUAL_STRING("feather-s3-8mb-ota2048k-v1",
                            release.boards[0].layout);
   TEST_ASSERT_EQUAL_UINT32(1234567, release.boards[0].size);
   TEST_ASSERT_EQUAL_UINT16(3, release.boards[0].min_save);
-  TEST_ASSERT_EQUAL_STRING("esp32-s3-devkitc-1-n16r8",
-                           release.boards[1].board);
-  TEST_ASSERT_EQUAL_UINT32(1300000, release.boards[1].size);
   TEST_ASSERT_EQUAL_STRING(
       "https://github.com/jakopako/beam-boy/releases/download/fw-v1.2.3/"
-      "beamboy-fw-1.2.3-esp32-s3-devkitc-1-n16r8.bin",
-      release.boards[1].url);
+      "beamboy-fw-1.2.3-adafruit_feather_esp32s3_nopsram.bin",
+      release.boards[0].url);
 }
 
 void test_parses_every_payload_field() {
   Release release;
   const std::string text = payload("[" + board() + "," +
-                                   board("esp32-s3-devkitc-1-n16r8") + "]");
+                                   board("some-other-board") + "]");
   TEST_ASSERT_EQUAL(ManifestError::kNone,
                     parsePayload(text.data(), text.size(), release));
   const BoardImage& b = release.boards[0];

@@ -682,16 +682,6 @@ def _sample_payload() -> dict:
                     "size": 1234567,
                     "sha256": hashlib.sha256(b"beam boy feather test image").hexdigest(),
                 },
-                {
-                    "board": "esp32-s3-devkitc-1-n16r8",
-                    "layout": "devkitc-s3-16mb-ota6400k-v1",
-                    "min_updater": 1,
-                    "min_save": 3,
-                    "min_api": 1,
-                    "url": asset_url(DEFAULT_REPO, "1.2.3", "esp32-s3-devkitc-1-n16r8"),
-                    "size": 1300000,
-                    "sha256": hashlib.sha256(b"beam boy devkitc test image").hexdigest(),
-                },
             ],
         }
     )

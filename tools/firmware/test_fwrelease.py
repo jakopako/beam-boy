@@ -22,16 +22,15 @@ import fwrelease as fr
 
 BOARDS = fr.load_boards()
 FEATHER = "adafruit_feather_esp32s3_nopsram"
-DEVKIT = "esp32-s3-devkitc-1-n16r8"
 
 
-def fake_image(board: str, version: str = "1.2.3", sequence: int = 7, size: int = 4096, chip: int = 9, tags: int = 1) -> bytes:
+def fake_image(board: str, version: str = "1.2.3", sequence: int = 7, size: int = 4096, chip: int = 9, tags: int = 1, layout: str | None = None) -> bytes:
     header = bytearray(24)
     header[0] = fr.ESP_IMAGE_MAGIC
     header[12:14] = chip.to_bytes(2, "little")
     tag = b"beamboy-fw:%s;%s;%s;%d\0" % (
         board.encode(),
-        BOARDS[board]["layout"].encode(),
+        (layout or BOARDS[board]["layout"]).encode(),
         version.encode(),
         sequence,
     )
@@ -50,7 +49,11 @@ class ImageTests(unittest.TestCase):
 
     def test_rejects_another_boards_image(self):
         with self.assertRaisesRegex(fr.ReleaseError, "built for"):
-            fr.check_image(fake_image(FEATHER), DEVKIT)
+            fr.check_image(fake_image("some-other-board", layout="other-v1"), FEATHER)
+        with self.assertRaisesRegex(fr.ReleaseError, "layout"):
+            fr.check_image(fake_image(FEATHER, layout="feather-s3-8mb-other-v2"), FEATHER)
+        with self.assertRaisesRegex(fr.ReleaseError, "unknown board"):
+            fr.check_image(fake_image(FEATHER), "some-other-board")
 
     def test_rejects_bad_header_chip_size_and_tags(self):
         bad = bytearray(fake_image(FEATHER))
@@ -107,7 +110,9 @@ class ReleaseFlowTests(unittest.TestCase):
         with self.assertRaisesRegex(fr.ReleaseError, "plain MAJOR.MINOR.PATCH"):
             self.payload(version="1.2.3-rc.1")
         with self.assertRaisesRegex(fr.ReleaseError, "missing images"):
-            self.payload(images={FEATHER: self.images[FEATHER]})
+            self.payload(images={})
+        with self.assertRaisesRegex(fr.ReleaseError, "unknown board"):
+            self.payload(images=dict(self.images, **{"some-other-board": self.images[FEATHER]}))
         with self.assertRaises(fr.ReleaseError):
             self.payload(sequence=0)
 
@@ -272,7 +277,7 @@ class RepositoryTests(unittest.TestCase):
         feather = (fr.HW_DIR / BOARDS[FEATHER]["partitions"]).read_text()
         self.assertIn("ota_0,    app,  ota_0,    0x10000,  2048K", feather)
         self.assertEqual(BOARDS[FEATHER]["slot_size"], 2048 * 1024)
-        self.assertEqual(BOARDS[DEVKIT]["slot_size"], 0x640000)
+        self.assertEqual(list(BOARDS), [FEATHER])
 
 
 if __name__ == "__main__":

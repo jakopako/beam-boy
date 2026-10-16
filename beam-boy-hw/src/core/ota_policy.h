@@ -81,7 +81,7 @@ constexpr uint32_t kMaxBatteryReadingAgeMs = 5000;
 
 enum class PowerGate : uint8_t {
   kOk,
-  kUnavailable,  // Battery board, but no believable reading.
+  kUnavailable,  // No believable fuel-gauge reading.
   kStale,
   kTooLow,
   kCritical,
@@ -92,10 +92,10 @@ const char* describe(PowerGate gate);
 // Whether a write may start. USB presence and charge state are deliberately
 // not inputs: a cable can be pulled mid-write, so it never bypasses the
 // threshold. `level` must be the battery's own classification (Power::level()),
-// not the USB-overridden alert level.
-PowerGate installPowerGate(bool has_battery_monitor, bool reading_available,
-                           uint32_t reading_age_ms, float percent,
-                           PowerLevel level);
+// not the USB-overridden alert level. A missing gauge never counts as "no
+// battery to worry about": no reading means no update.
+PowerGate installPowerGate(bool reading_available, uint32_t reading_age_ms,
+                           float percent, PowerLevel level);
 
 // --- Confirmation ----------------------------------------------------------
 

@@ -4,7 +4,6 @@
 // Host tests cover parsing and policy, but the signature check needs the
 // target's mbedTLS, so this runs on a board:
 //
-//   pio test -e esp32-s3-devkitc-1-n16r8 -f test_device_ota_signature
 //   pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature
 //
 // It also logs verification time and heap use, which PLAN.md asks to measure

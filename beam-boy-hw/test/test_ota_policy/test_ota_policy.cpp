@@ -43,8 +43,9 @@ fw::Release makeRelease(uint32_t sequence = 8) {
   strcpy(release.channel, "stable");
   strcpy(release.version, "1.2.3");
   release.sequence = sequence;
-  release.boards[0] =
-      makeImage("esp32-s3-devkitc-1-n16r8", "devkitc-s3-16mb-ota6400k-v1");
+  // A second, unrelated board first, so tests prove the lookup picks this
+  // board's entry rather than whichever comes first.
+  release.boards[0] = makeImage("some-other-board", "some-other-layout-v1");
   release.boards[1] = makeImage(kFeather, kFeatherLayout);
   release.board_count = 2;
   return release;
@@ -236,41 +237,34 @@ void test_redirect_statuses() {
 
 // --- Power -----------------------------------------------------------------------
 
-void test_usb_only_boards_need_no_battery() {
-  TEST_ASSERT_EQUAL(PowerGate::kOk,
-                    installPowerGate(false, false, 999999, 0.0f,
-                                     PowerLevel::kCritical));
+void test_a_missing_gauge_reading_blocks_the_update() {
+  // No "USB-only" escape hatch: without a reading there is no update.
+  TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
+                    installPowerGate(false, 0, 100.0f, PowerLevel::kNormal));
 }
 
 void test_battery_boards_need_a_fresh_valid_reading() {
   TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
-                    installPowerGate(true, false, 0, 90.0f,
-                                     PowerLevel::kNormal));
+                    installPowerGate(true, 0, NAN, PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
-                    installPowerGate(true, true, 0, NAN, PowerLevel::kNormal));
-  TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
-                    installPowerGate(true, true, 0, 101.0f,
-                                     PowerLevel::kNormal));
+                    installPowerGate(true, 0, 101.0f, PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kOk,
-                    installPowerGate(true, true, kMaxBatteryReadingAgeMs,
-                                     90.0f, PowerLevel::kNormal));
+                    installPowerGate(true, kMaxBatteryReadingAgeMs, 90.0f,
+                                     PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kStale,
-                    installPowerGate(true, true, kMaxBatteryReadingAgeMs + 1,
-                                     90.0f, PowerLevel::kNormal));
+                    installPowerGate(true, kMaxBatteryReadingAgeMs + 1, 90.0f,
+                                     PowerLevel::kNormal));
 }
 
 void test_battery_threshold_is_thirty_percent() {
   TEST_ASSERT_EQUAL(PowerGate::kOk,
-                    installPowerGate(true, true, 0, 30.0f,
-                                     PowerLevel::kNormal));
+                    installPowerGate(true, 0, 30.0f, PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kTooLow,
-                    installPowerGate(true, true, 0, 29.9f,
-                                     PowerLevel::kNormal));
+                    installPowerGate(true, 0, 29.9f, PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kTooLow,
-                    installPowerGate(true, true, 0, 50.0f, PowerLevel::kLow));
+                    installPowerGate(true, 0, 50.0f, PowerLevel::kLow));
   TEST_ASSERT_EQUAL(PowerGate::kCritical,
-                    installPowerGate(true, true, 0, 50.0f,
-                                     PowerLevel::kCritical));
+                    installPowerGate(true, 0, 50.0f, PowerLevel::kCritical));
 }
 
 // --- Confirmation ---------------------------------------------------------------
@@ -411,7 +405,7 @@ int main(int, char**) {
   RUN_TEST(test_allows_only_exact_https_hosts);
   RUN_TEST(test_rejects_lookalike_and_tricky_urls);
   RUN_TEST(test_redirect_statuses);
-  RUN_TEST(test_usb_only_boards_need_no_battery);
+  RUN_TEST(test_a_missing_gauge_reading_blocks_the_update);
   RUN_TEST(test_battery_boards_need_a_fresh_valid_reading);
   RUN_TEST(test_battery_threshold_is_thirty_percent);
   RUN_TEST(test_a_press_carried_into_the_scene_never_confirms);

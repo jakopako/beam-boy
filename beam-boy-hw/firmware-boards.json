@@ -5,11 +5,6 @@
       "layout": "feather-s3-8mb-ota2048k-v1",
       "partitions": "partitions-8MB-littlefs.csv",
       "slot_size": 2097152
-    },
-    "esp32-s3-devkitc-1-n16r8": {
-      "layout": "devkitc-s3-16mb-ota6400k-v1",
-      "partitions": "default_16MB.csv",
-      "slot_size": 6553600
     }
   }
 }

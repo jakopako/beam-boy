@@ -17,9 +17,9 @@
 // layer around the register reads; see power_policy.h's header comment for
 // why the split is worth it.
 //
-// board::kHasBatteryMonitor gates everything here: on a board with no fuel
-// gauge (the DevKitC), begin() fails harmlessly and every other call answers
-// as if nothing changed -- no charging and no low/critical warning.
+// board::kHasBatteryMonitor gates everything here: on a build with no fuel
+// gauge (the native host tests), begin() fails harmlessly and every other call
+// answers as if nothing changed -- no charging and no low/critical warning.
 //
 // Charging is decided from two signals: whether USB power is present (an
 // external divider on board::kPinUsbSense) and the gauge's voltage and

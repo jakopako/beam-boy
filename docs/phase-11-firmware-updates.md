@@ -103,8 +103,8 @@ The console refuses a release whose minimum is above its own value.
 
 `beginInstall(preconditions)` refuses unless the release is available, the
 power gate passes and saves are clean. The power gate requires a fresh (≤ 5 s),
-valid gauge reading of at least 30%. USB never bypasses it, and USB-only boards
-skip it. The rest of the install:
+valid gauge reading of at least 30%. USB never bypasses it, and neither does a
+missing gauge reading. The rest of the install:
 
 1. It follows at most 5 redirects by hand. Each hop must be `https://` to
    exactly one of the allowed hosts: `beamboy.ch`, `github.com`,
@@ -134,22 +134,21 @@ Version and sequence are inputs to the build, not edits to a source file.
 `0.0.0-dev`/0.
 
 ```sh
-# 1. Build each board with the release identity.
+# 1. Build the Feather firmware with the release identity.
 cd beam-boy-hw
-BEAMBOY_FW_VERSION=1.2.3 BEAMBOY_FW_SEQUENCE=7 pio run -e adafruit_feather_esp32s3_nopsram -e esp32-s3-devkitc-1-n16r8
+BEAMBOY_FW_VERSION=1.2.3 BEAMBOY_FW_SEQUENCE=7 pio run -e adafruit_feather_esp32s3_nopsram
 cd ..
 
-# 2. Check the images (header, chip, slot size, embedded build tag) and stage assets + payload.json.
+# 2. Check the image (header, chip, slot size, embedded build tag) and stage the asset + payload.json.
 python tools/firmware/fwrelease.py prepare --version 1.2.3 --sequence 7 \
   --image adafruit_feather_esp32s3_nopsram=beam-boy-hw/.pio/build/adafruit_feather_esp32s3_nopsram/firmware.bin \
-  --image esp32-s3-devkitc-1-n16r8=beam-boy-hw/.pio/build/esp32-s3-devkitc-1-n16r8/firmware.bin \
   --out dist/fw-v1.2.3
 
 # 3. Offline: sign. Writes dist/fw-v1.2.3/manifest-1.2.3.json and refuses to overwrite.
 python tools/firmware/fwrelease.py sign --key /offline/bb-release-1.pem --key-id bb-release-1 dist/fw-v1.2.3/payload.json
 
-# 4. Create GitHub release fw-v1.2.3 and upload both .bin files and manifest-1.2.3.json. Never replace assets.
-# 5. Check the published assets, then smoke-test on both boards.
+# 4. Create GitHub release fw-v1.2.3 and upload the .bin and manifest-1.2.3.json. Never replace assets.
+# 5. Check the published asset, then smoke-test on a Feather.
 python tools/firmware/fwrelease.py verify --manifest dist/fw-v1.2.3/manifest-1.2.3.json --download
 
 # 6. Move the stable pointer (re-downloads and checks assets; refuses a non-increasing sequence), commit, push.
@@ -184,7 +183,7 @@ state, deliberately.
 cd beam-boy-hw && pio test -e native -f "test_ota_*"           # parser + policy
 python -m unittest discover -s tools/firmware -p "test_*.py"   # release tool
 python tools/firmware/fwrelease.py test-vector                 # vector + header in sync
-pio test -e esp32-s3-devkitc-1-n16r8 -f test_device_ota_signature   # on a board
+pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature   # on a Feather
 ```
 
 The signature test vector (`tools/firmware/testdata/p256-vector-1.json`) was
@@ -207,9 +206,9 @@ format.
 - **First boot and rollback (step 5):**
   - Override Arduino's `verifyRollbackLater()` and acknowledge the new image
     only after a healthy launcher has run for 5 s.
-  - Prove rollback on both boards: interrupted downloads, a crashing signed
+  - Prove rollback on the Feather: interrupted downloads, a crashing signed
     image, and power loss at every stage.
-- **Run `test_device_ota_signature` on both boards and record the numbers**,
+- **Run `test_device_ota_signature` on the Feather and record the numbers**,
   then create the first release key.
 - **Ship the first updater-capable firmware over USB** before publishing
   `stable.json`.

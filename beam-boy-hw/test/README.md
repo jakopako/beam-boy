@@ -69,13 +69,13 @@ Suites named `test_device_*` need the target's mbedTLS or flash, so the native
 env ignores them and the board envs run only them:
 
 ```
-pio test -e esp32-s3-devkitc-1-n16r8 -f test_device_ota_signature
+pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature
 ```
 
 `test_device_ota_signature` verifies the release tool's ECDSA P-256 test vector
 with the firmware's verifier, rejects tampered payloads/signatures/keys, and
 logs verification time and heap. CI only compiles it
-(`--without-uploading --without-testing`); run it on both boards before
+(`--without-uploading --without-testing`); run it on the Feather before
 creating a release key. Its vector lives in `test/ota_vectors/` and is
 regenerated with `python tools/firmware/fwrelease.py test-vector --regenerate`.
 

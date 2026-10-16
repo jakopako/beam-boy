@@ -48,43 +48,6 @@ constexpr uint8_t kBrightnessDefault = 64;
 
 #if defined(ARDUINO_ARCH_ESP32)
 
-#if defined(BEAMBOY_BOARD_S3_DEVKIT)
-
-// Espressif ESP32-S3-DevKitC-1 N16R8, the bring-up/dev board. Pins differ from
-// the Feather because this board has real constraints the Feather does not:
-//
-//   * GPIO35-37 are wired to the octal PSRAM and must never be used, even
-//     though the headers expose them and nothing stops you.
-//   * GPIO0, 45 and 46 are strapping pins; a button or a pull-up on one can
-//     stop the board booting.
-//   * GPIO19/20 are USB D-/D+, needed for the CDC serial console.
-//   * GPIO38 (or 48 on some revisions) drives the onboard WS2812.
-//
-// Everything below lands in the 4-18 range, clear of all of the above, with the
-// analog inputs on ADC1 -- ADC2 is unusable while WiFi is on, which is exactly
-// when the stick still has to work.
-constexpr uint8_t kPinLedData = 17;
-constexpr uint8_t kPinButtonA = 15;
-constexpr uint8_t kPinButtonB = 16;
-constexpr uint8_t kPinStickSw = 18;
-constexpr uint8_t kPinStickX = 4;  // ADC1_CH3
-constexpr uint8_t kPinStickY = 5;  // ADC1_CH4
-
-// ⚠️ No battery on this board. The DevKitC has no LiPo charger and no fuel
-// gauge, so it runs from USB only and there is deliberately no battery-sense
-// wiring here. Power management (core/power.h) checks this flag and stays
-// inert rather than inventing a chip that isn't there; if a build error ever
-// points at a missing battery pin or peripheral, the fix is to guard that
-// feature, not to invent one for this board.
-constexpr bool kHasBatteryMonitor = false;
-
-// No charger, so nothing to sense. The pin is a placeholder that exists only
-// so shared code compiles; kHasUsbSense keeps it from ever being touched.
-constexpr bool kHasUsbSense = false;
-constexpr uint8_t kPinUsbSense = 0;
-
-#else
-
 // Adafruit Feather ESP32-S3 (No PSRAM), checked against the Arduino core's
 // variants/adafruit_feather_esp32s3_nopsram/pins_arduino.h.
 //
@@ -139,8 +102,6 @@ constexpr bool kHasBatteryMonitor = true;
 constexpr bool kHasUsbSense = true;
 constexpr uint8_t kPinUsbSense = 12;
 
-#endif  // BEAMBOY_BOARD_S3_DEVKIT
-
 constexpr uint16_t kAdcMax = 4095;
 
 // The ESP32 RMT peripheral generates WS2812 timing in hardware, so LED output
@@ -161,8 +122,8 @@ constexpr uint8_t kPinStickX = 4;
 constexpr uint8_t kPinStickY = 5;
 
 // No fuel gauge to shim over I2C on the host; power.h/power.cpp are ESP32-only
-// and never compiled into a native test binary, so this exists only for
-// symmetry with the two ESP32 branches above.
+// and never compiled into a native test binary, so this exists only so shared
+// code compiles here.
 constexpr bool kHasBatteryMonitor = false;
 constexpr bool kHasUsbSense = false;
 constexpr uint8_t kPinUsbSense = 6;
