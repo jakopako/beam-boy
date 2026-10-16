@@ -81,9 +81,9 @@ void test_envelope_verifies_through_the_trusted_key_table() {
                     verifyEnvelope(envelope, payload, payload_length));
 }
 
-// The first verify keeps a few hundred bytes (measured: 444) that could be
-// one-time crypto initialisation or a per-call leak. Repeated calls tell them
-// apart: a leak of that size would cost several KB over ten verifies.
+// The first verify keeps a few hundred bytes (measured: 444) of one-time
+// crypto initialisation. Repeated calls must keep nothing: on the Feather,
+// ten more verifies left free heap unchanged.
 void test_repeated_verifies_do_not_leak() {
   TEST_ASSERT_EQUAL(SignatureResult::kOk,
                     verifySignature(payload, payload_length,
