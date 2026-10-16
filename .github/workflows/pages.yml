@@ -32,6 +32,10 @@ jobs:
           python-version: '3.12'
       - name: Validate store index
         run: python tools/build_store_index.py --check
+      - name: Validate firmware manifest
+        run: |
+          pip install cryptography
+          python tools/firmware/fwrelease.py check-published
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload website

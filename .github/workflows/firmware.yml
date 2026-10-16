@@ -1,0 +1,69 @@
+name: Firmware
+
+# Builds both boards, checks the images against their update slots, and runs
+# the firmware-update tests. It never signs or publishes anything: release keys
+# are offline by design (see docs/phase-11-firmware-updates.md), so no secret
+# is reachable from this workflow, including from forks and pull requests.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'beam-boy-hw/**'
+      - 'tools/firmware/**'
+      - 'website/firmware/**'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'beam-boy-hw/**'
+      - 'tools/firmware/**'
+      - 'website/firmware/**'
+      - '.github/workflows/firmware.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install cryptography
+      - name: Release tool tests
+        run: python -m unittest discover -s tools/firmware -p "test_*.py" -v
+      - name: Published manifest verifies against firmware keys
+        run: python tools/firmware/fwrelease.py check-published
+
+  firmware:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: beam-boy-hw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('beam-boy-hw/platformio.ini') }}
+      - run: pip install platformio cryptography
+      # Only the update suites for now; the full native suite is run locally.
+      - name: Update host tests
+        run: pio test -e native -f "test_ota_*"
+      - name: Build both boards
+        run: pio run -e esp32-s3-devkitc-1-n16r8 -e adafruit_feather_esp32s3_nopsram
+      - name: Images fit their slots and carry the right identity
+        run: |
+          for env in esp32-s3-devkitc-1-n16r8 adafruit_feather_esp32s3_nopsram; do
+            python ../tools/firmware/fwrelease.py check-image --board "$env" ".pio/build/$env/firmware.bin"
+          done
+      - name: On-device signature test compiles
+        run: >
+          pio test -e esp32-s3-devkitc-1-n16r8 -e adafruit_feather_esp32s3_nopsram
+          -f test_device_ota_signature --without-uploading --without-testing
