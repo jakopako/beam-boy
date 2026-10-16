@@ -295,8 +295,6 @@ def update(dt)
   end
 end
 
-end
-
 def render()
   if state == STATE_GAME_OVER
     beam.clear()
