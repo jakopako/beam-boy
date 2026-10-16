@@ -103,7 +103,7 @@ beam.score(add)                           -- accumulate; engine files it on exit
 beam.reset_score()                        -- preserve highscore in RAM, reset run to zero
 beam.highscore()                          -- NEW: read this cartridge's own highscore
 beam.show_score(elapsed_ms)               -- the engine-drawn binary reveal
-beam.show_lives(lives)                    -- shared green life dots at the far end
+beam.show_lives(lives)                    -- shared turquoise life dots at the far end
 beam.raw_pixel(index, color, intensity)   -- bypass normalised coords for custom UI
 beam.exit()                               -- return to launcher
 
@@ -119,7 +119,7 @@ This API requires the updated firmware; update the engine before installing
 the revised Reflex cartridge. Fishing uses the same reset in its local cartridge.
 
 Call `beam.show_lives(lives)` after drawing the playfield in `render()`. It
-draws one pure-green LED per remaining life at 35% intensity, anchored at the
+draws one turquoise LED per remaining life at 40% intensity, anchored at the
 logical far end and mirrored by display reversal. Zero draws nothing; it does
 not clear the playfield, so games should clear/redraw each frame. Counts must
 be non-negative integers; invalid arguments raise a script error. Counts beyond
