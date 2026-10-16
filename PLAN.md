@@ -157,17 +157,17 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 
 The source of truth is `src/core/board_config.h`. Feather header labels are in quotes.
 
-| Signal        | Feather (target)        | DevKitC (dev) | Notes                                                                                     |
-| ------------- | ----------------------- | ------------- | ----------------------------------------------------------------------------------------- |
-| LED data      | GPIO5 ("5")             | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                                 |
-| Button A      | GPIO6 ("6")             | 15            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
-| Button B      | GPIO9 ("9")             | 16            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
-| Stick push    | GPIO15 ("A3")           | 18            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.          |
-| Stick X       | GPIO8 ("A5")            | 4             | ADC1 — usable while WiFi is active.                                                       |
-| Stick Y       | GPIO10 ("10")           | 5             | ADC1 — usable while WiFi is active.                                                       |
-| Stick VCC     | "3V"                    | 3V3           | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V.      |
-| Battery sense | I2C (GPIO3/4, SDA/SCL)  | —             | MAX17048 fuel gauge (Feather only); shares the STEMMA QT bus. See Phase 8.                |
-| USB sense     | GPIO12 ("12")           | —             | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
+| Signal        | Feather                 | Notes                                                                                     |
+| ------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
+| LED data      | GPIO5 ("5")             | RMT-capable WS2812B data line. Via 330 Ω.                                                 |
+| Button A      | GPIO6 ("6")             | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
+| Button B      | GPIO9 ("9")             | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
+| Stick push    | GPIO15 ("A3")           | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.          |
+| Stick X       | GPIO8 ("A5")            | ADC1 — usable while WiFi is active.                                                       |
+| Stick Y       | GPIO10 ("10")           | ADC1 — usable while WiFi is active.                                                       |
+| Stick VCC     | "3V"                    | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V.      |
+| Battery sense | I2C (GPIO3/4, SDA/SCL)  | MAX17048 fuel gauge; shares the STEMMA QT bus. See Phase 8.                               |
+| USB sense     | GPIO12 ("12")           | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
 
 ⚠️ Keep every analog input on **ADC1** (GPIO1–10 on the S3). ADC2 (GPIO11–20) is shared with
 the WiFi radio, and the Store and Network scenes read the stick while WiFi is on. Beware the
@@ -577,14 +577,14 @@ it over the air is item 5.)_
 > to tune. The sections below describe what was actually built.
 
 1. ✅ **Hardware & Sensing Layer (`src/core/power.*`):**
-   - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
+   - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `true` on the Feather, `false` in native host builds (no chip, no I2C traffic attempted).
    - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `chargeState()`, `charging()`, `usbPowered()`, `level()`.
    - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it charging — live in `src/core/power_policy.h` as plain, host-testable functions over floats (   `classifyPowerLevel`, `classifyChargeState`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. Native tests cover gauge-reading plausibility, hysteresis, charge-state classification, and idle-sleep decisions.
       - Charging is detected from USB presence (a 2:3 divider, e.g. 10k/15k, from the Feather's `USB` pin to GPIO12) combined with the gauge's voltage and percentage: on battery / charging / full, with "full" latched until the cell sags to its recharge voltage. See [`docs/phase-8-power.md`](docs/phase-8-power.md#usb-power-sense) for the wiring.
 
 2. ✅ **Battery Gauge & Status — launcher only:**
    - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar, for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
-   - On a board with no fuel gauge (the DevKitC), the same gesture shows a dim, steady white pixel instead of a fake reading.
+   - With no usable fuel-gauge reading, the same gesture shows a dim, steady white pixel instead of a fake reading.
    - This is the **only charge-state indicator**. On battery the bar is steady green → amber → red by level; charging, it is green and breathes; full, it is steady green at full length. On USB it is always green, so a red bar never reads as a warning while the battery is being charged.
    - Adding a third gesture to two buttons that already had two turned the launcher's input handling into a small state machine, which is now arbitrated in one place (`src/scenes/launcher_gestures.h`) and covered by 17 native tests. It closes three ordering bugs, two of which destroyed user data: A pressed slightly before B launching a game instead of showing the gauge; releasing A first after the gauge deleting the selected cartridge; and holding B to exit a game (1.2 s) rolling straight on past the delete threshold (2.5 s). See [`docs/phase-8-power.md`](docs/phase-8-power.md#gesture-ordering).
 
@@ -790,9 +790,8 @@ downloads into B, verifies, then flips a pointer and reboots into B. An interrup
 or corrupt download leaves A untouched and the console boots normally. This is why
 the BOM specifies 8 MB flash — two complete copies must fit.
 
-Both supported ESP32-S3 environments already have two application slots: 2 MiB per slot on
-the Feather and `0x640000` bytes per slot on the DevKitC. Release images must fit their
-board's layout; the obsolete ESP8266 layout is not an update target.
+The Feather's layout already has two 2 MiB application slots. Release images must fit it; the
+Feather is the only update target.
 
 #### Current status and retained lesson
 
@@ -850,17 +849,17 @@ It now:
   do not claim health-checked rollback until the hardware tests pass.
 - Native signed-app verification is not enabled in the current SDK configuration. The updater
   therefore checks authenticity itself (signed manifest plus image SHA-256) before selecting a
-  slot. The on-device test vector must still pass on both boards.
+  slot. The on-device test vector must still pass on the Feather.
 
 **1. Release contract and publishing**
 - Derive a displayed SemVer, monotonically increasing release sequence, board id and layout id
   from the release build, not an independently edited string in `ota.cpp`.
-- Publish separate `firmware.bin` assets for `adafruit_feather_esp32s3_nopsram` and
-  `esp32-s3-devkitc-1-n16r8`; never offer one board's GPIO/flash configuration to the other.
+- Publish a `firmware.bin` asset for `adafruit_feather_esp32s3_nopsram`, tagged with its board
+  and layout ids; never offer an image built for a different board or layout.
   OTA delivers only the app image, never a merged flash image, partition table, bootloader
   or LittleFS image. Keep saves, brightness, credentials, highscores and cartridges intact.
-- The Feather currently has two 2 MiB app slots and the DevKitC two `0x640000`-byte slots.
-  CI must check each exact image size against its environment's inactive-slot capacity.
+- The Feather has two 2 MiB app slots.
+  CI must check the exact image size against the inactive-slot capacity.
   Runtime repeats that check using the actual partition, and rejects incompatible layout ids.
   Layout changes require a separate USB migration, not an ordinary OTA.
 - Discovery URL: `https://beamboy.ch/firmware/stable.json`.
@@ -882,7 +881,7 @@ It now:
 - Independently verify the manifest signature with a firmware-embedded public key, then match
   the downloaded image to the signed size and SHA-256 before changing the boot target.
   Algorithm: ECDSA P-256/SHA-256 through ESP32's mbedTLS; the on-device test vector measures
-  heap and time and must pass on both boards before real release keys are created.
+  heap and time and must pass on the Feather before real release keys are created.
   This is updater-level authenticity, not Secure Boot; do not burn eFuses in this work.
 - Keep private keys outside the repository, GitHub and devices: the maintainer signs offline
   with `tools/firmware/fwrelease.py`; CI and fork/PR builds cannot sign or publish a stable
@@ -913,10 +912,10 @@ It now:
   completed pending image must be detected, not overwritten without acknowledgement.
 
 **4. Safe writing, responsiveness and engine coordination**
-- Before confirmation starts a write: on battery-equipped boards require a valid, fresh gauge
-  sample >=30%; refuse stale/unavailable readings, low/critical power and unavailable storage.
-  USB-powered DevKitC has no battery check. USB presence or charge state must not be used to
-  bypass the threshold.
+- Before confirmation starts a write, require a valid, fresh gauge sample >=30%; refuse
+  stale/unavailable readings, low/critical power and unavailable storage. A missing gauge
+  reading blocks the update. USB presence or charge state must not be used to bypass the
+  threshold.
 - Flush pending saves and verify they are clean before writing; failed saves block installation.
   Never format/migrate LittleFS as part of an update. Save migrations must remain rollback-safe:
   additive/read-compatible until the new app is marked healthy, or use versioned backups.
@@ -929,7 +928,7 @@ It now:
   at safe chunk boundaries. Abort and clean up before exiting, disconnecting or critical shutdown.
   Clear the operation guard on every terminal path; no early return may leave sleep disabled.
 - Preserve single ownership of display/input; do not introduce a second task that races the engine.
-  Retain idle servicing for WiFi. Measure flash-write latency and RMT display safety on both boards:
+  Retain idle servicing for WiFi. Measure flash-write latency and RMT display safety on the Feather:
   use safe inter-chunk progress updates, not an assumption that LEDs must always freeze.
   If a synchronous library cannot satisfy cancellation/progress, replace that path rather than
   advertising it as responsive. Every stall has an inactivity and total-operation deadline.
@@ -943,14 +942,14 @@ It now:
   test intentional crash, failed mount and interrupted first boot. A malformed cartridge should
   be isolated/skipped as today, not treated as an unhealthy firmware boot.
 - Record/reset update diagnostics without erasing user content. Keep rollback-compatible storage
-  until acknowledgement, and keep a USB recovery recipe (Feather ROM/TinyUF2 where applicable,
-  DevKitC ROM flashing). An application OTA must not change partition/recovery images.
-- Confirm the first updater-capable firmware and its bootloader via USB on both boards before
+  until acknowledgement, and keep a USB recovery recipe (Feather ROM bootloader / TinyUF2).
+  An application OTA must not change partition/recovery images.
+- Confirm the first updater-capable firmware and its bootloader via USB on the Feather before
   enabling remote discovery. The existing placeholder is not a bootstrap update transport.
 
 **6. Implementation order and acceptance gates**
 1. Lock schema, board/layout identities, signature test vectors and publishing/signing tooling.
-   Build both environments and fail publishing on oversize or missing/wrong-board assets.
+   Build the Feather firmware and fail publishing on oversize or missing/wrong-board assets.
 2. Extract host-testable strict parsing, version/compatibility, power and confirmation policy.
    Test same/new/old release, wrong board/layout, bad signatures, malformed/oversize manifests,
    missing credentials, stale power, tap/held-A carried across entry and early-release cancellation.
@@ -961,12 +960,12 @@ It now:
    Verify hold-B from every state, radio off after every exit/result, normal sleep after errors,
    and brightness/highscores/credentials/cartridges unchanged across success and failure.
 5. Prove target first-boot rollback and USB recovery before declaring release readiness.
-   On both boards install release A -> B -> C across both slots; inject power loss during download,
+   On the Feather install release A -> B -> C across both slots; inject power loss during download,
    verification, slot selection and first boot, plus a deliberately crashing signed image.
    Verify the booted version, prior working slot, actual progress and restored user data.
 
 **Remaining design gate:** the signature format (ECDSA P-256) and offline key management are
-approved and implemented in the tooling. Pass the on-device test vector on both boards before
+approved and implemented in the tooling. Pass the on-device test vector on the Feather before
 creating release keys or publishing `stable.json`. Battery threshold, hosting and the
 separation from WiFi are confirmed.
 

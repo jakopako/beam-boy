@@ -1,6 +1,6 @@
 name: Firmware
 
-# Builds both boards, checks the images against their update slots, and runs
+# Builds the Feather firmware, checks the image against its update slot, and runs
 # the firmware-update tests. It never signs or publishes anything: release keys
 # are offline by design (see docs/phase-11-firmware-updates.md), so no secret
 # is reachable from this workflow, including from forks and pull requests.
@@ -56,14 +56,14 @@ jobs:
       # Only the update suites for now; the full native suite is run locally.
       - name: Update host tests
         run: pio test -e native -f "test_ota_*"
-      - name: Build both boards
-        run: pio run -e esp32-s3-devkitc-1-n16r8 -e adafruit_feather_esp32s3_nopsram
-      - name: Images fit their slots and carry the right identity
-        run: |
-          for env in esp32-s3-devkitc-1-n16r8 adafruit_feather_esp32s3_nopsram; do
-            python ../tools/firmware/fwrelease.py check-image --board "$env" ".pio/build/$env/firmware.bin"
-          done
+      - name: Build the Feather
+        run: pio run -e adafruit_feather_esp32s3_nopsram
+      - name: Image fits its slot and carries the right identity
+        run: >
+          python ../tools/firmware/fwrelease.py check-image
+          --board adafruit_feather_esp32s3_nopsram
+          .pio/build/adafruit_feather_esp32s3_nopsram/firmware.bin
       - name: On-device signature test compiles
         run: >
-          pio test -e esp32-s3-devkitc-1-n16r8 -e adafruit_feather_esp32s3_nopsram
+          pio test -e adafruit_feather_esp32s3_nopsram
           -f test_device_ota_signature --without-uploading --without-testing

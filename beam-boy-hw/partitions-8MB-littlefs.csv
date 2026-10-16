@@ -10,8 +10,7 @@
 # writes a file (highscores, WiFi credentials) fails with it. PlatformIO still
 # builds and flashes a LittleFS image happily, because its uploader targets the
 # data partition by offset regardless of subtype, so the upload "succeeds" into
-# a partition the firmware can never open. The DevKitC env never hit this: it
-# pins default_16MB.csv, which has a real spiffs partition.
+# a partition the firmware can never open.
 #
 # Offset and size are deliberately identical to Adafruit's (0x450000, 3776K =
 # 0x3B0000, ending exactly at the 8 MB boundary), and the uf2 partition is kept

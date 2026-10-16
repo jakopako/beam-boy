@@ -156,11 +156,8 @@ const char* describe(PowerGate gate) {
   return "unknown power state";
 }
 
-PowerGate installPowerGate(bool has_battery_monitor, bool reading_available,
-                           uint32_t reading_age_ms, float percent,
-                           PowerLevel level) {
-  // USB-only boards (the DevKitC) have nothing to run out.
-  if (!has_battery_monitor) return PowerGate::kOk;
+PowerGate installPowerGate(bool reading_available, uint32_t reading_age_ms,
+                           float percent, PowerLevel level) {
   if (!reading_available) return PowerGate::kUnavailable;
   // Written to also reject NaN.
   if (!(percent >= 0.0f && percent <= 100.0f)) return PowerGate::kUnavailable;

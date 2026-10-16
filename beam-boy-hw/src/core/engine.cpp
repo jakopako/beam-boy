@@ -210,10 +210,8 @@ void Engine::enterDeepSleep() {
   gpio_hold_en(static_cast<gpio_num_t>(board::kPinLedData));
   gpio_deep_sleep_hold_en();
 
-  // Every wake button lands within GPIO 0-21 on the S3 on both boards this
-  // firmware targets, which is exactly the range ext1 wakeup supports; no
-  // board-specific guard is needed here the way board_config.h needs one for
-  // kHasBatteryMonitor.
+  // Every wake button lands within GPIO 0-21 on the Feather, which is exactly
+  // the range ext1 wakeup supports.
   const uint64_t wake_mask = (1ULL << board::kPinButtonA) |
                              (1ULL << board::kPinButtonB) |
                              (1ULL << board::kPinStickSw);
