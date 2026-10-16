@@ -965,9 +965,9 @@ It now:
    Verify the booted version, prior working slot, actual progress and restored user data.
 
 **Remaining design gate:** the signature format (ECDSA P-256) and offline key management are
-approved and implemented in the tooling. Pass the on-device test vector on the Feather before
-creating release keys or publishing `stable.json`. Battery threshold, hosting and the
-separation from WiFi are confirmed.
+approved and implemented in the tooling. The on-device test vector passed on the Feather
+(about 292 ms and 5 KB of heap per verify; see the Phase 11 doc), so release keys may now be
+created. Battery threshold, hosting and the separation from WiFi are confirmed.
 
 Visible result when complete: install a compatible authenticated engine release deliberately,
 see real progress, reboot into it, and recover safely if its first boot fails.

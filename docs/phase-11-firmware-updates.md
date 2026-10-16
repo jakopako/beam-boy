@@ -193,6 +193,18 @@ tests and the on-device test. The on-device test also logs verification time
 and heap, which are the measurements PLAN.md asks for before adopting the
 format.
 
+Measured on the Feather (2026-10-16, test build without WiFi or engine):
+
+| Measurement | Value |
+|---|---|
+| All signature tests | 6/6 pass |
+| One P-256 verify | ~292 ms |
+| Peak extra heap during verify | ~5.2 KB (min free heap 337,588 → 332,276 bytes) |
+| Heap kept after the first verify | 444 bytes, likely one-time initialisation; `test_repeated_verifies_do_not_leak` checks that later calls keep nothing |
+
+The verify cost is paid once per `check()`, which already blocks for a TLS
+handshake, so it needs no special handling.
+
 ## Not done yet (PLAN.md steps 4–5)
 
 - **Scene and engine guard (step 4):**
@@ -208,7 +220,7 @@ format.
     only after a healthy launcher has run for 5 s.
   - Prove rollback on the Feather: interrupted downloads, a crashing signed
     image, and power loss at every stage.
-- **Run `test_device_ota_signature` on the Feather and record the numbers**,
-  then create the first release key.
+- **Create the first release key.** The on-device signature test passed on the
+  Feather (see Testing).
 - **Ship the first updater-capable firmware over USB** before publishing
   `stable.json`.
