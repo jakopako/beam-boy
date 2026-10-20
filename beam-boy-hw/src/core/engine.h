@@ -42,6 +42,12 @@ class Scene {
   // Nothing here may draw, since no present() follows it.
   virtual void idle(Engine& engine) { (void)engine; }
 
+  // Called once when a critical battery starts the shutdown sweep, before the
+  // engine flushes saves and sleeps. A scene in the middle of something that
+  // must not be cut off half-way -- a firmware write -- aborts it cleanly here
+  // and switches the radio off. It is not ticked again afterwards.
+  virtual void abortForShutdown(Engine& engine) { (void)engine; }
+
   // The score to record when this scene is left. Games that keep score override
   // this; the launcher and other non-game scenes leave it at zero.
   virtual uint32_t score() const { return 0; }
@@ -70,6 +76,15 @@ class Engine {
   // often, in the idle time the frame gate would otherwise spin away. Games
   // still see a fixed timestep and are unaffected.
   void setIdleServiced(bool serviced) { idle_serviced_ = serviced; }
+
+  // Holds off idle sleep while a scene does something that must not be
+  // interrupted (a firmware write). The idle timer restarts when it is
+  // released, so finishing a long write does not sleep the console at once.
+  // Cleared automatically on every scene change, so no exit path can leave it
+  // set. Critical-battery shutdown is not affected; see
+  // Scene::abortForShutdown().
+  void setSleepInhibited(bool inhibited) { sleep_inhibited_ = inhibited; }
+  bool sleepInhibited() const { return sleep_inhibited_; }
 
   void setScene(Scene* scene);
 
@@ -190,6 +205,8 @@ class Engine {
   // See setIdleServiced(). When true, tick() calls the scene's idle() on
   // frames it would otherwise skip entirely.
   bool idle_serviced_ = false;
+  // See setSleepInhibited().
+  bool sleep_inhibited_ = false;
   bool exit_armed_ = false;
   float exit_gesture_progress_ = 0.0f;
 

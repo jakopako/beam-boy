@@ -68,6 +68,10 @@ class Storage {
   // Wipes everything back to defaults.
   void reset();
 
+  // Save-record format version. A firmware release declares the oldest format
+  // it can read (min_save); the updater refuses one that would drop this save.
+  static constexpr uint8_t formatVersion() { return kVersion; }
+
  private:
   static constexpr uint8_t kVersion = 3;
   // Distinct games that can hold a highscore. The launcher currently caps this
