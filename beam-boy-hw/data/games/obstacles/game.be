@@ -14,7 +14,6 @@ var kSpawnPos = 1.02
 var kJumpSeconds = 0.65
 var kRecoverySeconds = 0.18
 var kStartSpeed = 0.28
-var kMaxSpeed = 0.80
 var kSpeedPerClear = 0.013
 var kStartingLives = 3
 var kReadySeconds = 1.0
@@ -25,13 +24,16 @@ var kGroundMaxSeconds = 0.28
 var kOverheadMinSeconds = 0.35
 var kOverheadMaxSeconds = 0.95
 var kMinGapSeconds = 0.95
+var kGapReductionPerClear = 0.001
+var kMinGapFloorSeconds = 0.85
 
 class Obstacle
-  var pos, length, ground
+  var pos, length, ground, scored
   def init(ground, length)
     self.ground = ground
     self.length = length
     self.pos = kSpawnPos
+    self.scored = false
   end
 end
 
@@ -53,8 +55,12 @@ var spawn_distance = 0.0
 var game_over_elapsed = 0.0
 
 def speed()
-  var value = kStartSpeed + cleared * kSpeedPerClear
-  return value > kMaxSpeed ? kMaxSpeed : value
+  return kStartSpeed + cleared * kSpeedPerClear
+end
+
+def min_gap_seconds()
+  var gap = kMinGapSeconds - cleared * kGapReductionPerClear
+  return gap < kMinGapFloorSeconds ? kMinGapFloorSeconds : gap
 end
 
 def reset_actions()
@@ -120,11 +126,8 @@ def spawn_obstacle()
   # Reserve a gap at the fastest speed possible before the queue reaches the
   # player, including score-driven acceleration from every queued obstacle.
   var gap_speed = kStartSpeed + (cleared + kMaxObstacles) * kSpeedPerClear
-  if gap_speed > kMaxSpeed
-    gap_speed = kMaxSpeed
-  end
   spawn_distance = previous_length +
-      gap_speed * (kMinGapSeconds + beam.random(0, 250) / 1000.0)
+      gap_speed * (min_gap_seconds() + beam.random(0, 250) / 1000.0)
 end
 
 def hit()
@@ -179,10 +182,13 @@ def update(dt)
         return
       end
     end
-    if obstacle.pos + obstacle.length < kPlayerPos
-      obstacles.remove(i)
+    if !obstacle.scored && obstacle.pos + obstacle.length < kPlayerPos
+      obstacle.scored = true
       cleared += 1
       beam.score(1)
+    end
+    if obstacle.pos + obstacle.length < 0.0
+      obstacles.remove(i)
     else
       i += 1
     end
@@ -208,13 +214,13 @@ def render()
   while index < size(obstacles)
     var obstacle = obstacles[index]
     var color = obstacle.ground ? kGroundColor : kOverheadColor
-    if obstacle.pos <= 1.0
+    var tail = obstacle.pos + obstacle.length
+    if obstacle.pos <= 1.0 && tail >= 0.0
       var first = obstacle.pos < 0.0 ? 0.0 : obstacle.pos
-      var last = obstacle.pos + obstacle.length
-      if last > 1.0
-        last = 1.0
+      if tail > 1.0
+        tail = 1.0
       end
-      beam.line(first, last, color, 0.75)
+      beam.line(first, tail, color, 0.75)
       if obstacle.pos >= 0.0
         beam.pixel(obstacle.pos, color, 1.0)
       end

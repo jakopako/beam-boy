@@ -56,7 +56,8 @@ consoles running older firmware.
   `uploadfs` picks up the change without a firmware flash.
 - Fishing is available from the store in `website/games/fishing/`; it is no
   longer bundled in this local filesystem image.
-- `games/obstacles/` is a **local-only prototype**, not yet in the store.
+- `games/obstacles/` is bundled for local testing and is also available from
+  the online store in `website/games/obstacles/`.
   The white player stays near the controller end. Press **A** for a timed
   jump over **orange** obstacles; hold **B** to duck **cyan** obstacles.
   The player stays the same size and position: white at 25% intensity when
@@ -66,13 +67,15 @@ consoles running older firmware.
   Life indicators use the shared `beam.show_lives()` API: turquoise at 40%
   intensity at the far end. Flash the updated firmware before uploading these
   cartridges; older firmware does not provide this API.
-  Three lives, one point per obstacle cleared; speed increases with clears.
+  Three lives, one point per obstacle cleared; speed increases with every clear
+  and has no fixed cap.
   Up to four obstacles can approach together, entering gradually from beyond
   the far end rather than appearing all at once. Orange obstacles vary in length
   but take at most 0.28 seconds to pass, within the 0.65-second jump. Cyan
   obstacles can be longer; hold B until their trailing edge clears the player.
-  Points are awarded only after the entire obstacle passes. Gaps allow time
-  to land, recover and switch actions even as the game speeds up.
+  Points are awarded only after the entire obstacle passes; it then glides off
+  the near end of the tube. Gaps shrink gradually as difficulty rises, but stay
+  above the time needed to land and recover before the next obstacle.
   A restarts after game over. The stick's normal pause/exit controls still apply.
 
 To test Obstacles on the Feather, run from `beam-boy-hw`:
@@ -91,7 +94,7 @@ so the launcher rescans the cartridges.
 The tests execute the actual cartridge in the vendored Berry VM, with mocked
 input and drawing. They cover both obstacle types, full-length collisions,
 jump timing, duck release, scoring, lives, restart, queue spacing and 30,000
-frames, including successful play through the full speed ramp.
+frames, including successful play beyond the former speed cap.
 From the repository root, with GCC on PATH:
 
 ```powershell

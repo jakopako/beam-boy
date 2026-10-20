@@ -84,9 +84,15 @@ def test_cartridge()
   prepare(true)
   beam.a_pressed = true
   update(0.02)
-  assert(beam.total == 1 && lives == 3 && size(obstacles) == 0, "jump must clear ground")
+  assert(beam.total == 1 && lives == 3 && size(obstacles) == 1,
+         "cleared ground obstacle must remain until it leaves the tube")
+  render()
+  assert(size(beam.lines) == 1, "cleared obstacle must glide offscreen visibly")
   update(0.02)
   assert(beam.total == 1, "one point per obstacle")
+  update(1.0)
+  assert(size(obstacles) == 0 && beam.total == 1,
+         "obstacle must disappear only after leaving the tube, without rescoring")
 
   prepare(true)
   beam.b_held = true
@@ -162,9 +168,23 @@ def test_cartridge()
   assert(state == STATE_READY && lives == 3 && cleared == 0 && beam.total == 0)
 
   cleared = 100
-  assert(speed() == kMaxSpeed)
-  assert(kMinGapSeconds > kJumpSeconds + kRecoverySeconds,
+  assert(speed() == kStartSpeed + cleared * kSpeedPerClear &&
+         speed() > 0.80, "speed must continue beyond the old maximum")
+  var late_speed = speed()
+  cleared = 200
+  assert(speed() > late_speed, "speed must keep increasing with clears")
+  assert(min_gap_seconds() == kMinGapFloorSeconds &&
+         min_gap_seconds() > kJumpSeconds + kRecoverySeconds,
          "minimum gap must allow jump recovery")
+  cleared = 0
+  assert(min_gap_seconds() == kMinGapSeconds)
+  cleared = 50
+  var mid_gap = min_gap_seconds()
+  assert(mid_gap < kMinGapSeconds && mid_gap > kMinGapFloorSeconds,
+         "minimum gap must gradually decrease")
+  cleared = 100
+  assert(min_gap_seconds() == kMinGapFloorSeconds,
+         "minimum gap must stop at its safe floor")
 
   prepare(true)
   obstacles = []
@@ -201,6 +221,14 @@ def test_cartridge()
   obstacles[0].pos = 0.6
   render()
   assert(beam.lines[0][1] < 1.0, "fully entered obstacle must show its trailing edge")
+  obstacles[0].pos = -0.05
+  render()
+  assert(size(beam.lines) == 1 && beam.lines[0][0] == 0.0 &&
+         beam.lines[0][1] == 0.25,
+         "cleared obstacle must remain clipped at the near end")
+  obstacles[0].pos = -0.31
+  render()
+  assert(size(beam.lines) == 0, "obstacle must not render once fully offscreen")
 
   # Long obstacles require protection for their entire overlap, not just entry.
   prepare(false)
@@ -284,7 +312,7 @@ def test_cartridge()
   assert(size(obstacles) >= 2, "multiple approaching obstacles must be visible")
   render()
 
-  # Play successfully through the full speed ramp with mixed obstacle lengths.
+  # Play successfully beyond the old speed cap with mixed obstacle lengths.
   init()
   var frame = 0
   while frame < 20000
@@ -303,13 +331,14 @@ def test_cartridge()
     var i = 1
     while i < size(obstacles)
       var gap = obstacles[i].pos - (obstacles[i - 1].pos + obstacles[i - 1].length)
-      assert(gap / speed() >= kMinGapSeconds - 0.001,
+      assert(gap / speed() >= kMinGapFloorSeconds - 0.001,
              "accelerating queue must retain its recovery gap")
       i += 1
     end
     frame += 1
   end
-  assert(speed() == kMaxSpeed && beam.total > 50, "test must reach maximum difficulty")
+  assert(speed() > 0.80 && beam.total > 50,
+         "test must continue accelerating beyond the old speed cap")
   beam.random_high = false
 
   # Run real update/render callbacks for 10,000 frames, including every state.
@@ -321,15 +350,16 @@ def test_cartridge()
     update(1.0 / 60.0)
     render()
     assert(lives >= 0 && lives <= 3)
-    assert(speed() >= kStartSpeed && speed() <= kMaxSpeed)
+    assert(speed() >= kStartSpeed)
     assert(size(obstacles) <= kMaxObstacles)
     var i = 1
     while i < size(obstacles)
       var gap = obstacles[i].pos - (obstacles[i - 1].pos + obstacles[i - 1].length)
-      assert(gap / speed() >= kMinGapSeconds - 0.001, "queue gap must allow recovery")
+      assert(gap / speed() >= kMinGapFloorSeconds - 0.001,
+             "queue gap must allow recovery")
       i += 1
     end
     frame += 1
   end
-  print("Obstacles cartridge tests passed (30,000 frames, including the full speed ramp).")
+  print("Obstacles cartridge tests passed (30,000 frames, including continued acceleration).")
 end

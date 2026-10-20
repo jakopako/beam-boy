@@ -9,6 +9,14 @@
       "size": "8112"
     },
     {
+      "id": "obstacles",
+      "title": "Obstacles",
+      "color": "ff6020",
+      "url": "https://beamboy.ch/games/obstacles/game.be",
+      "sha256": "fea8658246483105d0e9888a99ae65bcab06440d0a2242ef63875792784c9783",
+      "size": "5934"
+    },
+    {
       "id": "reflex",
       "title": "Reflex",
       "color": "ff00aa",
