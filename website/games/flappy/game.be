@@ -128,7 +128,7 @@ def render()
       var progress = game_over_elapsed / 0.5
       beam.line(0.0, progress, kHitColor, 0.5 * (1.0 - progress))
     else
-      beam.show_score((game_over_elapsed - 0.5) * 1000.0)
+      beam.show_score(int((game_over_elapsed - 0.5) * 1000.0))
     end
     return
   end

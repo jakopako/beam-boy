@@ -82,7 +82,9 @@ def test_cartridge()
          "hitting a wall outside its gap should end the run")
   game_over_elapsed = 0.6
   render()
-  assert(beam.score_elapsed >= 0.0, "game over should reveal the score")
+  assert(beam.score_elapsed >= 0 &&
+         beam.score_elapsed == int(beam.score_elapsed),
+         "score reveal should receive integer elapsed milliseconds")
 
   beam.a_pressed = true
   update(kRestartDelay)
