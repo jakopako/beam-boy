@@ -179,9 +179,13 @@ release newer than the firmware on the console:
 
 1. Flash the console over USB with a release-identity build. In PowerShell:
    ```powershell
-   cd beam-boy-hw
-   $env:BEAMBOY_FW_VERSION="0.9.0"; $env:BEAMBOY_FW_SEQUENCE="1"
-   pio run -e adafruit_feather_esp32s3_nopsram -t upload
+   $pio = Join-Path $env:USERPROFILE '.platformio\penv\Scripts\pio.exe'
+   if (-not (Test-Path $pio)) { throw "PlatformIO CLI not found: $pio" }
+   Push-Location beam-boy-hw
+   $env:BEAMBOY_FW_VERSION = '0.9.0'
+   $env:BEAMBOY_FW_SEQUENCE = '1'
+   & $pio run -e adafruit_feather_esp32s3_nopsram -t upload
+   Pop-Location
    ```
 2. Build sequence 2, then `prepare`, `sign`, upload the `.bin` and manifest to
    GitHub release `fw-v0.9.1`, and `promote` (see Release procedure).
@@ -212,27 +216,34 @@ rolled back on its own; reflash over USB.
 Version and sequence are inputs to the build, not edits to a source file.
 `sequence` must be higher than the published one; dev builds are
 `0.0.0-dev`/0.
+Run the PowerShell examples from the repository root. They use the per-user
+PlatformIO CLI path used by the Feather setup; if PlatformIO is installed
+elsewhere, set `$pio` to that executable.
 
-```sh
+```powershell
 # 1. Build the Feather firmware with the release identity.
-cd beam-boy-hw
-BEAMBOY_FW_VERSION=1.2.3 BEAMBOY_FW_SEQUENCE=7 pio run -e adafruit_feather_esp32s3_nopsram
-cd ..
+$pio = Join-Path $env:USERPROFILE '.platformio\penv\Scripts\pio.exe'
+if (-not (Test-Path $pio)) { throw "PlatformIO CLI not found: $pio" }
+Push-Location beam-boy-hw
+$env:BEAMBOY_FW_VERSION = '1.2.3'
+$env:BEAMBOY_FW_SEQUENCE = '7'
+& $pio run -e adafruit_feather_esp32s3_nopsram
+Pop-Location
 
 # 2. Check the image (header, chip, slot size, embedded build tag) and stage the asset + payload.json.
-python tools/firmware/fwrelease.py prepare --version 1.2.3 --sequence 7 \
-  --image adafruit_feather_esp32s3_nopsram=beam-boy-hw/.pio/build/adafruit_feather_esp32s3_nopsram/firmware.bin \
-  --out dist/fw-v1.2.3
+python tools\firmware\fwrelease.py prepare --version 1.2.3 --sequence 7 `
+  --image 'adafruit_feather_esp32s3_nopsram=beam-boy-hw\.pio\build\adafruit_feather_esp32s3_nopsram\firmware.bin' `
+  --out dist\fw-v1.2.3
 
 # 3. Offline: sign. Writes dist/fw-v1.2.3/manifest-1.2.3.json and refuses to overwrite.
-python tools/firmware/fwrelease.py sign --key /offline/bb-release-1.pem --key-id bb-release-1 dist/fw-v1.2.3/payload.json
+python tools\firmware\fwrelease.py sign --key 'D:\offline\bb-release-1.pem' --key-id bb-release-1 dist\fw-v1.2.3\payload.json
 
 # 4. Create GitHub release fw-v1.2.3 and upload the .bin and manifest-1.2.3.json. Never replace assets.
 # 5. Check the published asset, then smoke-test on a Feather.
-python tools/firmware/fwrelease.py verify --manifest dist/fw-v1.2.3/manifest-1.2.3.json --download
+python tools\firmware\fwrelease.py verify --manifest dist\fw-v1.2.3\manifest-1.2.3.json --download
 
 # 6. Move the stable pointer (re-downloads and checks assets; refuses a non-increasing sequence), commit, push.
-python tools/firmware/fwrelease.py promote dist/fw-v1.2.3/manifest-1.2.3.json
+python tools\firmware\fwrelease.py promote dist\fw-v1.2.3\manifest-1.2.3.json
 ```
 
 `prepare` defaults `min_save` and `min_api` to the current firmware values,
@@ -241,8 +252,8 @@ migrates older saves or still runs older cartridges.
 
 ### Keys
 
-```sh
-python tools/firmware/fwrelease.py keygen --key-id bb-release-1 --out /offline/bb-release-1.pem
+```powershell
+python tools\firmware\fwrelease.py keygen --key-id bb-release-1 --out 'D:\offline\bb-release-1.pem'
 ```
 
 `keygen` refuses to write inside the repository and asks for a passphrase. It
@@ -260,11 +271,17 @@ maintainer).
 
 ## Testing
 
-```sh
-cd beam-boy-hw && pio test -e native -f "test_ota_*" -f test_update_flow   # parser, policy, update screen
-python -m unittest discover -s tools/firmware -p "test_*.py"   # release tool
-python tools/firmware/fwrelease.py test-vector                 # vector + header in sync
-pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature   # on a Feather
+Run these PowerShell commands from the repository root.
+
+```powershell
+$pio = Join-Path $env:USERPROFILE '.platformio\penv\Scripts\pio.exe'
+if (-not (Test-Path $pio)) { throw "PlatformIO CLI not found: $pio" }
+Push-Location beam-boy-hw
+& $pio test -e native -f "test_ota_*" -f test_update_flow
+& $pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature
+Pop-Location
+python -m unittest discover -s tools\firmware -p "test_*.py"
+python tools\firmware\fwrelease.py test-vector
 ```
 
 The signature test vector (`tools/firmware/testdata/p256-vector-1.json`) was
