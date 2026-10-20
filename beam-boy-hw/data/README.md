@@ -56,6 +56,8 @@ consoles running older firmware.
   `uploadfs` picks up the change without a firmware flash.
 - Fishing is available from the store in `website/games/fishing/`; it is no
   longer bundled in this local filesystem image.
+- Flappy is available from the store in `website/games/flappy/`; it is not
+  bundled in this local filesystem image.
 - `games/obstacles/` is bundled for local testing and is also available from
   the online store in `website/games/obstacles/`.
   The white player stays near the controller end. Press **A** for a timed
@@ -89,13 +91,14 @@ anything you need first. Store-installed games and saved settings/highscores
 not included in this folder will be overwritten. Reset the board afterwards
 so the launcher rescans the cartridges.
 
-### Obstacles host tests
+### Cartridge host tests
 
-The tests execute the actual cartridge in the vendored Berry VM, with mocked
-input and drawing. They cover both obstacle types, full-length collisions,
-jump timing, duck release, scoring, lives, restart, queue spacing and 30,000
-frames, including successful play beyond the former speed cap.
-From the repository root, with GCC on PATH:
+The tests execute the actual cartridges in the vendored Berry VM, with mocked
+input and drawing. Obstacles tests cover both obstacle types, full-length
+collisions, jump timing, duck release, scoring, lives, restart, queue spacing
+and 30,000 frames, including successful play beyond the former speed cap.
+Flappy tests cover flapping, wall brightness, scoring, difficulty, collision,
+score reveal and restart. From the repository root, with GCC on PATH:
 
 ```powershell
 $sources = Get-ChildItem beam-boy-hw\lib\berry\src\*.c |
@@ -109,6 +112,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Cartridge test build failed' }
     & $runner tools\obstacles_test.be beam-boy-hw\data\games\obstacles\game.be
     if ($LASTEXITCODE -ne 0) { throw 'Cartridge tests failed' }
+    & $runner tools\flappy_test.be website\games\flappy\game.be
+    if ($LASTEXITCODE -ne 0) { throw 'Flappy tests failed' }
 } finally {
     if (Test-Path -LiteralPath $runner) { Remove-Item -LiteralPath $runner }
 }
