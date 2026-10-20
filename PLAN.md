@@ -57,16 +57,16 @@ the most deliberate design — which is exactly what this plan front-loads.
 
 ### Bill of materials
 
-| Part              | Choice                                                                                     | Notes                                                                                                                                                                                                                                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                     | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and an on-board MAX17048 fuel gauge (I2C) for battery percentage — no ADC divider to wire or calibrate. Solves the charging design in one part. |
-| _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                             | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                                                                            |
-| Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                     | Already owned.                                                                                                                                                                                                                                                                                                 |
-| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                           | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                                                                                        |
-| Buttons           | **2 × 6 mm tactile switches**                                                              | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                                                                                          |
-| Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**          | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                                                                             |
+| Part              | Choice                                                                                                                                      | Notes                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCU               | **Adafruit Feather ESP32-S3 (8 MB flash, 2 MB PSRAM)** — _recommended_                                                                      | ~€18. **Has LiPo charging and a JST battery connector built in**, sharing the same USB-C port used for flashing: one port for everything, proper load sharing, and an on-board MAX17048 fuel gauge (I2C) for battery percentage — no ADC divider to wire or calibrate. Solves the charging design in one part.                         |
+| _MCU alternative_ | **ESP32-S3-DevKitC-1 (N16R8)** + separate TP4056 USB-C charger                                                                              | ~€10 + €2. Cheaper and more flash, but you must solve charging yourself — see §2.1.                                                                                                                                                                                                                                                    |
+| Display           | Your **WS2812B silicone neon tube, 50 px / 1 m, IP67**                                                                                      | Already owned.                                                                                                                                                                                                                                                                                                                         |
+| Stick             | **2-axis analog thumbstick with push switch** (PS2-style module)                                                                            | ~€2. Gives absolute + velocity control on X and Y axes.                                                                                                                                                                                                                                                                                |
+| Buttons           | **2 × 6 mm tactile switches**                                                                                                               | Named **A** (action/confirm) and **B** (back/cancel).                                                                                                                                                                                                                                                                                  |
+| Battery           | **LiPo pouch cell, 2000–2500 mAh, with JST-PH connector and built-in protection**                                                           | Rechargeable — the user never buys a battery. A pouch cell fits a flat handheld grip far better than a cylindrical 18650. Must include a protection circuit (most pouch cells with a JST lead do).                                                                                                                                     |
 | Power switch      | **DPDT slide switch, two independent poles**: one pole ties **EN to GND** when off; the other connects **BAT to the tube's +** only when on | The battery stays on the Feather's JST connector, so it charges over USB while switched off. Off is not zero drain: the charger and fuel gauge still draw standby current. Rate the tube pole for the tube's peak current (~1 A full white at cap 128; pick ≥ 2 A). See [`docs/phase-8-power.md`](docs/phase-8-power.md#power-switch). |
-| Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                                                                           |
+| Misc              | JST connector for the tube, 470 µF cap across strip power, 330 Ω resistor in the data line                                                  | Standard NeoPixel hygiene — the cap absorbs inrush, the resistor tames data ringing.                                                                                                                                                                                                                                                   |
 
 **Total: roughly €35–45** on top of what you own (Feather route), or €27–37 with the
 DevKitC + separate charger.
@@ -157,17 +157,17 @@ a button temporarily. Phases 4+ (WiFi, OTA, scripting VM, store) should wait for
 
 The source of truth is `src/core/board_config.h`. Feather header labels are in quotes.
 
-| Signal        | Feather (target)        | DevKitC (dev) | Notes                                                                                     |
-| ------------- | ----------------------- | ------------- | ----------------------------------------------------------------------------------------- |
-| LED data      | GPIO5 ("5")             | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                                 |
-| Button A      | GPIO6 ("6")             | 15            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
-| Button B      | GPIO9 ("9")             | 16            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                              |
-| Stick push    | GPIO15 ("A3")           | 18            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.          |
-| Stick X       | GPIO8 ("A5")            | 4             | ADC1 — usable while WiFi is active.                                                       |
-| Stick Y       | GPIO10 ("10")           | 5             | ADC1 — usable while WiFi is active.                                                       |
-| Stick VCC     | "3V"                    | 3V3           | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V.      |
-| Battery sense | I2C (GPIO3/4, SDA/SCL)  | —             | MAX17048 fuel gauge (Feather only); shares the STEMMA QT bus. See Phase 8.                |
-| USB sense     | GPIO12 ("12")           | —             | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8.      |
+| Signal        | Feather (target)       | DevKitC (dev) | Notes                                                                                |
+| ------------- | ---------------------- | ------------- | ------------------------------------------------------------------------------------ |
+| LED data      | GPIO5 ("5")            | 17            | RMT-capable WS2812B data line. Via 330 Ω.                                            |
+| Button A      | GPIO6 ("6")            | 15            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                         |
+| Button B      | GPIO9 ("9")            | 16            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin.                                         |
+| Stick push    | GPIO15 ("A3")          | 18            | `INPUT_PULLUP`, to GND. Deep-sleep wake pin. Digital only, so ADC2 is fine here.     |
+| Stick X       | GPIO8 ("A5")           | 4             | ADC1 — usable while WiFi is active.                                                  |
+| Stick Y       | GPIO10 ("10")          | 5             | ADC1 — usable while WiFi is active.                                                  |
+| Stick VCC     | "3V"                   | 3V3           | Never BAT/USB: the stick's outputs feed the ADC pins directly and must stay ≤ 3.3 V. |
+| Battery sense | I2C (GPIO3/4, SDA/SCL) | —             | MAX17048 fuel gauge (Feather only); shares the STEMMA QT bus. See Phase 8.           |
+| USB sense     | GPIO12 ("12")          | —             | 2:3 divider from the Feather `USB` pin (10 kΩ to GPIO12, 15 kΩ to GND). See Phase 8. |
 
 ⚠️ Keep every analog input on **ADC1** (GPIO1–10 on the S3). ADC2 (GPIO11–20) is shared with
 the WiFi radio, and the Store and Network scenes read the stick while WiFi is on. Beware the
@@ -409,8 +409,8 @@ the scene updates, so no game — including a future community cartridge — can
    excludes colourblind players.
 3. ✅ Verify offline behaviour is untouched: no saved credentials ⇒ never scans, never blocks,
    boots straight into the launcher.
-Firmware updates are separate from WiFi provisioning; see
-[Phase 11](#phase-11--firmware-updates).
+   Firmware updates are separate from WiFi provisioning; see
+   [Phase 11](#phase-11--firmware-updates).
 
 ✅ _Visible result: configure WiFi from your phone with no display._
 
@@ -579,8 +579,8 @@ it over the air is item 5.)_
 1. ✅ **Hardware & Sensing Layer (`src/core/power.*`):**
    - `Power` wraps Adafruit's `Adafruit_MAX1704X` library (I2C, `Wire`) and is gated entirely by `board::kHasBatteryMonitor` — `false` on the DevKitC and native (no chip, no I2C traffic attempted), `true` on the Feather.
    - Polls the gauge at most once a second; exposes `percent()`, `voltage()`, `chargeState()`, `charging()`, `usbPowered()`, `level()`.
-   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it charging — live in `src/core/power_policy.h` as plain, host-testable functions over floats (   `classifyPowerLevel`, `classifyChargeState`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. Native tests cover gauge-reading plausibility, hysteresis, charge-state classification, and idle-sleep decisions.
-      - Charging is detected from USB presence (a 2:3 divider, e.g. 10k/15k, from the Feather's `USB` pin to GPIO12) combined with the gauge's voltage and percentage: on battery / charging / full, with "full" latched until the cell sags to its recharge voltage. See [`docs/phase-8-power.md`](docs/phase-8-power.md#usb-power-sense) for the wiring.
+   - All the actual _decisions_ — is this worth warning about, is it worth shutting down for, is it charging — live in `src/core/power_policy.h` as plain, host-testable functions over floats ( `classifyPowerLevel`, `classifyChargeState`, `shouldEnterIdleSleep`), following the same pure-logic/untestable-driver split already used for `net_policy.h`. Native tests cover gauge-reading plausibility, hysteresis, charge-state classification, and idle-sleep decisions.
+     - Charging is detected from USB presence (a 2:3 divider, e.g. 10k/15k, from the Feather's `USB` pin to GPIO12) combined with the gauge's voltage and percentage: on battery / charging / full, with "full" latched until the cell sags to its recharge voltage. See [`docs/phase-8-power.md`](docs/phase-8-power.md#usb-power-sense) for the wiring.
 
 2. ✅ **Battery Gauge & Status — launcher only:**
    - Holding **A + B together** for ~0.5 s in the launcher shows the battery gauge as a proportional bar, for as long as it's held. This is deliberately **launcher-only**, not a global engine-level gesture, so no game ever has to reserve the combo for itself.
@@ -820,6 +820,7 @@ plugging in USB. The dummy scene and removal of the old WiFi action are the only
 runtime changes in this slice; the steps below are future work.
 
 **Current gaps -- do not treat the prototype as production-ready:**
+
 - `Ota` uses `https://beamboy.example/firmware/manifest.json`, a hard-coded `0.4.0`, insecure TLS,
   a two-field substring parser, and installs any different version (including older versions).
 - Checking and installing currently block; `progress()` is not connected to download callbacks.
@@ -834,6 +835,7 @@ runtime changes in this slice; the steps below are future work.
   for this ESP32-S3 build. Implement and test authenticity explicitly before selecting a slot.
 
 **1. Release contract and publishing**
+
 - Derive a displayed SemVer, monotonically increasing release sequence, board id and layout id
   from the release build, not an independently edited string in `ota.cpp`.
 - Publish separate `firmware.bin` assets for `adafruit_feather_esp32s3_nopsram` and
@@ -855,6 +857,7 @@ runtime changes in this slice; the steps below are future work.
   duplicate-field rejection and rejection of unsupported schemas before implementation.
 
 **2. Trust, version selection and release keys**
+
 - Authenticate discovery and binary transport with the existing CA bundle; establish bounded
   network time before TLS validation where required. Never fall back to `setInsecure()`.
   GitHub asset redirects need a bounded hop count and HTTPS-only allowed destinations, including
@@ -873,6 +876,7 @@ runtime changes in this slice; the steps below are future work.
   Persisted update metadata must not replace build identity or let a failed install advance it.
 
 **3. User flow and state machine**
+
 - Enter -> load credentials -> check power -> connect -> fetch/authenticate manifest ->
   up to date / available / failed. Reuse `Network` for connection and `Ota` as the update
   service boundary, replacing the prototype's unsafe internals rather than copying them.
@@ -893,6 +897,7 @@ runtime changes in this slice; the steps below are future work.
   completed pending image must be detected, not overwritten without acknowledgement.
 
 **4. Safe writing, responsiveness and engine coordination**
+
 - Before confirmation starts a write: on battery-equipped boards require a valid, fresh gauge
   sample >=30%; refuse stale/unavailable readings, low/critical power and unavailable storage.
   USB-powered DevKitC has no battery check. USB presence or charge state must not be used to
@@ -915,6 +920,7 @@ runtime changes in this slice; the steps below are future work.
   advertising it as responsive. Every stall has an inactivity and total-operation deadline.
 
 **5. First boot, rollback and recovery**
+
 - Defer Arduino's automatic validity acknowledgement with the verified target hook.
   For a pending-verification boot, mark healthy only after display/input init, filesystem mount,
   readable saves and game-list construction succeed and the launcher runs stably for five seconds.
@@ -929,6 +935,7 @@ runtime changes in this slice; the steps below are future work.
   enabling remote discovery. The existing placeholder is not a bootstrap update transport.
 
 **6. Implementation order and acceptance gates**
+
 1. Lock schema, board/layout identities, signature test vectors and publishing/signing tooling.
    Build both environments and fail publishing on oversize or missing/wrong-board assets.
 2. Extract host-testable strict parsing, version/compatibility, power and confirmation policy.
@@ -978,20 +985,20 @@ beam-boy/
 
 ## 6. Timeline
 
-| Phase               | Effort | Cumulative |
-| ------------------- | ------ | ---------- |
-| 0 Hardware bring-up | ½ d    | ½ d        |
-| 1 Core engine       | 1–2 d  | 2½ d       |
-| 2 First game        | 2–3 d  | 5½ d       |
-| 3 Launcher          | 1–2 d  | 7½ d       |
-| 4 WiFi              | 1–2 d  | 9½ d       |
-| 5 VM bake-off       | 1–2 d  | 11½ d      |
-| 6 Script games      | 2–3 d  | 14½ d      |
-| 7 Store             | 2 d    | 16½ d      |
-| 8 Power & Battery   | 1–2 d  | 18 d       |
-| 9 Enclosure ✅      | 2–4 d  | 21 d       |
-| 10 Polish & Settings UX | TBD | TBD      |
-| 11 Firmware updates | TBD    | TBD        |
+| Phase                   | Effort | Cumulative |
+| ----------------------- | ------ | ---------- |
+| 0 Hardware bring-up     | ½ d    | ½ d        |
+| 1 Core engine           | 1–2 d  | 2½ d       |
+| 2 First game            | 2–3 d  | 5½ d       |
+| 3 Launcher              | 1–2 d  | 7½ d       |
+| 4 WiFi                  | 1–2 d  | 9½ d       |
+| 5 VM bake-off           | 1–2 d  | 11½ d      |
+| 6 Script games          | 2–3 d  | 14½ d      |
+| 7 Store                 | 2 d    | 16½ d      |
+| 8 Power & Battery       | 1–2 d  | 18 d       |
+| 9 Enclosure ✅          | 2–4 d  | 21 d       |
+| 10 Polish & Settings UX | TBD    | TBD        |
+| 11 Firmware updates     | TBD    | TBD        |
 
 **≈ 3 weeks of focused work through Phase 9**, with something playable from day 5.
 Phases 10–11 are additional work; firmware-update effort must include release tooling and
@@ -1052,6 +1059,8 @@ Since you want to accept community games eventually, two things move from "nice"
   the 1D format uniquely enables.
 - **crossy road** (find different title) N-player game where each player's tube is a lane and a player
   is responsible for the 'chicken' when it is on his lane.
+- **flappy bird**: known concept. Moving towards the next wall is symbolized by increasing brightness of the coming wall
+  up to a maximum
 
 ---
 
