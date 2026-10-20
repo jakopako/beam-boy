@@ -47,6 +47,9 @@ class LauncherScene : public Scene {
   uint8_t selected_ = 0;
   bool selection_initialized_ = false;
   bool settings_selected_ = false;
+  // Keep a distant selected slot bright while the highlight eases across a
+  // dark gap; adjacent selections retain the existing moving-glow animation.
+  bool selection_crossed_gap_ = false;
 
   // Eases between physical slots, so jumping over a dark gap toward Settings
   // still reads as movement in the correct direction.

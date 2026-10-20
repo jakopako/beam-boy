@@ -52,6 +52,7 @@ void LauncherScene::enter(Engine& engine) {
   }
 
   highlight_ = static_cast<float>(selectedPhysicalSlot());
+  selection_crossed_gap_ = false;
   launching_ = false;
   launch_timer_ = 0.0f;
   nav_hold_exceeded_ = false;
@@ -109,12 +110,20 @@ void LauncherScene::update(Engine& engine, float dt) {
   const int8_t step = input.navDelta();
   const uint8_t previous_selection = selected_;
   if (step != 0) {
+    const uint8_t previous_slot = selectedPhysicalSlot();
     const uint8_t settings_selection = gameList().gameCount();
     // Clamp rather than wrap: on a physical line, running off the end and
     // reappearing at the other is disorienting.
     selected_ =
         moveLauncherSelection(selected_, settings_selection, step);
     settings_selected_ = selected_ == settings_selection;
+    if (selected_ != previous_selection) {
+      const uint8_t next_slot = selectedPhysicalSlot();
+      const uint8_t slot_distance =
+          previous_slot > next_slot ? previous_slot - next_slot
+                                    : next_slot - previous_slot;
+      selection_crossed_gap_ = slot_distance > 1;
+    }
   }
 
   highlight_ +=
@@ -193,6 +202,7 @@ void LauncherScene::update(Engine& engine, float dt) {
     }
     engine.storage().commit();
     highlight_ = static_cast<float>(selectedPhysicalSlot());
+    selection_crossed_gap_ = false;
     deleted_at_ms_ = millis();
   } else if (!input.held(Button::kB)) {
     deleting_ = false;
@@ -233,7 +243,7 @@ void LauncherScene::renderList(Engine& engine) {
       intensity = feedback.intensity;
     } else if (index == selected_) {
       const float level = 0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
-      intensity *= level;
+      intensity = selection_crossed_gap_ ? level : intensity * level;
     }
 
     drawLauncherSlot(display, index, color, intensity);
@@ -244,8 +254,9 @@ void LauncherScene::renderList(Engine& engine) {
   float intensity =
       distance < 1.0f ? 0.22f + 0.78f * (1.0f - distance) : 0.22f;
   if (selected_ == settings_selection) {
-    intensity *=
+    const float level =
         0.75f + 0.25f * pulse(millis() / 1000.0f, 4.0f);
+    intensity = selection_crossed_gap_ ? level : intensity * level;
   }
   drawLauncherSlot(display, kSettingsSlot, gameList().settings().accent,
                    intensity);
