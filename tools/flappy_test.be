@@ -1,5 +1,5 @@
 class BeamMock
-  var a_pressed, total, resets, lines, pixels, score_elapsed
+  var a_pressed, total, resets, lines, pixels, score_elapsed, shown_lives
   def init()
     self.a_pressed = false
     self.total = 0
@@ -7,6 +7,7 @@ class BeamMock
     self.lines = []
     self.pixels = []
     self.score_elapsed = -1.0
+    self.shown_lives = -1
   end
   def pressed(button)
     return button == "a" && self.a_pressed
@@ -37,13 +38,17 @@ class BeamMock
   def show_score(elapsed)
     self.score_elapsed = elapsed
   end
+  def show_lives(count)
+    self.shown_lives = count
+  end
 end
 
 var beam = BeamMock()
 
 def test_cartridge()
   init()
-  assert(state == STATE_READY && beam.resets == 1 && beam.total == 0)
+  assert(state == STATE_READY && beam.resets == 1 && beam.total == 0 &&
+         lives == 3)
   update(0.1)
   assert(state == STATE_READY && bird_pos == 0.5,
          "bird should wait for the first flap")
@@ -56,6 +61,7 @@ def test_cartridge()
   render()
   assert(size(beam.lines) == 2 && size(beam.pixels) == 1,
          "render the wall around a visible gap and the bird")
+  assert(beam.shown_lives == 3, "show all three starting lives")
   assert(beam.lines[0][3] >= kWallDimIntensity &&
          beam.lines[0][3] <= kWallBrightIntensity,
          "wall brightness must stay within its defined range")
@@ -78,8 +84,30 @@ def test_cartridge()
   bird_velocity = 0.0
   wall_elapsed = wall_seconds() - 0.01
   update(0.02)
+  assert(state == STATE_HIT && lives == 2 && beam.total == 1,
+         "a wall collision should cost one life without ending the run")
+  render()
+  assert(beam.shown_lives == 2, "update life indicators after a collision")
+  update(kHitSeconds)
+  assert(state == STATE_PLAYING && lives == 2 && score == 1,
+         "resume on a new life without losing score")
+
+  bird_pos = 0.95
+  bird_velocity = 0.0
+  wall_elapsed = wall_seconds() - 0.01
+  update(0.02)
+  assert(state == STATE_HIT && lives == 1, "second collision costs one life")
+  update(kHitSeconds)
+  assert(state == STATE_PLAYING && lives == 1, "resume with the last life")
+
+  bird_pos = 0.95
+  bird_velocity = 0.0
+  wall_elapsed = wall_seconds() - 0.01
+  update(0.02)
+  assert(state == STATE_HIT && lives == 0, "third collision uses final life")
+  update(kHitSeconds)
   assert(state == STATE_GAME_OVER && beam.total == 1,
-         "hitting a wall outside its gap should end the run")
+         "game over should follow the last life")
   game_over_elapsed = 0.6
   render()
   assert(beam.score_elapsed >= 0 &&
@@ -96,5 +124,6 @@ def test_cartridge()
   bird_pos = 0.99
   bird_velocity = kFlapVelocity
   update(0.1)
-  assert(state == STATE_GAME_OVER, "leaving the tube should end the run")
+  assert(state == STATE_HIT && lives == 2,
+         "leaving the tube should also cost one life")
 end

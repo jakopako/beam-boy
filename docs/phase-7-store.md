@@ -16,8 +16,8 @@ the store does not negotiate API versions.
   Leaving it for 1.2 seconds costs one of three lives; the bar gets faster and
   more erratic over 45 seconds. Press A after game over to restart.
 - **Flappy** — tap A to flap against gravity and keep the bird inside each gap.
-  Walls brighten as they approach; gaps tighten as your score grows. One
-  collision ends the run. Tap A after the score reveal to restart.
+  Walls brighten as they approach; gaps tighten as your score grows. You have
+  three lives. Tap A after the score reveal to restart.
 
 Published cartridge files live in `website/games/`. After changing them, run
 `python tools\build_store_index.py` and `python tools\build_store_index.py --check`

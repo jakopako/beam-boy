@@ -1,6 +1,6 @@
 {
   "id": "flappy",
   "title": "Flappy",
-  "description": "Tap A to flap and keep the bird inside each gap. Incoming walls brighten as they approach.",
+  "description": "Tap A to flap through gaps. Three lives; walls brighten as they approach.",
   "color": "ffb52e"
 }

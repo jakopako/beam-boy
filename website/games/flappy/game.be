@@ -16,11 +16,14 @@ var kFastestWallSeconds = 0.9
 var kWallSpeedPerPipe = 0.025
 var kWallDimIntensity = 0.06
 var kWallBrightIntensity = 0.9
+var kStartingLives = 3
+var kHitSeconds = 0.6
 var kRestartDelay = 0.7
 
 var STATE_READY = 0
 var STATE_PLAYING = 1
-var STATE_GAME_OVER = 2
+var STATE_HIT = 2
+var STATE_GAME_OVER = 3
 
 var state = STATE_READY
 var bird_pos = 0.5
@@ -29,6 +32,8 @@ var gap_center = 0.5
 var wall_elapsed = 0.0
 var score = 0
 var game_over_elapsed = 0.0
+var lives = kStartingLives
+var hit_pos = 0.5
 
 def clamp(value, low, high)
   if value < low
@@ -54,14 +59,18 @@ def choose_gap()
   gap_center = margin + beam.random(0, 1000) / 1000.0 * (1.0 - margin * 2.0)
 end
 
-def start_game()
+def start_life()
   state = STATE_PLAYING
   bird_pos = 0.5
   bird_velocity = kFlapVelocity
-  score = 0
   wall_elapsed = 0.0
   game_over_elapsed = 0.0
   choose_gap()
+end
+
+def start_game()
+  score = 0
+  start_life()
 end
 
 def init()
@@ -72,12 +81,15 @@ def init()
   score = 0
   wall_elapsed = 0.0
   game_over_elapsed = 0.0
+  lives = kStartingLives
   choose_gap()
 end
 
 def hit()
-  state = STATE_GAME_OVER
+  lives -= 1
+  state = STATE_HIT
   game_over_elapsed = 0.0
+  hit_pos = clamp(bird_pos, 0.0, 1.0)
   bird_velocity = 0.0
 end
 
@@ -86,6 +98,19 @@ def update(dt)
     game_over_elapsed += dt
     if game_over_elapsed >= kRestartDelay && beam.pressed("a")
       init()
+    end
+    return
+  end
+
+  if state == STATE_HIT
+    game_over_elapsed += dt
+    if game_over_elapsed >= kHitSeconds
+      if lives == 0
+        state = STATE_GAME_OVER
+        game_over_elapsed = 0.0
+      else
+        start_life()
+      end
     end
     return
   end
@@ -133,6 +158,13 @@ def render()
     return
   end
 
+  if state == STATE_HIT
+    var fade = 1.0 - clamp(game_over_elapsed / kHitSeconds, 0.0, 1.0)
+    beam.pixel(hit_pos, kHitColor, fade)
+    beam.show_lives(lives)
+    return
+  end
+
   var progress = clamp(wall_elapsed / wall_seconds(), 0.0, 1.0)
   var intensity = kWallDimIntensity +
       (kWallBrightIntensity - kWallDimIntensity) * progress
@@ -146,4 +178,5 @@ def render()
     beam.line(gap_high, 1.0, kPipeColor, intensity)
   end
   beam.pixel(bird_pos, kBirdColor, 1.0)
+  beam.show_lives(lives)
 end

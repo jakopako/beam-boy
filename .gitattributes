@@ -5,3 +5,4 @@
 *.be -text
 website/games/**/meta.json -text
 beam-boy-hw/data/games/**/meta.json -text
+website/games/index.json text eol=lf
