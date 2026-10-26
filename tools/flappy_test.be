@@ -89,8 +89,15 @@ def test_cartridge()
   render()
   assert(beam.shown_lives == 2, "update life indicators after a collision")
   update(kHitSeconds)
+  assert(state == STATE_READY && lives == 2 && score == 1,
+         "wait in ready state without losing score")
+  update(2.0)
+  assert(state == STATE_READY, "do not start the next life automatically")
+  beam.a_pressed = true
+  update(0.02)
+  beam.a_pressed = false
   assert(state == STATE_PLAYING && lives == 2 && score == 1,
-         "resume on a new life without losing score")
+         "A should begin the next life without resetting score")
 
   bird_pos = 0.95
   bird_velocity = 0.0
@@ -98,7 +105,12 @@ def test_cartridge()
   update(0.02)
   assert(state == STATE_HIT && lives == 1, "second collision costs one life")
   update(kHitSeconds)
-  assert(state == STATE_PLAYING && lives == 1, "resume with the last life")
+  assert(state == STATE_READY && lives == 1, "wait before the last life")
+  beam.a_pressed = true
+  update(0.02)
+  beam.a_pressed = false
+  assert(state == STATE_PLAYING && lives == 1,
+         "A should start the last life")
 
   bird_pos = 0.95
   bird_velocity = 0.0

@@ -17,7 +17,8 @@ the store does not negotiate API versions.
   more erratic over 45 seconds. Press A after game over to restart.
 - **Flappy** — tap A to flap against gravity and keep the bird inside each gap.
   Walls brighten as they approach; gaps tighten as your score grows. You have
-  three lives. Tap A after the score reveal to restart.
+  three lives; after losing one, tap A when ready to begin the next life. Tap A
+  after the score reveal to restart.
 
 Published cartridge files live in `website/games/`. After changing them, run
 `python tools\build_store_index.py` and `python tools\build_store_index.py --check`

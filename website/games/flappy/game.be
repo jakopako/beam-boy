@@ -34,6 +34,7 @@ var score = 0
 var game_over_elapsed = 0.0
 var lives = kStartingLives
 var hit_pos = 0.5
+var game_started = false
 
 def clamp(value, low, high)
   if value < low
@@ -70,6 +71,7 @@ end
 
 def start_game()
   score = 0
+  game_started = true
   start_life()
 end
 
@@ -82,6 +84,7 @@ def init()
   wall_elapsed = 0.0
   game_over_elapsed = 0.0
   lives = kStartingLives
+  game_started = false
   choose_gap()
 end
 
@@ -109,7 +112,11 @@ def update(dt)
         state = STATE_GAME_OVER
         game_over_elapsed = 0.0
       else
-        start_life()
+        state = STATE_READY
+        bird_pos = 0.5
+        bird_velocity = 0.0
+        wall_elapsed = 0.0
+        choose_gap()
       end
     end
     return
@@ -117,7 +124,11 @@ def update(dt)
 
   if state == STATE_READY
     if beam.pressed("a")
-      start_game()
+      if game_started
+        start_life()
+      else
+        start_game()
+      end
     else
       return
     end
