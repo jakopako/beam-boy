@@ -80,6 +80,16 @@ consoles running older firmware.
   above the time needed to land and recover before the next obstacle.
   A restarts after game over. The stick's normal pause/exit controls still apply.
 
+- Wormfight is available from the store in `website/games/wormfight/`; it is not bundled in this local filesystem image. It is a shooter. The player sits at the
+  controller end; worms crawl in from the far end (lives are drawn there).
+  **A** fires a bullet; a worm dies after exactly as many hits as it has
+  segments. Bullets that miss pile up next to the player for the rest of the
+  game, shrinking the distance worms must cover. Hold **B** to charge the cannon
+  (1-3 damage, shown on the player pixel) and release for a flashing shot that
+  damages every worm on the display. It needs a 10-second recharge (also at the
+  start of a game); a slowly pulsing amber pixel beside the player shows it is recharging and turns steady when ready. One point per worm; three lives; worms get faster and more frequent.
+  Host test: `tools\wormfight_test.be` against `website\games\wormfight\game.be` (same runner as above).
+
 To test Obstacles on the Feather, run from `beam-boy-hw`:
 
 ```powershell
