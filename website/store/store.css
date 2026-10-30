@@ -40,11 +40,11 @@ body.store {
 }
 
 .game {
-  --tube: clamp(2.5rem, 7vw, 3.5rem);
+  --tube: clamp(2rem, 5vw, 2.75rem);
   display: grid;
   grid-template-columns: var(--tube) 1fr;
   gap: clamp(1.25rem, 4vw, 2.5rem);
-  min-height: 12rem;
+  min-height: 14rem;
 }
 
 /* One continuous tube: segments touch, only the outer ends are rounded. */
