@@ -1,0 +1,132 @@
+body.store {
+  display: block;
+}
+
+.store .brand {
+  margin-bottom: 2rem;
+}
+
+.store main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 0 5rem;
+  text-align: left;
+}
+
+.store h1 {
+  font-size: clamp(3.5rem, 11vw, 7.5rem);
+}
+
+.store .tagline {
+  max-width: 32rem;
+  margin-top: 1.75rem;
+}
+
+.store footer {
+  margin-top: 2rem;
+}
+
+.status {
+  margin: 4rem 0;
+  color: #a5afa1;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.85rem;
+}
+
+.games {
+  margin: 4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game {
+  --tube: clamp(2.5rem, 7vw, 3.5rem);
+  display: grid;
+  grid-template-columns: var(--tube) 1fr;
+  gap: clamp(1.25rem, 4vw, 2.5rem);
+  min-height: 12rem;
+}
+
+/* One continuous tube: segments touch, only the outer ends are rounded. */
+.segment {
+  background: var(--c);
+  opacity: 0.28;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--c) 30%, transparent);
+  transition: opacity 0.4s, box-shadow 0.4s;
+}
+
+.game:first-child .segment {
+  border-radius: 999px 999px 0 0;
+}
+
+.game:last-child .segment {
+  border-radius: 0 0 999px 999px;
+}
+
+.game:only-child .segment {
+  border-radius: 999px;
+}
+
+.games:not(.ready) .segment,
+.game.active .segment {
+  opacity: 1;
+  box-shadow:
+    0 0 14px color-mix(in srgb, var(--c) 80%, transparent),
+    0 0 48px color-mix(in srgb, var(--c) 45%, transparent),
+    inset 0 0 14px #ffffff55;
+}
+
+.games:not(.ready) .info,
+.game.active .info {
+  opacity: 1;
+}
+
+.info {
+  align-self: center;
+  padding: 1.5rem 0;
+  opacity: 0.55;
+  transition: opacity 0.4s;
+}
+
+.info h2 {
+  margin: 0 0 0.75rem;
+  color: var(--c);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  text-shadow: 0 0 24px color-mix(in srgb, var(--c) 40%, transparent);
+}
+
+.desc {
+  max-width: 34rem;
+  margin: 0 0 1.25rem;
+  color: #c9d1c5;
+  line-height: 1.6;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  color: #a5afa1;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.swatch {
+  width: 1.4rem;
+  height: 0.5rem;
+  border-radius: 1rem;
+  background: var(--c);
+  box-shadow: 0 0 10px var(--c);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment,
+  .info {
+    transition: none;
+  }
+}
