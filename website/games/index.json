@@ -3,7 +3,7 @@
     {
       "id": "fishing",
       "title": "Fishing",
-      "color": "ffa000",
+      "color": "00ff28",
       "url": "https://beamboy.ch/games/fishing/game.be",
       "sha256": "25258c51c9408561411a075ebb88e39567afa494ef57e290397059ac6b0ed9d9",
       "size": "8112"
@@ -19,7 +19,7 @@
     {
       "id": "obstacles",
       "title": "Obstacles",
-      "color": "ff6020",
+      "color": "00dfff",
       "url": "https://beamboy.ch/games/obstacles/game.be",
       "sha256": "fea8658246483105d0e9888a99ae65bcab06440d0a2242ef63875792784c9783",
       "size": "5934"
@@ -29,7 +29,7 @@
       "title": "Reflex",
       "color": "ff00aa",
       "url": "https://beamboy.ch/games/reflex/game.be",
-      "sha256": "762e603057a1606c42973ebd1625e7b72fb5bd8dcb0c9075d0d44165734cd8c9",
+      "sha256": "374760a0692b7a4c638608e3aed70df2c99f6560331fb2eee131108f9958b8f5",
       "size": "4290"
     }
   ]

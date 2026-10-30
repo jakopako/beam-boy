@@ -11,8 +11,8 @@ var kResultMs = 700
 var kStartingLives = 3
 
 var kDotColor = 0xFFFFFF
-var kZoneColor = 0x00FF28
-var kHitColor = 0x8CFF8C
+var kZoneColor = 0xFF00AA
+var kHitColor = 0xFF8CDB
 var kMissColor = 0xFF281E
 
 # STATE_* mirror the native ReflexScene::State enum, kept as plain ints since
