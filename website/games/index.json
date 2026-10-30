@@ -31,6 +31,14 @@
       "url": "https://beamboy.ch/games/reflex/game.be",
       "sha256": "374760a0692b7a4c638608e3aed70df2c99f6560331fb2eee131108f9958b8f5",
       "size": "4290"
+    },
+    {
+      "id": "wormfight",
+      "title": "Wormfight",
+      "color": "ff1818",
+      "url": "https://beamboy.ch/games/wormfight/game.be",
+      "sha256": "c4e4c3a32789c1774f81c9a5e2c28dd86d2a3540db9aaa617ee57fc83d84bacd",
+      "size": "9407"
     }
   ]
 }
