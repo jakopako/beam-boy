@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#080a0b">
+    <meta name="robots" content="noindex">
+    <meta name="description" content="Games available in the Beam Boy store, and the color to look for on your device.">
+    <title>Beam Boy - Store</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="store.css">
+  </head>
+  <body class="store">
+    <header class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>beam boy</span>
+    </header>
+
+    <main>
+      <section class="intro">
+        <p class="eyebrow">The store</p>
+        <h1>pick your<br><span>glow.</span></h1>
+        <p class="tagline">
+          Every game shows up in the store on your Beam Boy as a block of light.
+          Find the color below, press A, and it's yours.
+        </p>
+      </section>
+
+      <p id="status" class="status" role="status">Loading games&hellip;</p>
+      <ol id="games" class="games" aria-label="Available games"></ol>
+    </main>
+
+    <footer>
+      <span>beamboy.ch</span>
+      <a href="https://github.com/jakopako/beam-boy">Follow the build <span aria-hidden="true">&nearr;</span></a>
+    </footer>
+
+    <script src="store.js"></script>
+  </body>
+</html>

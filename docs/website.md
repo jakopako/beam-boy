@@ -3,8 +3,13 @@
 All published content lives in [website](../website): the landing page is
 [index.html](../website/index.html), with its styles in
 [style.css](../website/style.css). It is plain HTML/CSS: no dependencies, build
-step, external fonts, or JavaScript. The [games](../website/games) directory is
+step, or external fonts. The [games](../website/games) directory is
 published alongside it for the device's store.
+
+The unlinked store page at `/store/` ([store](../website/store)) is the only
+page using JavaScript: it fetches `games/index.json` and each game's
+`meta.json` at load time, so it always lists exactly the games in the index.
+Each game's `color` is drawn as a segment of a vertical neon tube.
 
 Implementation notes and this hosting guide remain in `docs`, outside the
 published site. They are still public in the repository, but are not included
