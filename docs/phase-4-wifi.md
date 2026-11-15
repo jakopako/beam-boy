@@ -1137,7 +1137,7 @@ input and animation logic:
 
 > **Historical Phase 4 snapshot — superseded by Phase 11:** the prototype OTA
 > described below had no published manifest or release pipeline. The current
-> signed-release updater and its remaining hardware validation are documented
+> signed-release updater and its completed Feather hardware validation are documented
 > in [Phase 11](../PLAN.md#phase-11--firmware-updates).
 
 At the time this Phase 4 checklist was written, OTA could not be tested
