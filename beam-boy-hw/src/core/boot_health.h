@@ -15,18 +15,24 @@ class BootHealth {
     launcher_window_started_ = false;
   }
 
-  bool observe(uint32_t now_ms, bool launcher_active) {
-    if (!pending_verification_ || !startup_ready_) return false;
+  float progress(uint32_t now_ms, bool launcher_active) {
+    if (!pending_verification_ || !startup_ready_) return 0.0f;
     if (!launcher_active) {
       launcher_window_started_ = false;
-      return false;
+      return 0.0f;
     }
     if (!launcher_window_started_) {
       launcher_started_ms_ = now_ms;
       launcher_window_started_ = true;
-      return false;
+      return 0.0f;
     }
-    return now_ms - launcher_started_ms_ >= kBootHealthWindowMs;
+    const uint32_t elapsed_ms = now_ms - launcher_started_ms_;
+    if (elapsed_ms >= kBootHealthWindowMs) return 1.0f;
+    return static_cast<float>(elapsed_ms) / kBootHealthWindowMs;
+  }
+
+  bool observe(uint32_t now_ms, bool launcher_active) {
+    return progress(now_ms, launcher_active) >= 1.0f;
   }
 
  private:

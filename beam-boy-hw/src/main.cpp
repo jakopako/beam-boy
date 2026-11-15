@@ -201,20 +201,24 @@ void setup() {
 void loop() {
   engine.tick();
 
-  if (pending_ota_verification &&
-      boot_health.observe(
-          millis(), !engine.shuttingDown() &&
-                        engine.currentScene() == &launcher_scene)) {
-    const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
-    if (result != ESP_OK) {
-      Serial.print("[ota] could not mark image healthy: ");
-      Serial.println(esp_err_to_name(result));
-      rollbackPendingImage("could not acknowledge the running image");
+  if (pending_ota_verification) {
+    const float progress = boot_health.progress(
+        millis(), !engine.shuttingDown() &&
+                      engine.currentScene() == &launcher_scene);
+    launcher_scene.setFirmwareCheckProgress(progress);
+    if (progress >= 1.0f) {
+      const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
+      if (result != ESP_OK) {
+        Serial.print("[ota] could not mark image healthy: ");
+        Serial.println(esp_err_to_name(result));
+        rollbackPendingImage("could not acknowledge the running image");
+      }
+      pending_ota_verification = false;
+      launcher_scene.setFirmwareCheckProgress(-1.0f);
+      engine.storage().setWritesInhibited(false);
+      engine.setInteractionInhibited(false);
+      Serial.println("[ota] image marked healthy");
     }
-    pending_ota_verification = false;
-    engine.storage().setWritesInhibited(false);
-    engine.setInteractionInhibited(false);
-    Serial.println("[ota] image marked healthy");
   }
 
   const uint32_t now = millis();

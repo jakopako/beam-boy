@@ -327,6 +327,8 @@ mark an OTA image valid during startup. On a pending-verification boot it:
 - continues normal launcher frame updates and battery monitoring, but ignores
   controls and inhibits save-file writes during probation, preventing game
   deletion or other user-data changes before rollback is no longer needed;
+- dims the launcher and displays a five-segment cyan/white progress indicator
+  at the end of the tube during the five-second check;
 - marks the image valid only after the launcher has remained active for five
   uninterrupted seconds. Leaving the launcher or entering critical-battery
   shutdown restarts that timer. A control held through acknowledgement remains

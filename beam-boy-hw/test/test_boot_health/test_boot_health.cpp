@@ -33,14 +33,29 @@ void test_launcher_must_run_for_the_full_health_window() {
   TEST_ASSERT_TRUE(health.observe(100 + kBootHealthWindowMs, true));
 }
 
+void test_progress_advances_during_a_continuous_launcher_window() {
+  BootHealth health;
+  health.begin(true, true);
+
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, health.progress(100, true));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.2f,
+                           health.progress(100 + 1000, true));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.6f,
+                           health.progress(100 + 3000, true));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f,
+                           health.progress(100 + kBootHealthWindowMs, true));
+}
+
 void test_leaving_launcher_restarts_the_health_window() {
   BootHealth health;
   health.begin(true, true);
 
-  TEST_ASSERT_FALSE(health.observe(100, true));
-  TEST_ASSERT_FALSE(health.observe(200, false));
-  TEST_ASSERT_FALSE(health.observe(300, true));
-  TEST_ASSERT_FALSE(health.observe(300 + kBootHealthWindowMs - 1, true));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, health.progress(100, true));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, health.progress(200, false));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, health.progress(300, true));
+  TEST_ASSERT_FLOAT_WITHIN(
+      0.001f, 0.9998f,
+      health.progress(300 + kBootHealthWindowMs - 1, true));
   TEST_ASSERT_TRUE(health.observe(300 + kBootHealthWindowMs, true));
 }
 
@@ -59,6 +74,7 @@ int main(int, char**) {
   RUN_TEST(test_normal_boot_never_requests_ota_acknowledgement);
   RUN_TEST(test_unhealthy_startup_never_requests_acknowledgement);
   RUN_TEST(test_launcher_must_run_for_the_full_health_window);
+  RUN_TEST(test_progress_advances_during_a_continuous_launcher_window);
   RUN_TEST(test_leaving_launcher_restarts_the_health_window);
   RUN_TEST(test_health_window_handles_millis_rollover);
   return UNITY_END();
