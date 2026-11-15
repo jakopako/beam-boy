@@ -159,8 +159,12 @@ const char* describe(PowerGate gate) {
 PowerGate installPowerGate(bool reading_available, uint32_t reading_age_ms,
                            float percent, PowerLevel level) {
   if (!reading_available) return PowerGate::kUnavailable;
-  // Written to also reject NaN.
-  if (!(percent >= 0.0f && percent <= 100.0f)) return PowerGate::kUnavailable;
+  // The MAX17048 can report slightly over 100% on a freshly charged cell;
+  // accept the same physical range as isPlausibleReading().
+  if (!(percent >= kMinPlausiblePercent &&
+        percent <= kMaxPlausiblePercent)) {
+    return PowerGate::kUnavailable;
+  }
   if (reading_age_ms > kMaxBatteryReadingAgeMs) return PowerGate::kStale;
   if (level == PowerLevel::kCritical) return PowerGate::kCritical;
   if (level == PowerLevel::kLow || percent < kMinInstallBatteryPercent) {

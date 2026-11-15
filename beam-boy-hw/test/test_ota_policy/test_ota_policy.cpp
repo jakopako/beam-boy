@@ -247,7 +247,15 @@ void test_battery_boards_need_a_fresh_valid_reading() {
   TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
                     installPowerGate(true, 0, NAN, PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
-                    installPowerGate(true, 0, 101.0f, PowerLevel::kNormal));
+                    installPowerGate(true, 0, -1.0f, PowerLevel::kNormal));
+  TEST_ASSERT_EQUAL(PowerGate::kOk,
+                    installPowerGate(true, 0, 104.0f, PowerLevel::kNormal));
+  TEST_ASSERT_EQUAL(PowerGate::kOk,
+                    installPowerGate(true, 0, kMaxPlausiblePercent,
+                                     PowerLevel::kNormal));
+  TEST_ASSERT_EQUAL(PowerGate::kUnavailable,
+                    installPowerGate(true, 0, kMaxPlausiblePercent + 0.1f,
+                                     PowerLevel::kNormal));
   TEST_ASSERT_EQUAL(PowerGate::kOk,
                     installPowerGate(true, kMaxBatteryReadingAgeMs, 90.0f,
                                      PowerLevel::kNormal));
