@@ -65,7 +65,6 @@ void UpdateFirmwareScene::start() {
           "first"));
     return;
   }
-  Serial.println(F("[update] connecting"));
   net_.connect();
 }
 
