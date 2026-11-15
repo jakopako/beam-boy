@@ -34,8 +34,10 @@
 //
 // Used by UpdateFirmwareScene, which supplies the preconditions, holds off
 // engine idle sleep while busy() and cancels on exit or critical battery.
-// Not done yet (PLAN.md Phase 11 step 5): deferring Arduino's automatic "app
-// valid" acknowledgement for health-checked rollback.
+// The first-boot "app valid" acknowledgement is deferred until BootHealth
+// confirms that the launcher has run successfully for five seconds. The
+// rollback and USB-recovery behavior has been validated on the Feather; see
+// PLAN.md Phase 11.
 
 #include <Arduino.h>
 #include <HTTPClient.h>

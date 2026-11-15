@@ -4,15 +4,15 @@ Networking that stays out of the way. The radio is **off** unless you walk into
 the Network scene and ask for it, and everything here is built so that offline
 behaviour is not merely the fallback but the default.
 
-> **Current Settings layout:** WiFi now owns credentials and connectivity only.
-> The old connected-A OTA action and result/reboot handling have been removed.
+> **Current Settings layout:** WiFi owns credentials and connectivity.
 > Settings contains WiFi, Update firmware, Store and Brightness in that order.
-> Update firmware is an unavailable placeholder (two separated amber bars);
-> A logs that no update was started, and hold B returns to Settings. It never
-> starts the radio or writes firmware. The legacy `Ota` component is retained
-> but has no scene caller. The historical OTA notes below are not a description
-> of a working release updater; see [Phase 11](../PLAN.md#phase-11--firmware-updates)
-> for the replacement and its release gates.
+> Update firmware is a working signed-release flow: it connects using saved
+> credentials, checks the stable manifest, and requires a deliberate hold
+> before installing. It never opens WiFi provisioning; set up credentials in
+> Settings > WiFi first. See [Phase 11](../PLAN.md#phase-11--firmware-updates)
+> for its behavior, release procedure and completed Feather hardware validation.
+> The OTA implementation notes later in this historical Phase 4 document
+> describe the original prototype, not the current updater.
 
 > ## ✅ Status: ESP8266 provisioning crash confirmed fixed on ESP32
 >
@@ -130,7 +130,7 @@ a red/green distinction is invisible to a red-green colourblind player.
 | Failed: password rejected | Red | **Two** flashes, then a dim hold |
 | Failed: network not found | Red | **Four** flashes, then a dim hold |
 | Failed: timed out / link lost | Red | **Three** flashes, then a dim hold |
-| Update firmware placeholder | Amber | Two separated gently breathing bars; no update operation |
+| Legacy Update firmware placeholder (historical) | Amber | Two separated gently breathing bars; no update operation |
 
 The selected menu entry breathes while the others sit dim and still — brightness
 and motion mark the selection. All entries are drawn the same width: an earlier
@@ -1135,9 +1135,14 @@ input and animation logic:
 & "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" test -e native
 ```
 
-**OTA cannot be tested end-to-end yet** — it needs a manifest at a real URL.
-`kManifestUrl` in `ota.cpp` is a placeholder. Pressing A while connected will
-report a failure, which is the correct behaviour for an unreachable server.
+> **Historical Phase 4 snapshot — superseded by Phase 11:** the prototype OTA
+> described below had no published manifest or release pipeline. The current
+> signed-release updater and its completed Feather hardware validation are documented
+> in [Phase 11](../PLAN.md#phase-11--firmware-updates).
+
+At the time this Phase 4 checklist was written, OTA could not be tested
+end-to-end because it had no real manifest URL; the remaining items below are
+historical and are not the current release checklist.
 
 ## Still to do in this phase
 
