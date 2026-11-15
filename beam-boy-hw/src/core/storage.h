@@ -21,12 +21,14 @@ namespace beamboy {
 
 class Storage {
  public:
-  // Mounts the filesystem, formatting it on first boot, and loads the save.
-  // Returns false if the filesystem is unusable -- the console still runs, it
-  // just cannot remember anything.
-  bool begin();
+  // Mounts the filesystem and loads the save. Formatting on mount failure can
+  // be disabled while a new OTA image is under health verification, so a failed
+  // boot never erases data needed by the previous image.
+  bool begin(bool format_on_failure = true);
 
   bool mounted() const { return mounted_; }
+  bool saveReadable() const { return save_readable_; }
+  void setWritesInhibited(bool inhibited) { writes_inhibited_ = inhibited; }
 
   // --- Highscores ----------------------------------------------------------
 
@@ -107,7 +109,9 @@ class Storage {
 
   SaveData data_;
   bool mounted_ = false;
+  bool save_readable_ = false;
   bool dirty_ = false;
+  bool writes_inhibited_ = false;
 };
 
 }  // namespace beamboy

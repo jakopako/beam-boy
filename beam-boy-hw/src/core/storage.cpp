@@ -40,13 +40,12 @@ uint32_t checksumBytes(const void* data, size_t size) {
 
 }  // namespace
 
-bool Storage::begin() {
+bool Storage::begin(bool format_on_failure) {
 #if defined(ESP32)
-  // true = format automatically if the partition has never been used.
-  mounted_ = LittleFS.begin(true);
+  mounted_ = LittleFS.begin(format_on_failure);
 #else
   mounted_ = LittleFS.begin();
-  if (!mounted_) {
+  if (!mounted_ && format_on_failure) {
     LittleFS.format();
     mounted_ = LittleFS.begin();
   }
@@ -55,9 +54,13 @@ bool Storage::begin() {
   if (!mounted_) return false;
 
   if (!load()) {
-    // No save, or one we cannot trust. Start clean rather than guessing.
+    // A missing save is a normal first boot. An existing unreadable save must
+    // remain distinguishable so an OTA boot can roll back without overwriting it.
+    save_readable_ = !LittleFS.exists(kSavePath);
     data_ = SaveData();
     dirty_ = true;
+  } else {
+    save_readable_ = true;
   }
   return true;
 }
@@ -165,7 +168,7 @@ bool Storage::save() {
 }
 
 void Storage::commit() {
-  if (!dirty_) return;
+  if (!dirty_ || writes_inhibited_) return;
   save();
 }
 
@@ -254,7 +257,7 @@ void Storage::setLastGameId(const char* id) {
 void Storage::reset() {
   data_ = SaveData();
   dirty_ = true;
-  save();
+  commit();
 }
 
 }  // namespace beamboy

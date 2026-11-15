@@ -63,6 +63,7 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 | `test_net_policy` | The credential-retention truth table: which connection failures discard stored WiFi credentials |
 | `test_ota_manifest` | Firmware manifest parser: the release tool's signed test vector round-trips; unknown/duplicate/missing fields, wrong types, escapes, non-ASCII, truncation, oversize input and non-canonical base64 are all rejected |
 | `test_ota_policy` | Firmware update decisions: only newer compatible stable releases for this exact board/layout, minimum updater/save/API versions, slot size, exact-host HTTPS allowlist, the 30% fresh-battery gate, hold-A confirmation (including a press carried into the scene) and exact signed-image accounting |
+| `test_boot_health` | OTA probation timing: only pending, startup-ready boots can be acknowledged, and the launcher must remain active for five seconds (including across `millis()` rollover) |
 
 ### On-device suites
 

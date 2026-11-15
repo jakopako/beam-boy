@@ -147,6 +147,32 @@ void test_v2_save_migrates_without_losing_settings_or_scores(void) {
   TEST_ASSERT_FALSE(reloaded.dirty());
 }
 
+void test_existing_unreadable_save_is_reported_without_replacing_it() {
+  beamboy_host::files().clear();
+  beamboy_host::files()["/beamboy.sav"] = "corrupt";
+
+  Storage storage;
+  TEST_ASSERT_TRUE(storage.begin(false));
+  TEST_ASSERT_FALSE(storage.saveReadable());
+  TEST_ASSERT_TRUE(storage.dirty());
+  TEST_ASSERT_EQUAL_STRING("corrupt",
+                           beamboy_host::files()["/beamboy.sav"].c_str());
+}
+
+void test_inhibited_storage_writes_remain_pending_until_released() {
+  Storage storage = freshStorage();
+  storage.setWritesInhibited(true);
+  storage.setBrightness(42);
+  storage.commit();
+  TEST_ASSERT_TRUE(storage.dirty());
+  TEST_ASSERT_FALSE(LittleFS.exists("/beamboy.sav"));
+
+  storage.setWritesInhibited(false);
+  storage.commit();
+  TEST_ASSERT_FALSE(storage.dirty());
+  TEST_ASSERT_TRUE(LittleFS.exists("/beamboy.sav"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_erase_score_forgets_a_known_game);
@@ -156,5 +182,7 @@ int main(int, char**) {
   RUN_TEST(test_erase_score_frees_its_slot_for_reuse);
   RUN_TEST(test_last_game_id_survives_a_save_reload);
   RUN_TEST(test_v2_save_migrates_without_losing_settings_or_scores);
+  RUN_TEST(test_existing_unreadable_save_is_reported_without_replacing_it);
+  RUN_TEST(test_inhibited_storage_writes_remain_pending_until_released);
   return UNITY_END();
 }
