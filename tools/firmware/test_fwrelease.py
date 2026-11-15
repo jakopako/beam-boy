@@ -15,6 +15,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -95,6 +96,21 @@ class ReleaseFlowTests(unittest.TestCase):
         args = dict(version="1.2.3", sequence=7, images=self.images, repo=fr.DEFAULT_REPO, min_updater=1, min_save=3, min_api=1)
         args.update(overrides)
         return fr.build_payload(**args)
+
+    def test_download_404_explains_missing_github_release_asset(self):
+        url = (
+            "https://github.com/jakopako/beam-boy/releases/download/fw-v0.9.1/"
+            "beamboy-fw-0.9.1-%s.bin" % FEATHER
+        )
+        error = urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        with mock.patch.object(fr.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(fr.ReleaseError) as raised:
+                fr._download(url, 4096)
+        message = str(raised.exception)
+        self.assertIn("HTTP 404", message)
+        self.assertIn("fw-v0.9.1", message)
+        self.assertIn("beamboy-fw-0.9.1-%s.bin" % FEATHER, message)
+        self.assertIn("create/publish the release and upload that asset", message)
 
     def test_payload_entries_match_images(self):
         payload = self.payload()

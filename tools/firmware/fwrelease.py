@@ -34,6 +34,8 @@ import json
 import re
 import shutil
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -586,8 +588,28 @@ def cmd_sign(args):
 
 
 def _download(url: str, limit: int) -> bytes:
-    with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310 - https enforced by validation
-        data = response.read(limit + 1)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310 - https enforced by validation
+            data = response.read(limit + 1)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            parts = urllib.parse.urlsplit(url).path.strip("/").split("/")
+            try:
+                download_index = parts.index("download")
+            except ValueError:
+                release_tag = asset = None
+            else:
+                release_tag = parts[download_index + 1] if download_index + 1 < len(parts) else None
+                asset = parts[download_index + 2] if download_index + 2 < len(parts) else None
+            if release_tag and asset:
+                raise ReleaseError(
+                    "GitHub returned HTTP 404 for %s. Release %r or asset %r is missing or not "
+                    "published yet; create/publish the release and upload that asset, then retry."
+                    % (url, release_tag, asset)
+                ) from exc
+        raise ReleaseError("download failed for %s: HTTP %s %s" % (url, exc.code, exc.reason)) from exc
+    except urllib.error.URLError as exc:
+        raise ReleaseError("could not download %s: %s" % (url, exc.reason)) from exc
     if len(data) > limit:
         raise ReleaseError("%s is larger than %d bytes" % (url, limit))
     return data

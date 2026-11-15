@@ -238,13 +238,26 @@ python tools\firmware\fwrelease.py prepare --version 1.2.3 --sequence 7 `
 # 3. Offline: sign. Writes dist/fw-v1.2.3/manifest-1.2.3.json and refuses to overwrite.
 python tools\firmware\fwrelease.py sign --key 'D:\offline\bb-release-1.pem' --key-id bb-release-1 dist\fw-v1.2.3\payload.json
 
-# 4. Create GitHub release fw-v1.2.3 and upload the .bin and manifest-1.2.3.json. Never replace assets.
+# 4. Create and publish the GitHub release with both assets. Never replace assets.
+gh release create fw-v1.2.3 `
+  'dist\fw-v1.2.3\beamboy-fw-1.2.3-adafruit_feather_esp32s3_nopsram.bin' `
+  'dist\fw-v1.2.3\manifest-1.2.3.json' `
+  --title 'Beam Boy firmware v1.2.3' `
+  --notes 'Signed Beam Boy firmware release v1.2.3 (sequence 7).'
+
 # 5. Check the published asset, then smoke-test on a Feather.
 python tools\firmware\fwrelease.py verify --manifest dist\fw-v1.2.3\manifest-1.2.3.json --download
 
 # 6. Move the stable pointer (re-downloads and checks assets; refuses a non-increasing sequence), commit, push.
 python tools\firmware\fwrelease.py promote dist\fw-v1.2.3\manifest-1.2.3.json
 ```
+
+`gh release create` publishes the release immediately (do not use `--draft` here,
+because `verify --download` must be able to fetch its assets). This does not make
+the update available to consoles; that happens only when the promoted
+`website/firmware/stable.json` is committed and pushed. If an asset URL returns
+HTTP 404, confirm the release and its `.bin` asset have been published before
+retrying `verify`.
 
 `prepare` defaults `min_save` and `min_api` to the current firmware values,
 which is the conservative choice. Lower them only when the release really
