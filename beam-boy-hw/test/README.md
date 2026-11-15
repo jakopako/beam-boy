@@ -55,11 +55,30 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 | `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, refresh behavior, and alpha-blended overlays (white backgrounds, anti-aliased edges, opacity and reversal) |
 | `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat |
 | `test_brightness` | Actual brightness scene controls and repeat timing, 32 minimum (including clamping older saved values), preview scaled from three lower LEDs at minimum to the full bar at maximum with the far-end blue marker preserved, 128 maximum with unchanged 64 default, display power cap, default reset, deferred writes, confirmation/exit persistence, failed-save feedback, and hold-progress contrast over white previews |
-| `test_settings` | Four-child Settings routing order, distinct registry indices, and the unavailable firmware-update placeholder's rendering and preservation of brightness, credentials and saves |
+| `test_settings` | Four-child Settings routing order and distinct registry indices |
+| `test_update_flow` | Settings > Update firmware: the screen's state machine (radio only while working towards a result, a press carried into the screen never confirms, the confirming hold never also restarts, every failure retries with A, staged images restart on a fresh press) and its tube rendering (real download fill, per-failure pulse counts, success fill and heartbeat, every stage visibly distinct) |
 | `test_score` | Actual engine score renderer: dark spacing, 25% white zeros, coloured nibble groups, reveal/instant timing, brightness scaling, 25-bit capacity, overflow and reversal |
 | `test_run_score` | Restart resets the active score, preserves the best run across retries and save/reload, defers flash writes, and refuses to lose a score when preservation fails |
 | `test_soak` | Long-run invariants: phase growth over 6 simulated hours, the `millis()` rollover, fade termination |
 | `test_net_policy` | The credential-retention truth table: which connection failures discard stored WiFi credentials |
+| `test_ota_manifest` | Firmware manifest parser: the release tool's signed test vector round-trips; unknown/duplicate/missing fields, wrong types, escapes, non-ASCII, truncation, oversize input and non-canonical base64 are all rejected |
+| `test_ota_policy` | Firmware update decisions: only newer compatible stable releases for this exact board/layout, minimum updater/save/API versions, slot size, exact-host HTTPS allowlist, the 30% fresh-battery gate, hold-A confirmation (including a press carried into the scene) and exact signed-image accounting |
+
+### On-device suites
+
+Suites named `test_device_*` need the target's mbedTLS or flash, so the native
+env ignores them and the board envs run only them:
+
+```
+pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature
+```
+
+`test_device_ota_signature` verifies the release tool's ECDSA P-256 test vector
+with the firmware's verifier, rejects tampered payloads/signatures/keys, and
+logs verification time and heap. CI only compiles it
+(`--without-uploading --without-testing`); run it on the Feather before
+creating a release key. Its vector lives in `test/ota_vectors/` and is
+regenerated with `python tools/firmware/fwrelease.py test-vector --regenerate`.
 
 ## Adding a test
 
@@ -70,7 +89,9 @@ compiled into the test binary.
 
 Code that touches WiFi, OTA or the battery driver is not currently in that
 filter, because pulling it in would mean shimming hardware for very little
-return. The brightness scene uses Engine's inline display/input/storage accessors;
+return. The firmware updater follows the same split as `net_policy.h`: `ota.cpp`
+does the network and flash I/O, while `fw_manifest.cpp` and `ota_policy.cpp`
+hold every decision and are host-tested. The brightness scene uses Engine's inline display/input/storage accessors;
 an empty fuel-gauge type lets it compile without emulating I2C or power management.
 
 **But that is a reason to move the decision, not to skip the test.** `Network`

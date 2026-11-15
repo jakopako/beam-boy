@@ -149,6 +149,12 @@ void Engine::beginCriticalShutdown() {
   Serial.print(power_.voltage(), 2);
   Serial.println("V -- flushing and shutting down");
 
+  // Let the scene stop anything that must not be cut off half-way (a firmware
+  // write) before the flush and the sleep that follows. The scene is not
+  // ticked again during the sweep.
+  if (scene_ != nullptr) scene_->abortForShutdown(*this);
+  sleep_inhibited_ = false;
+
   // Flush now, before a single frame of the shutdown animation plays. This is
   // the entire point of detecting "critical" ahead of the hardware protection
   // circuit's own cutoff: get the write onto flash while there is still
@@ -210,10 +216,8 @@ void Engine::enterDeepSleep() {
   gpio_hold_en(static_cast<gpio_num_t>(board::kPinLedData));
   gpio_deep_sleep_hold_en();
 
-  // Every wake button lands within GPIO 0-21 on the S3 on both boards this
-  // firmware targets, which is exactly the range ext1 wakeup supports; no
-  // board-specific guard is needed here the way board_config.h needs one for
-  // kHasBatteryMonitor.
+  // Every wake button lands within GPIO 0-21 on the Feather, which is exactly
+  // the range ext1 wakeup supports.
   const uint64_t wake_mask = (1ULL << board::kPinButtonA) |
                              (1ULL << board::kPinButtonB) |
                              (1ULL << board::kPinStickSw);
@@ -289,6 +293,9 @@ void Engine::tick() {
     // servicing must ask for it, and one that does not cannot inherit it from
     // whatever ran previously.
     idle_serviced_ = false;
+    // Same for the sleep inhibit: a scene that left mid-write (hold B, or an
+    // early return) cannot leave the console unable to sleep.
+    sleep_inhibited_ = false;
     if (scene_ != nullptr) scene_->enter(*this);
     resetDiagnostics();
   }
@@ -344,6 +351,9 @@ void Engine::tick() {
   // top of updatePower(), which runs before this check every frame) resumes
   // exactly where the scene left off, since it was never ticked while idle.
   {
+    // While a scene holds sleep off, keep the idle timer at zero so the
+    // console does not fall asleep the moment a long write finishes.
+    if (sleep_inhibited_) last_activity_ms_ = now_ms;
     const uint32_t idle_ms = now_ms - last_activity_ms_;
     if (shouldEnterIdleSleep(idle_ms)) {
       const uint32_t fade_elapsed = idle_ms - kIdleSleepMs;

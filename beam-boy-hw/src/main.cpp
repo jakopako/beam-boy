@@ -10,6 +10,7 @@
 
 #include "core/cartridge_store.h"
 #include "core/engine.h"
+#include "core/firmware_identity.h"
 #include "core/game_registry.h"
 #include "scenes/launcher_scene.h"
 
@@ -50,6 +51,9 @@ void setup() {
   if (Serial) {
     delay(1200);
   }
+
+  // Also keeps the tag in the image, where the release tool looks for it.
+  Serial.println(beamboy::fw::kBuildTag);
 
   // The radio powers up automatically at boot and draws tens of mA even when
   // idle, several times the LED budget. Beam Boy is offline by default, so keep
