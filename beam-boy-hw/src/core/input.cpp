@@ -97,7 +97,7 @@ void Input::setControlsInhibited(bool inhibited) {
 
   for (uint8_t i = 0; i < static_cast<uint8_t>(Button::kCount); i++) {
     ButtonState& state = buttons_[i];
-    suppressed_buttons_[i] = state.down;
+    suppressed_buttons_[i] = state.down || state.pending_down;
     if (!state.down) state.previous_down = false;
   }
   stick_suppressed_until_center_ = true;
@@ -132,7 +132,7 @@ void Input::update(uint32_t now_ms) {
         if (state.down) state.pressed_at = now_ms;
       }
     }
-    if (suppressed_buttons_[i] && !state.down) {
+    if (suppressed_buttons_[i] && !state.down && !state.pending_down) {
       suppressed_buttons_[i] = false;
       state.previous_down = false;
     }
