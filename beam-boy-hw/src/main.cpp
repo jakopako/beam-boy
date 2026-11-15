@@ -153,7 +153,7 @@ void setup() {
 
   Serial.println();
   Serial.println("==================================");
-  Serial.println("Beam Boy -- Phase 10: fixed launcher");
+  Serial.println("Beam Boy -- Phase 11: firmware updates");
   Serial.print("Pixels:     ");
   Serial.println(engine.display().pixelCount());
   Serial.print("Brightness: ");

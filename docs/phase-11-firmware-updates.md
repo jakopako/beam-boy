@@ -1,26 +1,28 @@
 # Phase 11 — Firmware updates
 
-> **Steps 1–4 are implemented and the step 4 hardware checklist passed on a Feather.
-> Step 5's health-check code is implemented, but its rollback behavior still needs
-> physical fault-injection validation on the Feather.** Settings > Update firmware
-> checks, installs and restarts; the firmware trusts release key `bb-release-1`.
-> Until hardware rollback testing passes, keep USB recovery available.
+> **The OTA implementation and Feather hardware validation are complete, including
+> first-boot rollback and USB recovery.** Settings > Update firmware checks,
+> installs and restarts; the firmware trusts release key `bb-release-1`.
+>
+> Latest published stable firmware: **0.9.3 (sequence 4)**, signed and promoted
+> at [`fw-v0.9.3`](https://github.com/jakopako/beam-boy/releases/tag/fw-v0.9.3).
+> The live pointer is [`stable.json`](https://beamboy.ch/firmware/stable.json).
 
 ## What exists
 
 | Piece | Where | Tested by |
 |---|---|---|
 | Board/layout identities | `beam-boy-hw/firmware-boards.json` | build script, release tool |
-| Build identity (board, layout, version, sequence, slot size) | `scripts/firmware_identity.py` → `src/core/firmware_identity.h` | release tool `check-image` |
-| Manifest format + strict parser | `src/core/fw_manifest.{h,cpp}` | `test_ota_manifest` (host) |
-| Release selection, URL allowlist, power gate, hold-to-confirm, image accounting | `src/core/ota_policy.{h,cpp}` | `test_ota_policy` (host) |
-| ECDSA P-256 verification (mbedTLS) + trusted keys | `src/core/ota_signature.{h,cpp}`, `src/core/ota_keys.cpp` | `test_device_ota_signature` (passed on a Feather) |
-| Check / stream / verify / select | `src/core/ota.{h,cpp}` | build only; needs hardware |
-| Update screen: state machine | `src/scenes/update_flow.{h,cpp}` | `test_update_flow` (host) |
-| Update screen: tube rendering | `src/scenes/update_firmware_view.{h,cpp}` | `test_update_flow` (host) |
-| Update screen: wiring to Network/Ota/Power/Storage | `src/scenes/update_firmware_scene.{h,cpp}` | build only; needs hardware |
+| Build identity (board, layout, version, sequence, slot size) | `beam-boy-hw/scripts/firmware_identity.py` → `beam-boy-hw/src/core/firmware_identity.h` | release tool `check-image` |
+| Manifest format + strict parser | `beam-boy-hw/src/core/fw_manifest.{h,cpp}` | `test_ota_manifest` (host) |
+| Release selection, URL allowlist, power gate, hold-to-confirm, image accounting | `beam-boy-hw/src/core/ota_policy.{h,cpp}` | `test_ota_policy` (host) |
+| ECDSA P-256 verification (mbedTLS) + trusted keys | `beam-boy-hw/src/core/ota_signature.{h,cpp}`, `beam-boy-hw/src/core/ota_keys.cpp` | `test_device_ota_signature` (passed on a Feather) |
+| Check / stream / verify / select | `beam-boy-hw/src/core/ota.{h,cpp}` | manual Feather step 4 hardware checklist |
+| Update screen: state machine | `beam-boy-hw/src/scenes/update_flow.{h,cpp}` | `test_update_flow` (host) |
+| Update screen: tube rendering | `beam-boy-hw/src/scenes/update_firmware_view.{h,cpp}` | `test_update_flow` (host) |
+| Update screen: wiring to Network/Ota/Power/Storage | `beam-boy-hw/src/scenes/update_firmware_scene.{h,cpp}` | manual Feather step 4 hardware checklist |
 | Engine guard: sleep inhibit, abort before critical shutdown | `Engine::setSleepInhibited()`, `Scene::abortForShutdown()` | build only |
-| First-boot health gate | `verifyRollbackLater()`, `BootHealth`, `main.cpp` | host policy tests + Feather build; hardware rollback proof pending |
+| First-boot health gate | `verifyRollbackLater()`, `BootHealth`, `beam-boy-hw/src/main.cpp` | host policy tests + Feather rollback/USB-recovery validation |
 | Release tool | `tools/firmware/fwrelease.py` | `tools/firmware/test_fwrelease.py` |
 | CI | `.github/workflows/firmware.yml`, Pages workflow | — |
 
@@ -106,9 +108,10 @@ The console refuses a release whose minimum is above its own value.
      the image fits the slot, and that the URL is on the allowlist.
 
 `beginInstall(preconditions)` refuses unless the release is available, the
-power gate passes and saves are clean. The power gate requires a fresh (≤ 5 s),
-valid gauge reading of at least 30%. USB never bypasses it, and neither does a
-missing gauge reading. The rest of the install:
+power gate passes and saves are clean. The power gate requires a fresh (≤ 5 s), valid gauge reading of at least 30%.
+The MAX17048 may report slightly over 100% on a freshly charged cell; values
+within the shared plausible range (up to 110%) are accepted. USB never bypasses
+the gate, and neither does a missing gauge reading. The rest of the install:
 
 1. It follows at most 5 redirects by hand. Each hop must be `https://` to
    exactly one of the allowed hosts: `beamboy.ch`, `github.com`,
@@ -148,7 +151,10 @@ Entering turns the radio on and checks; it never writes flash on its own.
 | Red, 1 / 2 / 3 / 4 pulses | Failed: connection / check (manifest, TLS, signature) / incompatible release / install | A retries; hold B leaves |
 | Red, slow breathing | Battery below 30%, stale or unreadable | A retries; hold B leaves |
 
-Serial logs every stage change with the detailed reason (`[update] ...`).
+Serial logs every stage change with the detailed reason (`[update] ...`). At
+startup it prints the machine-readable build tag
+`beamboy-fw:<board>;<layout>;<version>;<sequence>` followed by the console
+summary; this tag is also checked in release images.
 
 Behaviour that is easy to miss:
 
@@ -172,10 +178,13 @@ Behaviour that is easy to miss:
   The manifest check, opening the image stream and the final
   `esp_ota_end()` validation each block for a moment behind a static frame.
 
-### Hardware checklist for step 4
+### Hardware checklist for step 4 (passed; historical release identities)
 
-This checklist passed on the Feather. To repeat it you need a signed release
-newer than the firmware on the console:
+This checklist passed on the Feather using a test image at 0.9.0 / sequence 1
+and an OTA release at 0.9.1 / sequence 2. Those identities are historical:
+the current stable release is 0.9.3 / sequence 4, so the exact release steps
+below cannot be replayed or promoted again. For a new hardware run, use fresh,
+strictly increasing identities and follow the current Release procedure.
 
 1. Flash the console over USB with a release-identity build. In PowerShell:
    ```powershell
@@ -208,8 +217,9 @@ newer than the firmware on the console:
      with the slow red breath.
    - With no credentials, the two amber bars appear and nothing connects.
 
-Keep a USB cable ready. Until step 5, an image that boots but crashes is not
-rolled back on its own; reflash over USB.
+This checklist records the original step 4 test, from before the step 5
+health-check implementation. Both the OTA flow and step 5 rollback behavior
+have since been validated on the Feather.
 
 ## Release procedure
 
@@ -336,14 +346,12 @@ mark an OTA image valid during startup. On a pending-verification boot it:
 
 An early reset or power loss should leave the image pending so the ESP32-S3
 bootloader selects the previous valid slot. A detected startup failure
-explicitly requests rollback. This behavior is **implemented but not yet proven
-on the physical Feather**; the bootloader, reset causes and flash timing must be
-tested on the target.
+explicitly requests rollback. This behavior has been validated on the physical
+Feather.
 
-### Remaining Feather validation
+### Completed Feather validation
 
-With USB recovery available, test the failure paths before declaring rollback
-proven:
+The following failure and recovery paths were validated:
 
 - install a signed image that deliberately crashes before the five-second mark
   and confirm the previous version boots;
@@ -356,6 +364,6 @@ proven:
   remains selected across a later reboot;
 - verify USB recovery using the Feather ROM bootloader/TinyUF2 procedure.
 
-Do not deliberately corrupt saves or cut power on a device with the only copy
-of important data. Host tests cannot prove the ESP32 bootloader's rollback
-behavior.
+The host tests cover the health-gate policy; the Feather tests confirm the
+bootloader's rollback behavior. Destructive fault injection should only be
+performed on a test device with recoverable user data.

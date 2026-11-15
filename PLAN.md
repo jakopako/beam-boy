@@ -807,12 +807,14 @@ Steps 1–4 of the implementation order below are in place (see
 - the real Update firmware screen (host-tested state machine and rendering), plus the engine's
   sleep inhibit and abort-before-critical-shutdown hook.
 
-Step 4 has passed its end-to-end Feather hardware checklist. Step 5's software health gate is
-implemented: Arduino's automatic acknowledgement is deferred, startup validates storage and the
-game list without formatting or modifying user data during probation, and the running image is
-marked healthy only after five uninterrupted seconds in the launcher with controls inhibited.
-Host tests and the Feather build cover the policy and wiring; physical rollback and USB-recovery
-proof remain before claiming step 5 complete.
+Steps 4 and 5 have passed Feather hardware validation. The software health gate defers Arduino's
+automatic acknowledgement, validates storage and the game list without formatting or modifying
+user data during probation, and marks the running image healthy only after five uninterrupted
+seconds in the launcher with controls inhibited. Physical rollback and USB recovery have also
+been verified.
+
+The latest published stable release is **0.9.3 (sequence 4)**. Its signed assets were verified,
+and the stable pointer was deployed at `https://beamboy.ch/firmware/stable.json`.
 
 - Reuse the existing `Network` connection component and replace the unsafe internals of `Ota`,
   rather than duplicating connectivity or coupling the WiFi and update menu items again.
@@ -823,7 +825,7 @@ proof remain before claiming step 5 complete.
 - **An operation that _stages_ a change is not finished until the change is applied.** A
   successful OTA that never reboots reports success, changes nothing, and offers itself again.
 
-#### Implementation plan (steps 1–4 implemented; 5 pending)
+#### Implementation plan (steps 1–5 implemented and hardware-validated)
 
 **Confirmed scope and choices:** firmware updates are a separate opt-in flow, never a side
 effect of WiFi connection, Store access or boot. Use GitHub Releases for immutable, versioned,
@@ -850,11 +852,11 @@ It now:
 - A complete image in an inactive slot prevents partial-image boot, but does not alone recover
   from a valid image that crashes. The installed ESP32-S3 SDK enables rollback, while Arduino's
   weak `verifyOta()` defaults to true and normally marks the image valid during startup.
-  Its `verifyRollbackLater()` hook must be evaluated and exercised on the actual bootloader;
-  do not claim health-checked rollback until the hardware tests pass.
+  `verifyRollbackLater()` defers acknowledgement until the health gate passes; the rollback
+  and USB-recovery behavior has been tested on the Feather.
 - Native signed-app verification is not enabled in the current SDK configuration. The updater
   therefore checks authenticity itself (signed manifest plus image SHA-256) before selecting a
-  slot. The on-device test vector must still pass on the Feather.
+  slot. The on-device signature test vector has passed on the Feather.
 
 **1. Release contract and publishing**
 
@@ -952,8 +954,8 @@ It now:
 - Record/reset update diagnostics without erasing user content. Keep rollback-compatible storage
   until acknowledgement, and keep a USB recovery recipe (Feather ROM bootloader / TinyUF2).
   An application OTA must not change partition/recovery images.
-- Keep USB recovery available while validating rollback. Firmware from before the updater cannot
-  fetch updates itself and must first be upgraded over USB.
+- Keep the USB recovery recipe documented. Firmware from before the updater cannot fetch
+  updates itself and must first be upgraded over USB.
 
 **6. Implementation order and acceptance gates**
 

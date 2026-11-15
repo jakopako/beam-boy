@@ -77,8 +77,9 @@ pio test -e adafruit_feather_esp32s3_nopsram -f test_device_ota_signature
 `test_device_ota_signature` verifies the release tool's ECDSA P-256 test vector
 with the firmware's verifier, rejects tampered payloads/signatures/keys, and
 logs verification time and heap. CI only compiles it
-(`--without-uploading --without-testing`); run it on the Feather before
-creating a release key. Its vector lives in `test/ota_vectors/` and is
+(`--without-uploading --without-testing`). It passed on the Feather before the
+release key was created; rerun it on hardware if the verifier or crypto
+configuration changes. Its vector lives in `test/ota_vectors/` and is
 regenerated with `python tools/firmware/fwrelease.py test-vector --regenerate`.
 
 ## Adding a test
