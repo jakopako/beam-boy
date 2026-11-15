@@ -46,7 +46,7 @@ uint32_t legacyChecksum(const LegacySaveData& data) {
 
 }  // namespace
 
-void setUp(void) {}
+void setUp(void) { beamboy_host::resetMountBehavior(); }
 void tearDown(void) {}
 
 void test_erase_score_forgets_a_known_game(void) {
@@ -173,6 +173,33 @@ void test_inhibited_storage_writes_remain_pending_until_released() {
   TEST_ASSERT_TRUE(LittleFS.exists("/beamboy.sav"));
 }
 
+void test_mount_failure_without_format_preserves_existing_files() {
+  beamboy_host::files().clear();
+  beamboy_host::files()["/important.dat"] = "preserve me";
+  beamboy_host::mountFailuresRemaining() = 1;
+
+  Storage storage;
+  TEST_ASSERT_FALSE(storage.begin(false));
+  TEST_ASSERT_FALSE(storage.mounted());
+  TEST_ASSERT_EQUAL_UINT(1, beamboy_host::beginCalls());
+  TEST_ASSERT_EQUAL_UINT(0, beamboy_host::formatCalls());
+  TEST_ASSERT_EQUAL_STRING("preserve me",
+                           beamboy_host::files()["/important.dat"].c_str());
+}
+
+void test_mount_failure_formats_and_retries_by_default() {
+  beamboy_host::files().clear();
+  beamboy_host::files()["/important.dat"] = "remove after format";
+  beamboy_host::mountFailuresRemaining() = 1;
+
+  Storage storage;
+  TEST_ASSERT_TRUE(storage.begin());
+  TEST_ASSERT_TRUE(storage.mounted());
+  TEST_ASSERT_EQUAL_UINT(2, beamboy_host::beginCalls());
+  TEST_ASSERT_EQUAL_UINT(1, beamboy_host::formatCalls());
+  TEST_ASSERT_FALSE(LittleFS.exists("/important.dat"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_erase_score_forgets_a_known_game);
@@ -184,5 +211,7 @@ int main(int, char**) {
   RUN_TEST(test_v2_save_migrates_without_losing_settings_or_scores);
   RUN_TEST(test_existing_unreadable_save_is_reported_without_replacing_it);
   RUN_TEST(test_inhibited_storage_writes_remain_pending_until_released);
+  RUN_TEST(test_mount_failure_without_format_preserves_existing_files);
+  RUN_TEST(test_mount_failure_formats_and_retries_by_default);
   return UNITY_END();
 }

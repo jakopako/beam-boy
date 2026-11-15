@@ -324,10 +324,13 @@ mark an OTA image valid during startup. On a pending-verification boot it:
 - mounts LittleFS without formatting on failure and refuses to pass health
   verification if the filesystem or an existing save is unreadable;
 - builds the game list and starts the launcher;
-- ignores controls and inhibits save-file writes during probation, preventing
-  game deletion or other user-data changes before rollback is no longer needed;
+- continues normal launcher frame updates and battery monitoring, but ignores
+  controls and inhibits save-file writes during probation, preventing game
+  deletion or other user-data changes before rollback is no longer needed;
 - marks the image valid only after the launcher has remained active for five
-  uninterrupted seconds. Leaving the launcher restarts that timer.
+  uninterrupted seconds. Leaving the launcher or entering critical-battery
+  shutdown restarts that timer. A control held through acknowledgement remains
+  ignored until released (the stick must return to centre).
 
 An early reset or power loss should leave the image pending so the ESP32-S3
 bootloader selects the previous valid slot. A detected startup failure

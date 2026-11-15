@@ -53,7 +53,7 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 |---|---|
 | `test_launcher_delete_feedback` | Immediate accent-to-red blend, rising visible pulse floor, accelerating pulse frequency and solid full-brightness completion at three seconds |
 | `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, refresh behavior, and alpha-blended overlays (white backgrounds, anti-aliased edges, opacity and reversal) |
-| `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat |
+| `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat, probation control inhibition |
 | `test_brightness` | Actual brightness scene controls and repeat timing, 32 minimum (including clamping older saved values), preview scaled from three lower LEDs at minimum to the full bar at maximum with the far-end blue marker preserved, 128 maximum with unchanged 64 default, display power cap, default reset, deferred writes, confirmation/exit persistence, failed-save feedback, and hold-progress contrast over white previews |
 | `test_settings` | Four-child Settings routing order and distinct registry indices |
 | `test_update_flow` | Settings > Update firmware: the screen's state machine (radio only while working towards a result, a press carried into the screen never confirms, the confirming hold never also restarts, every failure retries with A, staged images restart on a fresh press) and its tube rendering (real download fill, per-failure pulse counts, success fill and heartbeat, every stage visibly distinct) |

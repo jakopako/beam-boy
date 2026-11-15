@@ -23,6 +23,27 @@ inline std::map<std::string, std::string>& files() {
   return f;
 }
 
+inline unsigned int& mountFailuresRemaining() {
+  static unsigned int failures = 0;
+  return failures;
+}
+
+inline unsigned int& beginCalls() {
+  static unsigned int calls = 0;
+  return calls;
+}
+
+inline unsigned int& formatCalls() {
+  static unsigned int calls = 0;
+  return calls;
+}
+
+inline void resetMountBehavior() {
+  mountFailuresRemaining() = 0;
+  beginCalls() = 0;
+  formatCalls() = 0;
+}
+
 }  // namespace beamboy_host
 
 class File {
@@ -115,8 +136,16 @@ class File {
 
 class LittleFSClass {
  public:
-  bool begin(bool = false) { return true; }
-  void format() { beamboy_host::files().clear(); }
+  bool begin(bool = false) {
+    beamboy_host::beginCalls()++;
+    if (beamboy_host::mountFailuresRemaining() == 0) return true;
+    beamboy_host::mountFailuresRemaining()--;
+    return false;
+  }
+  void format() {
+    beamboy_host::formatCalls()++;
+    beamboy_host::files().clear();
+  }
   bool exists(const char* path) {
     return beamboy_host::files().count(path) > 0;
   }

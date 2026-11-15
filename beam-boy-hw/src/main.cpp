@@ -202,8 +202,9 @@ void loop() {
   engine.tick();
 
   if (pending_ota_verification &&
-      boot_health.observe(millis(),
-                          engine.currentScene() == &launcher_scene)) {
+      boot_health.observe(
+          millis(), !engine.shuttingDown() &&
+                        engine.currentScene() == &launcher_scene)) {
     const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
     if (result != ESP_OK) {
       Serial.print("[ota] could not mark image healthy: ");

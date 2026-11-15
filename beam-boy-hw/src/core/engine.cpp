@@ -12,7 +12,6 @@
 namespace beamboy {
 
 void Engine::begin(bool defer_storage_writes) {
-  interaction_inhibited_ = defer_storage_writes;
   // Release the LED data pin's pad hold before anything tries to drive it.
   // enterDeepSleep() latches that pin low so the strip cannot pick up noise
   // while asleep, and the latch *survives the wake reset* -- without this the
@@ -34,6 +33,7 @@ void Engine::begin(bool defer_storage_writes) {
 
   display_.begin();
   input_.begin();
+  input_.setControlsInhibited(defer_storage_writes);
   storage_.begin(!defer_storage_writes);
   storage_.setWritesInhibited(defer_storage_writes);
   // Absent on a board with no fuel gauge (board::kHasBatteryMonitor); see
@@ -303,11 +303,6 @@ void Engine::tick() {
   }
 
   if (scene_ == nullptr) return;
-  if (interaction_inhibited_) {
-    scene_->render(*this);
-    display_.present();
-    return;
-  }
 
   const uint32_t frame_start_us = micros();
   const uint32_t now_ms = millis();

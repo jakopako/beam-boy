@@ -86,8 +86,9 @@ class Engine {
   void setSleepInhibited(bool inhibited) { sleep_inhibited_ = inhibited; }
   bool sleepInhibited() const { return sleep_inhibited_; }
   void setInteractionInhibited(bool inhibited) {
-    interaction_inhibited_ = inhibited;
+    input_.setControlsInhibited(inhibited);
   }
+  bool shuttingDown() const { return shutting_down_; }
 
   void setScene(Scene* scene);
 
@@ -211,7 +212,6 @@ class Engine {
   bool idle_serviced_ = false;
   // See setSleepInhibited().
   bool sleep_inhibited_ = false;
-  bool interaction_inhibited_ = false;
   bool exit_armed_ = false;
   float exit_gesture_progress_ = 0.0f;
 

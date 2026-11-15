@@ -32,6 +32,7 @@ class Input {
   // Sample the hardware. Called once per frame by the engine, before scenes
   // update, so every scene sees a consistent snapshot.
   void update(uint32_t now_ms);
+  void setControlsInhibited(bool inhibited);
 
   // --- Buttons -------------------------------------------------------------
 
@@ -55,11 +56,17 @@ class Input {
 
   // Horizontal axis, -1.0 to +1.0, with the deadzone applied and the response
   // curve shaped. Positive is toward the far end of the strip (right).
-  float stickX() const { return stick_x_; }
+  float stickX() const {
+    return controls_inhibited_ || stick_suppressed_until_center_ ? 0.0f
+                                                                 : stick_x_;
+  }
 
   // Vertical axis, -1.0 to +1.0, with the deadzone applied and the response
   // curve shaped. Positive is forward / up.
-  float stickY() const { return stick_y_; }
+  float stickY() const {
+    return controls_inhibited_ || stick_suppressed_until_center_ ? 0.0f
+                                                                 : stick_y_;
+  }
 
   // Raw electrical axes before rotation or shaping, for diagnostics.
   float rawStickX() const { return raw_stick_x_; }
@@ -88,7 +95,10 @@ class Input {
   //
   // Steps since the last frame. Positive is toward the far end of the strip.
   // Usually -1, 0 or +1.
-  int8_t navDelta() const { return nav_delta_; }
+  int8_t navDelta() const {
+    return controls_inhibited_ || stick_suppressed_until_center_ ? 0
+                                                                 : nav_delta_;
+  }
 
   // The button that confirms a menu selection (the stick's push switch).
   static constexpr Button kNavButton = Button::kStick;
@@ -108,6 +118,9 @@ class Input {
   };
 
   ButtonState buttons_[static_cast<uint8_t>(Button::kCount)];
+  bool controls_inhibited_ = false;
+  bool suppressed_buttons_[static_cast<uint8_t>(Button::kCount)] = {};
+  bool stick_suppressed_until_center_ = false;
   uint32_t now_ms_ = 0;
 
   float stick_x_ = 0.0f;
