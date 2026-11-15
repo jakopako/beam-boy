@@ -53,7 +53,7 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 |---|---|
 | `test_launcher_delete_feedback` | Immediate accent-to-red blend, rising visible pulse floor, accelerating pulse frequency and solid full-brightness completion at three seconds |
 | `test_display` | `wrappedSin`/`pulse`, `Color::scaled` truncation (so `fade()` reaches black), HSV, refresh behavior, and alpha-blended overlays (white backgrounds, anti-aliased edges, opacity and reversal) |
-| `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat |
+| `test_input` | Debounce latching, fast double-taps, hold durations, stick deadzone and shaping, nav hysteresis and auto-repeat, probation control inhibition |
 | `test_brightness` | Actual brightness scene controls and repeat timing, 32 minimum (including clamping older saved values), preview scaled from three lower LEDs at minimum to the full bar at maximum with the far-end blue marker preserved, 128 maximum with unchanged 64 default, display power cap, default reset, deferred writes, confirmation/exit persistence, failed-save feedback, and hold-progress contrast over white previews |
 | `test_settings` | Four-child Settings routing order and distinct registry indices |
 | `test_update_flow` | Settings > Update firmware: the screen's state machine (radio only while working towards a result, a press carried into the screen never confirms, the confirming hold never also restarts, every failure retries with A, staged images restart on a fresh press) and its tube rendering (real download fill, per-failure pulse counts, success fill and heartbeat, every stage visibly distinct) |
@@ -63,6 +63,7 @@ always means an accumulator**, and accumulators are cheap to fast-forward here.
 | `test_net_policy` | The credential-retention truth table: which connection failures discard stored WiFi credentials |
 | `test_ota_manifest` | Firmware manifest parser: the release tool's signed test vector round-trips; unknown/duplicate/missing fields, wrong types, escapes, non-ASCII, truncation, oversize input and non-canonical base64 are all rejected |
 | `test_ota_policy` | Firmware update decisions: only newer compatible stable releases for this exact board/layout, minimum updater/save/API versions, slot size, exact-host HTTPS allowlist, the 30% fresh-battery gate, hold-A confirmation (including a press carried into the scene) and exact signed-image accounting |
+| `test_boot_health` | OTA probation timing and progress: only pending, startup-ready boots can be acknowledged, and the launcher must remain active for five seconds (including across `millis()` rollover) |
 
 ### On-device suites
 

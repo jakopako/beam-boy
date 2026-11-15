@@ -6,13 +6,23 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 #include <esp_sleep.h>
 
+#include "core/boot_health.h"
 #include "core/cartridge_store.h"
 #include "core/engine.h"
 #include "core/firmware_identity.h"
 #include "core/game_registry.h"
 #include "scenes/launcher_scene.h"
+
+#if defined(ESP32) && !defined(CONFIG_APP_ROLLBACK_ENABLE)
+#error "OTA health verification requires CONFIG_APP_ROLLBACK_ENABLE"
+#endif
+
+#if defined(CONFIG_APP_ROLLBACK_ENABLE)
+extern "C" bool verifyRollbackLater() { return true; }
+#endif
 
 namespace {
 
@@ -24,11 +34,49 @@ beamboy::CartridgeStore cartridge_store;
 // output is slow enough to distort the very measurement it is reporting.
 constexpr uint32_t kDiagnosticIntervalMs = 5000;
 uint32_t last_diagnostic_ms = 0;
+beamboy::fw::BootHealth boot_health;
+bool pending_ota_verification = false;
+
+bool runningImageNeedsVerification() {
+#if defined(CONFIG_APP_ROLLBACK_ENABLE)
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (running == nullptr) {
+    Serial.println("[ota] cannot identify running partition");
+    return true;
+  }
+
+  esp_ota_img_states_t state;
+  const esp_err_t result = esp_ota_get_state_partition(running, &state);
+  if (result != ESP_OK) {
+    Serial.print("[ota] cannot read running image state: ");
+    Serial.println(esp_err_to_name(result));
+    return result != ESP_ERR_NOT_FOUND;
+  }
+  return state == ESP_OTA_IMG_PENDING_VERIFY;
+#else
+  return false;
+#endif
+}
+
+[[noreturn]] void rollbackPendingImage(const char* reason) {
+  Serial.print("[ota] startup health check failed: ");
+  Serial.println(reason);
+  Serial.println("[ota] rolling back to the previous firmware");
+  const esp_err_t result = esp_ota_mark_app_invalid_rollback_and_reboot();
+  Serial.print("[ota] rollback request returned: ");
+  Serial.println(esp_err_to_name(result));
+  delay(1000);
+  esp_restart();
+}
 
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
+  pending_ota_verification = runningImageNeedsVerification();
+  if (pending_ota_verification) {
+    Serial.println("[ota] new image pending health verification");
+  }
 
   // Wait for the USB CDC link, then wait a little longer.
   //
@@ -78,7 +126,7 @@ void setup() {
   }
 
   // Calibrates the joystick centre, so leave the stick untouched at boot.
-  engine.begin();
+  engine.begin(pending_ota_verification);
 
   // Discover installed cartridges before the launcher opens. Scanning the
   // filesystem and parsing JSON is slow enough to drop frames, so it happens
@@ -88,6 +136,20 @@ void setup() {
 
   engine.setLauncher(&launcher_scene);
   engine.setScene(&launcher_scene);
+
+  if (pending_ota_verification) {
+    if (!engine.storage().mounted()) {
+      rollbackPendingImage("filesystem did not mount");
+    }
+    if (!engine.storage().saveReadable()) {
+      rollbackPendingImage("save file is unreadable");
+    }
+    if (beamboy::gameList().count() == 0) {
+      rollbackPendingImage("game list was not built");
+    }
+    boot_health.begin(true, true);
+    Serial.println("[ota] startup checks passed; launcher must run for 5 seconds");
+  }
 
   Serial.println();
   Serial.println("==================================");
@@ -138,6 +200,26 @@ void setup() {
 
 void loop() {
   engine.tick();
+
+  if (pending_ota_verification) {
+    const float progress = boot_health.progress(
+        millis(), !engine.shuttingDown() &&
+                      engine.currentScene() == &launcher_scene);
+    launcher_scene.setFirmwareCheckProgress(progress);
+    if (progress >= 1.0f) {
+      const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
+      if (result != ESP_OK) {
+        Serial.print("[ota] could not mark image healthy: ");
+        Serial.println(esp_err_to_name(result));
+        rollbackPendingImage("could not acknowledge the running image");
+      }
+      pending_ota_verification = false;
+      launcher_scene.setFirmwareCheckProgress(-1.0f);
+      engine.storage().setWritesInhibited(false);
+      engine.setInteractionInhibited(false);
+      Serial.println("[ota] image marked healthy");
+    }
+  }
 
   const uint32_t now = millis();
   if (now - last_diagnostic_ms >= kDiagnosticIntervalMs) {

@@ -339,6 +339,73 @@ void test_nav_reverses_immediately(void) {
   TEST_ASSERT_EQUAL_INT8(-1, input.navDelta());
 }
 
+void test_inhibited_controls_are_ignored_until_released_or_centered(void) {
+  Input input = freshInput();
+  input.setControlsInhibited(true);
+  setButton(board::kPinButtonA, true);
+  setStick(1.0f);
+  tick(input, 100);
+
+  TEST_ASSERT_FALSE(input.pressed(Button::kA));
+  TEST_ASSERT_FALSE(input.held(Button::kA));
+  TEST_ASSERT_EQUAL_UINT32(0, input.holdDuration(Button::kA));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickX());
+  TEST_ASSERT_EQUAL_INT8(0, input.navDelta());
+
+  input.setControlsInhibited(false);
+  tick(input, 116);
+  TEST_ASSERT_FALSE(input.pressed(Button::kA));
+  TEST_ASSERT_FALSE(input.held(Button::kA));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickX());
+  TEST_ASSERT_EQUAL_INT8(0, input.navDelta());
+
+  setButton(board::kPinButtonA, false);
+  setStick(0.5f);
+  tick(input, 148);
+  TEST_ASSERT_FALSE(input.released(Button::kA));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, input.stickX());
+  TEST_ASSERT_EQUAL_INT8(0, input.navDelta());
+
+  setButton(board::kPinButtonA, true);
+  setStick(1.0f);
+  tick(input, 200);
+  TEST_ASSERT_TRUE(input.pressed(Button::kA));
+  TEST_ASSERT_EQUAL_INT8(1, input.navDelta());
+}
+
+void test_button_repressed_during_debounce_stays_suppressed_after_probation(void) {
+  Input input = freshInput();
+  input.setControlsInhibited(true);
+  tick(input, 100);
+
+  setButton(board::kPinButtonA, true);
+  tick(input, 200);
+  TEST_ASSERT_FALSE(input.pressed(Button::kA));
+
+  setButton(board::kPinButtonA, false);
+  tick(input, 240);
+  setButton(board::kPinButtonA, true);
+  tick(input, 250);
+  TEST_ASSERT_FALSE(input.held(Button::kA));
+
+  input.setControlsInhibited(false);
+  tick(input, 260);
+  TEST_ASSERT_FALSE(input.pressed(Button::kA));
+  TEST_ASSERT_FALSE(input.held(Button::kA));
+  tick(input, 270);
+  TEST_ASSERT_FALSE(input.pressed(Button::kA));
+  TEST_ASSERT_FALSE(input.held(Button::kA));
+
+  setButton(board::kPinButtonA, false);
+  tick(input, 300);
+  TEST_ASSERT_FALSE(input.released(Button::kA));
+
+  setButton(board::kPinButtonA, true);
+  tick(input, 340);
+  TEST_ASSERT_TRUE(input.pressed(Button::kA));
+  TEST_ASSERT_TRUE(input.held(Button::kA));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_press_and_release_are_single_frame_events);
@@ -358,5 +425,8 @@ int main(int, char**) {
   RUN_TEST(test_nav_hysteresis_prevents_a_stream_of_steps);
   RUN_TEST(test_nav_steps_again_after_returning_to_centre);
   RUN_TEST(test_nav_reverses_immediately);
+  RUN_TEST(test_inhibited_controls_are_ignored_until_released_or_centered);
+  RUN_TEST(
+      test_button_repressed_during_debounce_stays_suppressed_after_probation);
   return UNITY_END();
 }

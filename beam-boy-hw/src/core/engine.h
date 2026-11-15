@@ -55,7 +55,7 @@ class Scene {
 
 class Engine {
  public:
-  void begin();
+  void begin(bool defer_storage_writes = false);
 
   // Runs one frame if the timestep has elapsed; returns immediately otherwise.
   // Called from loop().
@@ -85,6 +85,10 @@ class Engine {
   // Scene::abortForShutdown().
   void setSleepInhibited(bool inhibited) { sleep_inhibited_ = inhibited; }
   bool sleepInhibited() const { return sleep_inhibited_; }
+  void setInteractionInhibited(bool inhibited) {
+    input_.setControlsInhibited(inhibited);
+  }
+  bool shuttingDown() const { return shutting_down_; }
 
   void setScene(Scene* scene);
 
@@ -92,6 +96,7 @@ class Engine {
   Input& input() { return input_; }
   Storage& storage() { return storage_; }
   Power& power() { return power_; }
+  const Scene* currentScene() const { return scene_; }
 
   // --- Launcher integration ------------------------------------------------
   //

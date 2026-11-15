@@ -262,6 +262,30 @@ void LauncherScene::renderList(Engine& engine) {
                    intensity);
 }
 
+void LauncherScene::renderFirmwareCheck(Engine& engine) {
+  if (firmware_check_progress_ < 0.0f) return;
+
+  Display& display = engine.display();
+  constexpr uint8_t kProgressPixels = 5;
+  const uint16_t pixel_count = display.pixelCount();
+  if (pixel_count < kProgressPixels) return;
+
+  display.fade(0.35f);
+  const uint16_t first_pixel = pixel_count - kProgressPixels;
+  const uint8_t completed = static_cast<uint8_t>(
+      firmware_check_progress_ * static_cast<float>(kProgressPixels));
+  const float pulse_level = 0.65f + 0.35f * pulse(millis() / 1000.0f, 2.0f);
+
+  for (uint8_t i = 0; i < kProgressPixels; i++) {
+    if (i < completed) {
+      display.rawPixel(first_pixel + i, Color(0, 180, 255));
+    } else if (i == completed) {
+      display.rawPixel(first_pixel + i,
+                       Color(190, 240, 255).scaled(pulse_level));
+    }
+  }
+}
+
 void LauncherScene::drawLauncherSlot(Display& display, uint8_t slot,
                                      const Color& color,
                                      float intensity) const {
@@ -373,6 +397,7 @@ void LauncherScene::render(Engine& engine) {
   }
 
   renderList(engine);
+  renderFirmwareCheck(engine);
 }
 
 }  // namespace beamboy

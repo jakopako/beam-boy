@@ -1,11 +1,10 @@
 # Phase 11 — Firmware updates
 
-> **Status: steps 1–4 of PLAN.md's implementation order are implemented; step 5
-> (health-checked first boot and rollback) is not.** Settings > Update firmware
-> now checks, installs and restarts, and the firmware trusts release key
-> `bb-release-1`. Step 4 is build-checked and host-tested, but has not yet been
-> run end-to-end on a Feather: see "Hardware checklist for step 4". Until step 5,
-> a new image that crashes is not rolled back automatically.
+> **Steps 1–4 are implemented and the step 4 hardware checklist passed on a Feather.
+> Step 5's health-check code is implemented, but its rollback behavior still needs
+> physical fault-injection validation on the Feather.** Settings > Update firmware
+> checks, installs and restarts; the firmware trusts release key `bb-release-1`.
+> Until hardware rollback testing passes, keep USB recovery available.
 
 ## What exists
 
@@ -21,6 +20,7 @@
 | Update screen: tube rendering | `src/scenes/update_firmware_view.{h,cpp}` | `test_update_flow` (host) |
 | Update screen: wiring to Network/Ota/Power/Storage | `src/scenes/update_firmware_scene.{h,cpp}` | build only; needs hardware |
 | Engine guard: sleep inhibit, abort before critical shutdown | `Engine::setSleepInhibited()`, `Scene::abortForShutdown()` | build only |
+| First-boot health gate | `verifyRollbackLater()`, `BootHealth`, `main.cpp` | host policy tests + Feather build; hardware rollback proof pending |
 | Release tool | `tools/firmware/fwrelease.py` | `tools/firmware/test_fwrelease.py` |
 | CI | `.github/workflows/firmware.yml`, Pages workflow | — |
 
@@ -174,8 +174,8 @@ Behaviour that is easy to miss:
 
 ### Hardware checklist for step 4
 
-None of this has run on a Feather yet. To test end-to-end you need a signed
-release newer than the firmware on the console:
+This checklist passed on the Feather. To repeat it you need a signed release
+newer than the firmware on the console:
 
 1. Flash the console over USB with a release-identity build. In PowerShell:
    ```powershell
@@ -316,14 +316,46 @@ Measured on the Feather (2026-10-16, test build without WiFi or engine):
 The verify cost is paid once per `check()`, which already blocks for a TLS
 handshake, so it needs no special handling.
 
-## Not done yet
+## Step 5: health-checked first boot and rollback
 
-- **Run the step 4 hardware checklist** (above), including the LED behaviour
-  during flash writes and the frame rate while downloading.
-- **First boot and rollback (step 5):**
-  - Override Arduino's `verifyRollbackLater()` and acknowledge the new image
-    only after a healthy launcher has run for 5 s.
-  - Prove rollback on the Feather: interrupted downloads, a crashing signed
-    image, and power loss at every stage.
-- **Ship the first updater-capable firmware over USB** before publishing a
-  real `stable.json`.
+The firmware overrides Arduino's `verifyRollbackLater()` so the core does not
+mark an OTA image valid during startup. On a pending-verification boot it:
+
+- mounts LittleFS without formatting on failure and refuses to pass health
+  verification if the filesystem or an existing save is unreadable;
+- builds the game list and starts the launcher;
+- continues normal launcher frame updates and battery monitoring, but ignores
+  controls and inhibits save-file writes during probation, preventing game
+  deletion or other user-data changes before rollback is no longer needed;
+- dims the launcher and displays a five-segment cyan/white progress indicator
+  at the end of the tube during the five-second check;
+- marks the image valid only after the launcher has remained active for five
+  uninterrupted seconds. Leaving the launcher or entering critical-battery
+  shutdown restarts that timer. A control held through acknowledgement remains
+  ignored until released (the stick must return to centre).
+
+An early reset or power loss should leave the image pending so the ESP32-S3
+bootloader selects the previous valid slot. A detected startup failure
+explicitly requests rollback. This behavior is **implemented but not yet proven
+on the physical Feather**; the bootloader, reset causes and flash timing must be
+tested on the target.
+
+### Remaining Feather validation
+
+With USB recovery available, test the failure paths before declaring rollback
+proven:
+
+- install a signed image that deliberately crashes before the five-second mark
+  and confirm the previous version boots;
+- cause startup health checks to fail (for example, make the save unreadable on
+  a test device) and confirm it returns to the previous slot without formatting
+  LittleFS;
+- interrupt first boot with reset or power loss at different points before
+  acknowledgement, then confirm rollback and preservation of user data;
+- allow a healthy image to run in the launcher for five seconds and confirm it
+  remains selected across a later reboot;
+- verify USB recovery using the Feather ROM bootloader/TinyUF2 procedure.
+
+Do not deliberately corrupt saves or cut power on a device with the only copy
+of important data. Host tests cannot prove the ESP32 bootloader's rollback
+behavior.

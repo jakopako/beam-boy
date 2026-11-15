@@ -86,6 +86,23 @@ void Input::calibrateCenter() {
                     (kSamples * static_cast<float>(board::kAdcMax));
 }
 
+void Input::setControlsInhibited(bool inhibited) {
+  if (controls_inhibited_ == inhibited) return;
+  controls_inhibited_ = inhibited;
+  nav_delta_ = 0;
+  nav_direction_ = 0;
+  nav_hold_ms_ = 0;
+
+  if (inhibited) return;
+
+  for (uint8_t i = 0; i < static_cast<uint8_t>(Button::kCount); i++) {
+    ButtonState& state = buttons_[i];
+    suppressed_buttons_[i] = state.down || state.pending_down;
+    if (!state.down) state.previous_down = false;
+  }
+  stick_suppressed_until_center_ = true;
+}
+
 void Input::update(uint32_t now_ms) {
   now_ms_ = now_ms;
 
@@ -115,6 +132,10 @@ void Input::update(uint32_t now_ms) {
         if (state.down) state.pressed_at = now_ms;
       }
     }
+    if (suppressed_buttons_[i] && !state.down && !state.pending_down) {
+      suppressed_buttons_[i] = false;
+      state.previous_down = false;
+    }
   }
 
   // --- Joystick ------------------------------------------------------------
@@ -126,6 +147,14 @@ void Input::update(uint32_t now_ms) {
   // Fixed case orientation: horizontal is electrical Y, vertical is -X.
   stick_x_ = shapeAxis(raw_stick_y_, stick_center_y_, stick_x_inverted_);
   stick_y_ = shapeAxis(raw_stick_x_, stick_center_x_, !stick_y_inverted_);
+
+  if (stick_suppressed_until_center_ &&
+      fabsf(stick_x_) < kNavRelease && fabsf(stick_y_) < kNavRelease) {
+    stick_suppressed_until_center_ = false;
+    nav_direction_ = 0;
+    nav_hold_ms_ = 0;
+    nav_delta_ = 0;
+  }
 
   updateNav();
 }
@@ -165,18 +194,24 @@ void Input::updateNav() {
 }
 
 bool Input::pressed(Button button) const {
+  if (controls_inhibited_ || suppressed_buttons_[indexOf(button)]) return false;
   const ButtonState& state = buttons_[indexOf(button)];
   return state.down && !state.previous_down;
 }
 
 bool Input::released(Button button) const {
+  if (controls_inhibited_ || suppressed_buttons_[indexOf(button)]) return false;
   const ButtonState& state = buttons_[indexOf(button)];
   return !state.down && state.previous_down;
 }
 
-bool Input::held(Button button) const { return buttons_[indexOf(button)].down; }
+bool Input::held(Button button) const {
+  return !controls_inhibited_ && !suppressed_buttons_[indexOf(button)] &&
+         buttons_[indexOf(button)].down;
+}
 
 uint32_t Input::holdDuration(Button button) const {
+  if (controls_inhibited_ || suppressed_buttons_[indexOf(button)]) return 0;
   const ButtonState& state = buttons_[indexOf(button)];
   if (!state.down) return 0;
   return now_ms_ - state.pressed_at;

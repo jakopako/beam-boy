@@ -32,10 +32,14 @@ class LauncherScene : public Scene {
   void enter(Engine& engine) override;
   void update(Engine& engine, float dt) override;
   void render(Engine& engine) override;
+  void setFirmwareCheckProgress(float progress) {
+    firmware_check_progress_ = progress;
+  }
 
  private:
   void renderList(Engine& engine);
   void renderBatteryGauge(Engine& engine);
+  void renderFirmwareCheck(Engine& engine);
   const GameEntry& selectedEntry() const;
   uint8_t selectedRegistryIndex() const;
   uint8_t selectedPhysicalSlot() const;
@@ -76,6 +80,7 @@ class LauncherScene : public Scene {
   // True once A and B have been held together past kBatteryHoldMs, as decided
   // by gestures_.
   bool showing_battery_ = false;
+  float firmware_check_progress_ = -1.0f;
 
   // Arbitrates the overlapping A / B / A+B gestures. Holds the latches that
   // make the order of pressing and releasing irrelevant; see

@@ -11,7 +11,7 @@
 
 namespace beamboy {
 
-void Engine::begin() {
+void Engine::begin(bool defer_storage_writes) {
   // Release the LED data pin's pad hold before anything tries to drive it.
   // enterDeepSleep() latches that pin low so the strip cannot pick up noise
   // while asleep, and the latch *survives the wake reset* -- without this the
@@ -33,7 +33,9 @@ void Engine::begin() {
 
   display_.begin();
   input_.begin();
-  storage_.begin();
+  input_.setControlsInhibited(defer_storage_writes);
+  storage_.begin(!defer_storage_writes);
+  storage_.setWritesInhibited(defer_storage_writes);
   // Absent on a board with no fuel gauge (board::kHasBatteryMonitor); see
   // power.h. Nothing downstream needs to check this return value -- every
   // Power getter already answers as if nothing changed when unavailable.

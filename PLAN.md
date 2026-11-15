@@ -807,9 +807,12 @@ Steps 1–4 of the implementation order below are in place (see
 - the real Update firmware screen (host-tested state machine and rendering), plus the engine's
   sleep inhibit and abort-before-critical-shutdown hook.
 
-Step 4 is build-checked but has not yet run end-to-end on a Feather; the phase doc has the
-hardware checklist. Step 5 (health-checked first boot, rollback, recovery proof) remains, so a
-new image that crashes is not yet rolled back automatically.
+Step 4 has passed its end-to-end Feather hardware checklist. Step 5's software health gate is
+implemented: Arduino's automatic acknowledgement is deferred, startup validates storage and the
+game list without formatting or modifying user data during probation, and the running image is
+marked healthy only after five uninterrupted seconds in the launcher with controls inhibited.
+Host tests and the Feather build cover the policy and wiring; physical rollback and USB-recovery
+proof remain before claiming step 5 complete.
 
 - Reuse the existing `Network` connection component and replace the unsafe internals of `Ota`,
   rather than duplicating connectivity or coupling the WiFi and update menu items again.
@@ -949,8 +952,8 @@ It now:
 - Record/reset update diagnostics without erasing user content. Keep rollback-compatible storage
   until acknowledgement, and keep a USB recovery recipe (Feather ROM bootloader / TinyUF2).
   An application OTA must not change partition/recovery images.
-- Confirm the first updater-capable firmware and its bootloader via USB on the Feather before
-  enabling remote discovery. Firmware from before the updater cannot fetch updates itself.
+- Keep USB recovery available while validating rollback. Firmware from before the updater cannot
+  fetch updates itself and must first be upgraded over USB.
 
 **6. Implementation order and acceptance gates**
 
